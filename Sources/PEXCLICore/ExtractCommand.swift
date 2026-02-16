@@ -1,5 +1,12 @@
 import Foundation
 import PEXEngine
+import Configuration
+import SystemPackage
+
+private struct ConfigString: RawRepresentable, Sendable {
+    let rawValue: String
+    init?(rawValue: String) { self.rawValue = rawValue }
+}
 
 public struct ExtractCommand: Sendable {
     public let configURL: URL?
@@ -152,20 +159,7 @@ public struct ExtractCommand: Sendable {
 
         let request: PEXRunRequest
         if let configURL {
-            let data: Data
-            do {
-                data = try Data(contentsOf: configURL)
-            } catch {
-                throw PEXError.invalidInput("Failed to read config file: \(configURL.path(percentEncoded: false))")
-            }
-            let config: PEXProjectConfig
-            do {
-                config = try JSONDecoder().decode(PEXProjectConfig.self, from: data)
-            } catch {
-                throw PEXError.invalidInput("Failed to parse config JSON: \(error)")
-            }
-            let mapper = PEXConfigMapper()
-            request = try mapper.mapToRunRequest(config: config, configFileURL: configURL)
+            request = try await buildRequestFromConfigFile(configURL)
         } else if let params = directParams {
             request = buildRequestFromDirectParams(params)
         } else {
@@ -174,6 +168,7 @@ public struct ExtractCommand: Sendable {
 
         let result = try await engine.run(request)
 
+        // 結果を出力（CI で stdout から診断情報を取得できるように先に出力）
         if jsonOutput {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -184,6 +179,106 @@ public struct ExtractCommand: Sendable {
             let formatter = CLIOutputFormatter()
             print(formatter.formatResult(result))
         }
+
+        // status に基づいて終了コードを制御
+        switch result.status {
+        case .success:
+            break
+        case .partialSuccess:
+            throw PEXError(
+                kind: .backendExecutionFailed,
+                stage: .backendExecution,
+                message: "\(result.metrics.failureCount) of \(result.metrics.cornerCount) corners failed"
+            )
+        case .failed:
+            throw PEXError(
+                kind: .backendExecutionFailed,
+                stage: .backendExecution,
+                message: "All \(result.metrics.cornerCount) corners failed"
+            )
+        }
+    }
+
+    func buildRequestFromConfigFile(_ configURL: URL) async throws -> PEXRunRequest {
+        let filePath = FilePath(configURL.path(percentEncoded: false))
+        let provider: JSONProvider
+        do {
+            provider = try await JSONProvider(filePath: filePath)
+        } catch {
+            throw PEXError.invalidInput("Failed to read config file: \(configURL.path(percentEncoded: false))")
+        }
+
+        let defaults = InMemoryProvider(values: [
+            "topCell": "TOP",
+            "backendID": "mock",
+            "inputs.layout": "top.oas",
+            "inputs.netlist": "top.cir",
+            "inputs.technology": "tech.json",
+            "output.workspace": ".xcircuite/pex/runs",
+            "options.includeCouplingCaps": true,
+            "options.maxParallelJobs": 2,
+            "options.strictValidation": false,
+        ])
+
+        let config = ConfigReader(providers: [provider, defaults])
+        let baseDir = configURL.deletingLastPathComponent()
+
+        let topCell = config.string(forKey: "topCell", default: "TOP")
+        let backendID = config.string(forKey: "backendID", default: "mock")
+        let executablePath = config.string(forKey: "executablePath")
+
+        let layoutPath = config.string(forKey: "inputs.layout", default: "top.oas")
+        let netlistPath = config.string(forKey: "inputs.netlist", default: "top.cir")
+        let technologyPath = config.string(forKey: "inputs.technology", default: "tech.json")
+        let workspacePath = config.string(forKey: "output.workspace", default: ".xcircuite/pex/runs")
+
+        let includeCouplingCaps = config.bool(forKey: "options.includeCouplingCaps", default: true)
+        let maxParallelJobs = config.int(forKey: "options.maxParallelJobs", default: 2)
+        let strictValidation = config.bool(forKey: "options.strictValidation", default: false)
+        let minCapacitanceF = config.double(forKey: "options.minCapacitanceF")
+        let minResistanceOhm = config.double(forKey: "options.minResistanceOhm")
+
+        let layoutURL = Self.resolveURL(layoutPath, relativeTo: baseDir)
+        let netlistURL = Self.resolveURL(netlistPath, relativeTo: baseDir)
+        let technologyURL = Self.resolveURL(technologyPath, relativeTo: baseDir)
+        let workspaceURL = Self.resolveURL(workspacePath, relativeTo: baseDir)
+
+        let corners: [PEXCorner]
+        let defaultCorner = ConfigString(rawValue: "tt_25c_1v0")!
+        let cornerValues = config.stringArray(forKey: "corners", as: ConfigString.self, default: [defaultCorner])
+        let filtered = cornerValues.map { $0.rawValue.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if filtered.isEmpty {
+            corners = [PEXCorner(id: "tt_25c_1v0")]
+        } else {
+            corners = filtered.map { PEXCorner(id: $0) }
+        }
+
+        let options = PEXRunOptions(
+            extractMode: .rc,
+            includeCouplingCaps: includeCouplingCaps,
+            minCapacitanceF: minCapacitanceF,
+            minResistanceOhm: minResistanceOhm,
+            maxParallelJobs: maxParallelJobs,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: strictValidation
+        )
+
+        return PEXRunRequest(
+            layoutURL: layoutURL,
+            layoutFormat: Self.detectLayoutFormat(layoutPath),
+            sourceNetlistURL: netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: topCell,
+            corners: corners,
+            technology: .jsonFile(technologyURL),
+            backendSelection: PEXBackendSelection(
+                backendID: backendID,
+                executablePath: executablePath
+            ),
+            options: options,
+            workingDirectory: workspaceURL
+        )
     }
 
     public func buildRequestFromDirectParams(_ params: DirectParams) -> PEXRunRequest {
@@ -225,5 +320,20 @@ public struct ExtractCommand: Sendable {
             options: options,
             workingDirectory: workingDir
         )
+    }
+
+    private static func resolveURL(_ path: String, relativeTo baseDir: URL) -> URL {
+        if path.hasPrefix("/") {
+            return URL(filePath: path)
+        }
+        return baseDir.appending(path: path)
+    }
+
+    private static func detectLayoutFormat(_ path: String) -> LayoutFormat {
+        let lower = path.lowercased()
+        if lower.hasSuffix(".oas") || lower.hasSuffix(".oasis") {
+            return .oas
+        }
+        return .gds
     }
 }

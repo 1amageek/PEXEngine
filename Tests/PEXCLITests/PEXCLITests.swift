@@ -98,6 +98,8 @@ struct PEXCLITests {
             "--technology", "/tmp/tech.json",
             "--corner", "ff",
             "--max-jobs", "3",
+            "--min-cap-f", "1e-15",
+            "--min-res-ohm", "0.1",
             "--strict",
         ])
         let request = cmd.buildRequestFromDirectParams(cmd.directParams!)
@@ -106,9 +108,78 @@ struct PEXCLITests {
         #expect(request.corners.count == 1)
         #expect(request.corners[0].id == "ff")
         #expect(request.options.maxParallelJobs == 3)
+        #expect(request.options.minCapacitanceF == 1e-15)
+        #expect(request.options.minResistanceOhm == 0.1)
         #expect(request.options.strictValidation == true)
         #expect(request.options.emitRawArtifacts == true)
         #expect(request.options.emitIRJSON == true)
+    }
+
+    @Test func buildRequestFromConfigFileReadsThresholds() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let configJSON: [String: Any] = [
+            "topCell": "CHIP",
+            "backendID": "mock",
+            "inputs": [
+                "layout": "chip.gds",
+                "netlist": "chip.sp",
+                "technology": "tech.json",
+            ],
+            "corners": ["ff_m40c_0v9"],
+            "options": [
+                "includeCouplingCaps": false,
+                "maxParallelJobs": 4,
+                "strictValidation": true,
+                "minCapacitanceF": 5e-16,
+                "minResistanceOhm": 0.05,
+            ],
+        ]
+        let configURL = tmpDir.appending(path: "config.json")
+        let data = try JSONSerialization.data(withJSONObject: configJSON, options: .prettyPrinted)
+        try data.write(to: configURL)
+
+        let cmd = try ExtractCommand(arguments: ["--config", configURL.path(percentEncoded: false)])
+        let request = try await cmd.buildRequestFromConfigFile(configURL)
+
+        #expect(request.topCell == "CHIP")
+        #expect(request.corners.count == 1)
+        #expect(request.corners[0].id == "ff_m40c_0v9")
+        #expect(request.options.includeCouplingCaps == false)
+        #expect(request.options.maxParallelJobs == 4)
+        #expect(request.options.strictValidation == true)
+        #expect(request.options.minCapacitanceF == 5e-16)
+        #expect(request.options.minResistanceOhm == 0.05)
+        #expect(request.options.emitRawArtifacts == true)
+        #expect(request.options.emitIRJSON == true)
+    }
+
+    @Test func buildRequestFromConfigFileDefaultsThresholdsToNil() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let configJSON: [String: Any] = [
+            "topCell": "T",
+            "inputs": [
+                "layout": "a.gds",
+                "netlist": "a.sp",
+                "technology": "t.json",
+            ],
+        ]
+        let configURL = tmpDir.appending(path: "config.json")
+        let data = try JSONSerialization.data(withJSONObject: configJSON, options: .prettyPrinted)
+        try data.write(to: configURL)
+
+        let cmd = try ExtractCommand(arguments: ["--config", configURL.path(percentEncoded: false)])
+        let request = try await cmd.buildRequestFromConfigFile(configURL)
+
+        #expect(request.options.minCapacitanceF == nil)
+        #expect(request.options.minResistanceOhm == nil)
     }
 
     // MARK: - ParseCommand Argument Parsing
@@ -127,6 +198,18 @@ struct PEXCLITests {
         #expect(cmd.format == .spef)
         #expect(cmd.cornerID == "default")
         #expect(cmd.jsonOutput == false)
+    }
+
+    @Test func parseCommandRejectsUnknownFormat() {
+        do {
+            _ = try ParseCommand(arguments: ["--input", "/tmp/test.dspf", "--format", "dspf"])
+            #expect(Bool(false), "Should have thrown")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("Unsupported format"))
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
     }
 
     @Test func parseCommandMissingInput() {

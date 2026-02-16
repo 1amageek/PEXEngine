@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Synchronization
 @testable import PEXCore
 @testable import PEXAdapters
 
@@ -41,6 +42,56 @@ struct MockPEXAdapterTests {
         let validator = ParasiticIRValidator()
         let result = validator.validate(ir)
         #expect(result.isValid, "Mock-generated IR should be valid")
+    }
+
+    // MARK: - ProcessRunner Tests
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerEchoStdout() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executableURL: URL(filePath: "/bin/echo"),
+            arguments: ["hello", "world"]
+        )
+        #expect(result.exitCode == 0)
+        #expect(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "hello world")
+        #expect(result.stderr.isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerNonZeroExitCode() async throws {
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executableURL: URL(filePath: "/bin/sh"),
+            arguments: ["-c", "exit 42"]
+        )
+        #expect(result.exitCode == 42)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerImmediateExit() async throws {
+        // /usr/bin/true は即座に終了する — ハンドラ設定前に終了してもハングしないことを検証
+        let runner = ProcessRunner()
+        let result = try await runner.run(
+            executableURL: URL(filePath: "/usr/bin/true")
+        )
+        #expect(result.exitCode == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerInvalidExecutableThrows() async {
+        let runner = ProcessRunner()
+        do {
+            _ = try await runner.run(
+                executableURL: URL(filePath: "/nonexistent/binary")
+            )
+            #expect(Bool(false), "Should have thrown")
+        } catch let error as PEXError {
+            #expect(error.kind == .backendExecutionFailed)
+            #expect(error.message.contains("/nonexistent/binary"))
+        } catch {
+            #expect(Bool(false), "Unexpected error type: \(error)")
+        }
     }
 
     @Test func temperatureScalesValues() {
