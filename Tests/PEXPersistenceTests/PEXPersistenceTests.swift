@@ -65,7 +65,7 @@ struct PEXPersistenceTests {
 
     @Test func artifactStoreSaveLoadRoundTrip() throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_persist_test_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryDirectory(tempDir) }
 
         let runID = PEXRunID()
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
@@ -76,6 +76,10 @@ struct PEXPersistenceTests {
 
         let ir = makeTestIR()
         try store.saveIR(ir, for: cornerID)
+        let rawURL = workspace.cornerRawDirectory(cornerID).appending(path: "tt.spef")
+        let logURL = workspace.cornerRawDirectory(cornerID).appending(path: "extraction.log")
+        try Data("*SPEF".utf8).write(to: rawURL)
+        try Data("clean".utf8).write(to: logURL)
 
         let manifest = PEXManifest(
             runID: runID,
@@ -87,7 +91,7 @@ struct PEXPersistenceTests {
             corners: [
                 PEXManifest.CornerEntry(
                     cornerID: "tt", status: .success,
-                    rawFiles: ["tt.spef"], irFile: "tt.json", logFile: nil
+                    rawFiles: ["tt.spef"], irFile: "tt.json", logFile: "extraction.log"
                 )
             ],
             warnings: ["test warning"]
@@ -103,11 +107,16 @@ struct PEXPersistenceTests {
         #expect(result.metrics.successCount == 1)
         #expect(result.warnings.count == 1)
         #expect(result.warnings[0].message == "test warning")
+        #expect(result.cornerResults[0].rawOutputURLs == [rawURL])
+        #expect(result.cornerResults[0].logURL == logURL)
+        #expect(normalizedPath(result.artifacts.cornerArtifacts[cornerID]?.rawDirectory) == normalizedDirectoryPath(workspace.cornerRawDirectory(cornerID)))
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.irURL == workspace.cornerIRURL(cornerID))
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.logURL == logURL)
     }
 
     @Test func loadResultMultiCorner() throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_multi_persist_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryDirectory(tempDir) }
 
         let runID = PEXRunID()
         let corners: [PEXCornerID] = ["tt", "ss", "ff"]
@@ -152,7 +161,7 @@ struct PEXPersistenceTests {
 
     @Test func loadResultWithFailedCorner() throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_fail_persist_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryDirectory(tempDir) }
 
         let runID = PEXRunID()
         let successCorner: PEXCornerID = "tt"
@@ -164,8 +173,16 @@ struct PEXPersistenceTests {
 
         let ir = makeTestIR()
         try store.saveIR(ir, for: successCorner)
+        let successRawURL = workspace.cornerRawDirectory(successCorner).appending(path: "tt.spef")
+        let successLogURL = workspace.cornerRawDirectory(successCorner).appending(path: "extraction.log")
+        let failRawURL = workspace.cornerRawDirectory(failCorner).appending(path: "ss.spef")
+        let failLogURL = workspace.cornerRawDirectory(failCorner).appending(path: "extraction.log")
+        try Data("*SPEF tt".utf8).write(to: successRawURL)
+        try Data("tt clean".utf8).write(to: successLogURL)
+        try Data("*SPEF ss".utf8).write(to: failRawURL)
+        try Data("ss failed".utf8).write(to: failLogURL)
 
-        // 失敗コーナには IR を保存しない（実際の動作を再現）
+        // Failed corners do not have IR, but still retain raw and log evidence.
 
         let manifest = PEXManifest(
             runID: runID,
@@ -175,8 +192,8 @@ struct PEXPersistenceTests {
             startedAt: Date(),
             finishedAt: Date(),
             corners: [
-                PEXManifest.CornerEntry(cornerID: "tt", status: .success, rawFiles: [], irFile: "tt.json", logFile: nil),
-                PEXManifest.CornerEntry(cornerID: "ss", status: .failed, rawFiles: [], irFile: nil, logFile: nil),
+                PEXManifest.CornerEntry(cornerID: "tt", status: .success, rawFiles: ["tt.spef"], irFile: "tt.json", logFile: "extraction.log"),
+                PEXManifest.CornerEntry(cornerID: "ss", status: .failed, rawFiles: ["ss.spef"], irFile: nil, logFile: "extraction.log"),
             ],
             warnings: ["corner ss failed"]
         )
@@ -191,8 +208,135 @@ struct PEXPersistenceTests {
         #expect(ttResult?.status == .success)
         #expect(ttResult?.ir != nil)
         #expect(ttResult?.ir?.nets.count == 1)
+        #expect(ttResult?.rawOutputURLs == [successRawURL])
+        #expect(ttResult?.logURL == successLogURL)
         #expect(ssResult?.status == .failed)
         #expect(ssResult?.ir == nil)
+        #expect(ssResult?.rawOutputURLs == [failRawURL])
+        #expect(ssResult?.logURL == failLogURL)
+        #expect(result.artifacts.cornerArtifacts[successCorner]?.logURL == successLogURL)
+        #expect(result.artifacts.cornerArtifacts[failCorner]?.logURL == failLogURL)
+    }
+
+    @Test func loadResultPreservesDeclaredMissingLogArtifact() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_missing_log_persist_\(UUID().uuidString)")
+        defer { removeTemporaryDirectory(tempDir) }
+
+        let runID = PEXRunID()
+        let cornerID: PEXCornerID = "tt"
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: [cornerID])
+
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveIR(makeTestIR(), for: cornerID)
+        let declaredLogURL = workspace.cornerRawDirectory(cornerID).appending(path: "missing.log")
+        let manifest = PEXManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("missing-log"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [
+                PEXManifest.CornerEntry(
+                    cornerID: cornerID,
+                    status: .success,
+                    rawFiles: [],
+                    irFile: "tt.json",
+                    logFile: "missing.log"
+                )
+            ],
+            warnings: []
+        )
+
+        let result = try store.loadResult(cornerIDs: [cornerID], manifest: manifest)
+        #expect(result.cornerResults.first?.logURL == declaredLogURL)
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.logURL == declaredLogURL)
+        #expect(!FileManager.default.fileExists(atPath: declaredLogURL.path(percentEncoded: false)))
+    }
+
+    @Test func buildArtifactIndexUsesLogDirectoryWhenRawFilesAreEmpty() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_log_only_persist_\(UUID().uuidString)")
+        defer { removeTemporaryDirectory(tempDir) }
+
+        let runID = PEXRunID()
+        let cornerID: PEXCornerID = "tt"
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: [cornerID])
+        let customLogDirectory = workspace.runDirectory.appending(path: "logs").appending(path: cornerID.value)
+        try FileManager.default.createDirectory(at: customLogDirectory, withIntermediateDirectories: true)
+
+        let manifest = PEXManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("log-only"),
+            backendID: "mock",
+            status: .failed,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [
+                PEXManifest.CornerEntry(
+                    cornerID: cornerID,
+                    status: .failed,
+                    rawFiles: [],
+                    irFile: nil,
+                    logFile: "logs/tt/extraction.log"
+                )
+            ],
+            warnings: []
+        )
+
+        let result = try PEXArtifactStore(workspace: workspace).loadResult(cornerIDs: [cornerID], manifest: manifest)
+        #expect(normalizedPath(result.artifacts.cornerArtifacts[cornerID]?.rawDirectory) == normalizedDirectoryPath(customLogDirectory))
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.logURL == customLogDirectory.appending(path: "extraction.log"))
+    }
+
+    @Test func loadResultResolvesManifestRelativeArtifactPaths() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_relative_persist_\(UUID().uuidString)")
+        defer { removeTemporaryDirectory(tempDir) }
+
+        let runID = PEXRunID()
+        let cornerID: PEXCornerID = "tt"
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: [cornerID])
+        let customIRDirectory = workspace.runDirectory.appending(path: "custom-ir")
+        let customRawDirectory = workspace.runDirectory.appending(path: "custom-raw").appending(path: cornerID.value)
+        try FileManager.default.createDirectory(at: customIRDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: customRawDirectory, withIntermediateDirectories: true)
+
+        let store = PEXArtifactStore(workspace: workspace)
+        let ir = makeTestIR()
+        let serializer = PEXIRSerializer()
+        try serializer.encode(ir).write(to: customIRDirectory.appending(path: "tt-custom.json"))
+        try Data("*SPEF custom".utf8).write(to: customRawDirectory.appending(path: "tt.spef"))
+        try Data("custom log".utf8).write(to: customRawDirectory.appending(path: "extraction.log"))
+
+        let manifest = PEXManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("relative"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [
+                PEXManifest.CornerEntry(
+                    cornerID: cornerID,
+                    status: .success,
+                    rawFiles: ["custom-raw/tt/tt.spef"],
+                    irFile: "custom-ir/tt-custom.json",
+                    logFile: "custom-raw/tt/extraction.log"
+                )
+            ],
+            warnings: []
+        )
+
+        let result = try store.loadResult(cornerIDs: [cornerID], manifest: manifest)
+        let corner = try #require(result.cornerResults.first)
+        #expect(corner.ir?.cornerID == cornerID)
+        #expect(corner.rawOutputURLs == [customRawDirectory.appending(path: "tt.spef")])
+        #expect(corner.logURL == customRawDirectory.appending(path: "extraction.log"))
+        #expect(normalizedPath(result.artifacts.cornerArtifacts[cornerID]?.rawDirectory) == normalizedDirectoryPath(customRawDirectory))
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.irURL == customIRDirectory.appending(path: "tt-custom.json"))
+        #expect(result.artifacts.cornerArtifacts[cornerID]?.logURL == customRawDirectory.appending(path: "extraction.log"))
     }
 
     @Test func loadManifestRejectsMissingFile() {
@@ -293,4 +437,23 @@ struct PEXPersistenceTests {
             metrics: PEXRunMetrics(totalDurationSeconds: 1.0, cornerCount: 1, successCount: 1, failureCount: 0)
         )
     }
+}
+
+private func removeTemporaryDirectory(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary directory at \(url.path(percentEncoded: false)): \(error)")
+    }
+}
+
+private func normalizedPath(_ url: URL?) -> String? {
+    guard let url else { return nil }
+    return normalizedDirectoryPath(url)
+}
+
+private func normalizedDirectoryPath(_ url: URL) -> String {
+    let path = url.path(percentEncoded: false)
+    guard path.count > 1 else { return path }
+    return path.hasSuffix("/") ? String(path.dropLast()) : path
 }

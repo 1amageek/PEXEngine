@@ -207,6 +207,8 @@ Each extraction run produces immutable artifacts:
   reports/summary.md     # Human-readable summary
 ```
 
+Loading a run reconstructs corner results from the manifest rather than assuming default paths. Successful corners retain their IR, raw output files, and log file paths; failed corners retain raw and log evidence even when no IR artifact exists.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.

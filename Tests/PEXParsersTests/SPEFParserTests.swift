@@ -192,7 +192,7 @@ struct SPEFParserTests {
         let tempDir = FileManager.default.temporaryDirectory
         let spefURL = tempDir.appending(path: "test_\(UUID().uuidString).spef")
         try Data(sampleSPEF.utf8).write(to: spefURL)
-        defer { try? FileManager.default.removeItem(at: spefURL) }
+        defer { removeTemporaryItem(spefURL) }
 
         let raw = PEXRawOutput(format: .spef, fileURLs: [spefURL], logURL: nil, metadata: [:])
         let context = PEXParseContext(
@@ -205,5 +205,13 @@ struct SPEFParserTests {
         let parser = SPEFPEXParser()
         let ir = try parser.parse(raw, context: context)
         #expect(ir.nets.count == 2)
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

@@ -4,10 +4,12 @@ import PEXCore
 public struct PEXArtifactStore: Sendable {
     public let workspace: PEXRunWorkspace
     private let serializer: PEXIRSerializer
+    private let pathResolver: PEXArtifactPathResolver
 
     public init(workspace: PEXRunWorkspace) {
         self.workspace = workspace
         self.serializer = PEXIRSerializer()
+        self.pathResolver = PEXArtifactPathResolver(runDirectory: workspace.runDirectory)
     }
 
     public func saveManifest(_ manifest: PEXManifest) throws {
@@ -95,15 +97,17 @@ public struct PEXArtifactStore: Sendable {
         var cornerResults: [PEXCornerResult] = []
         for cornerID in cornerIDs {
             let manifestCorner = manifest.corners.first { $0.cornerID == cornerID }
+            let rawOutputURLs = manifestCorner.map(rawOutputURLs(for:)) ?? []
+            let logURL = manifestCorner.flatMap(logURL(for:))
 
-            if manifestCorner?.irFile != nil {
-                let ir = try loadIR(for: cornerID)
+            if let irFile = manifestCorner?.irFile {
+                let ir = try loadIR(fileName: irFile, for: cornerID)
                 cornerResults.append(PEXCornerResult(
                     cornerID: cornerID,
                     status: manifestCorner?.status ?? .success,
                     ir: ir,
-                    rawOutputURLs: [],
-                    logURL: workspace.cornerLogURL(cornerID),
+                    rawOutputURLs: rawOutputURLs,
+                    logURL: logURL,
                     warnings: [],
                     metrics: PEXCornerMetrics(
                         durationSeconds: 0,
@@ -116,8 +120,8 @@ public struct PEXArtifactStore: Sendable {
                     cornerID: cornerID,
                     status: manifestCorner?.status ?? .failed,
                     ir: nil,
-                    rawOutputURLs: [],
-                    logURL: workspace.cornerLogURL(cornerID),
+                    rawOutputURLs: rawOutputURLs,
+                    logURL: logURL,
                     warnings: [],
                     metrics: PEXCornerMetrics(
                         durationSeconds: 0,
@@ -139,7 +143,7 @@ public struct PEXArtifactStore: Sendable {
             finishedAt: manifest.finishedAt,
             cornerResults: cornerResults,
             warnings: manifest.warnings.map { PEXWarning(stage: .reporting, message: $0) },
-            artifacts: buildArtifactIndex(corners: cornerIDs),
+            artifacts: buildArtifactIndex(corners: cornerIDs, manifest: manifest),
             metrics: PEXRunMetrics(
                 totalDurationSeconds: manifest.finishedAt.timeIntervalSince(manifest.startedAt),
                 cornerCount: cornerIDs.count,
@@ -163,14 +167,21 @@ public struct PEXArtifactStore: Sendable {
     }
 
     public func buildArtifactIndex(corners: [PEXCornerID]) -> PEXArtifactIndex {
+        buildArtifactIndex(corners: corners, manifest: nil)
+    }
+
+    public func buildArtifactIndex(corners: [PEXCornerID], manifest: PEXManifest?) -> PEXArtifactIndex {
         var cornerArtifacts: [PEXCornerID: PEXArtifactIndex.CornerArtifacts] = [:]
         for corner in corners {
-            let logURL = workspace.cornerLogURL(corner)
-            let logExists = FileManager.default.fileExists(atPath: logURL.path(percentEncoded: false))
+            let manifestCorner = manifest?.corners.first { $0.cornerID == corner }
+            let rawURLs = manifestCorner.map(rawOutputURLs(for:)) ?? []
+            let logURL = manifestCorner.flatMap(logURL(for:))
+            let rawDirectory = (rawURLs.first ?? logURL)?.deletingLastPathComponent() ?? workspace.cornerRawDirectory(corner)
+            let irURL = manifestCorner?.irFile.map { resolveIRURL($0, cornerID: corner) } ?? workspace.cornerIRURL(corner)
             cornerArtifacts[corner] = PEXArtifactIndex.CornerArtifacts(
-                rawDirectory: workspace.cornerRawDirectory(corner),
-                irURL: workspace.cornerIRURL(corner),
-                logURL: logExists ? logURL : nil
+                rawDirectory: rawDirectory,
+                irURL: irURL,
+                logURL: logURL
             )
         }
         return PEXArtifactIndex(
@@ -179,5 +190,35 @@ public struct PEXArtifactStore: Sendable {
             cornerArtifacts: cornerArtifacts,
             reportURL: workspace.reportURL
         )
+    }
+
+    public func loadIR(fileName: String, for cornerID: PEXCornerID) throws -> ParasiticIR {
+        let url = resolveIRURL(fileName, cornerID: cornerID)
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw PEXError.persistenceFailed("Failed to read IR for corner \(cornerID)", underlying: error)
+        }
+        return try serializer.decode(from: data)
+    }
+
+    private func rawOutputURLs(for corner: PEXManifest.CornerEntry) -> [URL] {
+        corner.rawFiles.map { fileName in
+            resolveRawURL(fileName, cornerID: corner.cornerID)
+        }
+    }
+
+    private func logURL(for corner: PEXManifest.CornerEntry) -> URL? {
+        guard let logFile = corner.logFile else { return nil }
+        return resolveRawURL(logFile, cornerID: corner.cornerID)
+    }
+
+    private func resolveIRURL(_ fileName: String, cornerID: PEXCornerID) -> URL {
+        pathResolver.irURL(fileName: fileName, cornerID: cornerID)
+    }
+
+    private func resolveRawURL(_ fileName: String, cornerID: PEXCornerID) -> URL {
+        pathResolver.rawURL(fileName: fileName, cornerID: cornerID)
     }
 }

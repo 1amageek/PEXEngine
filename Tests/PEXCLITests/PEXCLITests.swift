@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import PEXCLICore
+@testable import PEXEngine
 @testable import PEXCore
 
 @Suite("PEXCLI Tests")
@@ -119,7 +120,7 @@ struct PEXCLITests {
         let tmpDir = FileManager.default.temporaryDirectory
             .appending(path: "pex-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        defer { removeTemporaryItem(tmpDir) }
 
         let configJSON: [String: Any] = [
             "topCell": "CHIP",
@@ -161,7 +162,7 @@ struct PEXCLITests {
         let tmpDir = FileManager.default.temporaryDirectory
             .appending(path: "pex-test-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        defer { removeTemporaryItem(tmpDir) }
 
         let configJSON: [String: Any] = [
             "topCell": "T",
@@ -280,6 +281,62 @@ struct PEXCLITests {
         } catch {
             #expect(Bool(false), "Unexpected error: \(error)")
         }
+    }
+
+    @Test func summarizeCommandUsesManifestIRFile() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-summary-\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let cornerID = PEXCornerID("tt")
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: [cornerID])
+
+        let customIRDirectory = workspace.runDirectory.appending(path: "custom-ir")
+        try FileManager.default.createDirectory(at: customIRDirectory, withIntermediateDirectories: true)
+        let ir = ParasiticIR(
+            version: "1.0",
+            cornerID: cornerID,
+            units: .canonical,
+            nets: [
+                ParasiticNet(name: NetName("OUT"), nodes: [], totalGroundCapF: 2e-12, totalCouplingCapF: 1e-12, totalResistanceOhm: 42)
+            ],
+            elements: [],
+            metadata: [:]
+        )
+        let serializer = PEXIRSerializer()
+        try serializer.encode(ir).write(to: customIRDirectory.appending(path: "tt-custom.json"))
+
+        let manifest = PEXManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("summary"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [
+                PEXManifest.CornerEntry(
+                    cornerID: cornerID,
+                    status: .success,
+                    rawFiles: [],
+                    irFile: "custom-ir/tt-custom.json",
+                    logFile: nil
+                )
+            ],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let cmd = try SummarizeCommand(arguments: [
+            "--run",
+            workspace.runDirectory.path(percentEncoded: false),
+        ])
+        let summary = try cmd.buildSummary()
+        let corner = try #require(summary.corners.first)
+        #expect(corner.netCount == 1)
+        #expect(corner.elementCount == 0)
+        #expect(corner.topNets.first?.name == "OUT")
     }
 
     // MARK: - DoctorCommand Argument Parsing
@@ -435,5 +492,13 @@ struct PEXCLITests {
         // Negative values
         #expect(cmd.formatEngineering(-5e-12) == "-5.000p")
         #expect(cmd.formatEngineering(-1.0e-15) == "-1.000f")
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

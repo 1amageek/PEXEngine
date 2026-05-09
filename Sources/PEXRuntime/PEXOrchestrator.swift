@@ -86,10 +86,8 @@ public actor PEXOrchestrator {
             failureCount: failureCount
         )
 
-        // 10. Build artifacts index
-        let artifacts = store.buildArtifactIndex(corners: cornerIDs)
-
-        // 11. Save manifest
+        // 10. Build and save manifest
+        let pathResolver = PEXArtifactPathResolver(runDirectory: workspace.runDirectory)
         let manifest = PEXManifest(
             runID: runID,
             requestHash: requestHash,
@@ -101,9 +99,9 @@ public actor PEXOrchestrator {
                 PEXManifest.CornerEntry(
                     cornerID: cr.cornerID,
                     status: cr.status,
-                    rawFiles: cr.rawOutputURLs.map(\.lastPathComponent),
-                    irFile: cr.ir != nil ? "\(cr.cornerID.value).json" : nil,
-                    logFile: cr.logURL?.lastPathComponent
+                    rawFiles: cr.rawOutputURLs.map { pathResolver.manifestPath(for: $0) },
+                    irFile: request.options.emitIRJSON && cr.ir != nil ? pathResolver.manifestPath(for: workspace.cornerIRURL(cr.cornerID)) : nil,
+                    logFile: cr.logURL.map { pathResolver.manifestPath(for: $0) }
                 )
             },
             warnings: allWarnings.map(\.message)
@@ -113,6 +111,9 @@ public actor PEXOrchestrator {
         } catch {
             allWarnings.append(PEXWarning(stage: .persistence, message: "Failed to save manifest: \(error)"))
         }
+
+        // 11. Build artifacts index from the same manifest persisted for later review.
+        let artifacts = store.buildArtifactIndex(corners: cornerIDs, manifest: manifest)
 
         // 12. Generate and save report
         let reportGenerator = PEXReportGenerator()

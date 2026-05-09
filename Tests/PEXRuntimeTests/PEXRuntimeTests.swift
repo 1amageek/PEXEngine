@@ -63,6 +63,7 @@ struct PEXRuntimeTests {
         let engine = DefaultPEXEngine.withDefaults()
 
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_test_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
 
         let tech = TechnologyIR(
             processName: "test_process",
@@ -102,13 +103,11 @@ struct PEXRuntimeTests {
             _ = cr.warnings  // Confirms field is accessible
         }
 
-        // Cleanup
-        try? FileManager.default.removeItem(at: tempDir)
     }
 
     @Test func defaultPEXServiceExtractAndLoadRun() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_service_test_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryItem(tempDir) }
 
         let service = DefaultPEXService.withDefaults()
 
@@ -143,11 +142,18 @@ struct PEXRuntimeTests {
         #expect(loaded.status == .success)
         #expect(loaded.cornerResults.count == 1)
         #expect(loaded.cornerResults[0].ir != nil)
+        #expect(loaded.artifacts.cornerArtifacts[PEXCornerID("tt")] == result.artifacts.cornerArtifacts[PEXCornerID("tt")])
+
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
+        let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
+        let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
+        #expect(manifestCorner.rawFiles == ["raw/tt/tt.spef"])
+        #expect(manifestCorner.irFile == "ir/tt.json")
     }
 
     @Test func defaultPEXServiceQueryNet() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_query_test_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryItem(tempDir) }
 
         let tech = TechnologyIR(
             processName: "test_process",
@@ -190,6 +196,46 @@ struct PEXRuntimeTests {
         #expect(summary.netName == firstNet.name)
         #expect(summary.cornerID == PEXCornerID("tt"))
         #expect(summary.nodeCount == firstNet.nodes.count)
+    }
+
+    @Test func loadRunDoesNotRequireIRWhenIRJSONEmissionIsDisabled() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_no_ir_test_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+
+        let options = PEXRunOptions(
+            extractMode: .rc,
+            includeCouplingCaps: true,
+            minCapacitanceF: nil,
+            minResistanceOhm: nil,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: false,
+            strictValidation: false
+        )
+        let engine = DefaultPEXEngine.withDefaults()
+        let request = PEXRunRequest(
+            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutFormat: .gds,
+            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: options,
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
+        let store = PEXArtifactStore(workspace: workspace)
+        let manifest = try store.loadManifest()
+        let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
+        #expect(manifestCorner.irFile == nil)
+
+        let loaded = try store.loadResult(cornerIDs: [PEXCornerID("tt")], manifest: manifest)
+        #expect(loaded.status == .success)
+        #expect(loaded.cornerResults.first?.ir == nil)
     }
 
     // MARK: - Error Path Tests
@@ -275,7 +321,7 @@ struct PEXRuntimeTests {
 
     @Test func technologyResolverRejectsInvalidJSON() throws {
         let tempFile = FileManager.default.temporaryDirectory.appending(path: "bad_tech_\(UUID().uuidString).json")
-        defer { try? FileManager.default.removeItem(at: tempFile) }
+        defer { removeTemporaryItem(tempFile) }
         try Data("{ not valid json".utf8).write(to: tempFile)
 
         let resolver = TechnologyResolver()
@@ -290,7 +336,7 @@ struct PEXRuntimeTests {
 
     @Test func queryNetRejectsUnknownNet() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_qerr_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryItem(tempDir) }
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
@@ -337,7 +383,7 @@ struct PEXRuntimeTests {
 
     @Test func serviceExtractViaLayoutSelection() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_svc_ext_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryItem(tempDir) }
 
         let techFile = tempDir.appending(path: "tech.json")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -365,7 +411,7 @@ struct PEXRuntimeTests {
 
     @Test func multiCornerLoadRunPreservesAll() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_multi_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: tempDir) }
+        defer { removeTemporaryItem(tempDir) }
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
@@ -407,6 +453,14 @@ struct PEXRuntimeTests {
             defaultExtractionRules: .default,
             backendHints: [:]
         )
+    }
+
+    private func removeTemporaryItem(_ url: URL) {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
+        }
     }
 
     // MARK: - Direct Parameter Tests

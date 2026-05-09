@@ -52,6 +52,34 @@ public struct SummarizeCommand: Sendable {
     }
 
     public func run() async throws {
+        let summary = try buildSummary()
+        if jsonOutput {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let jsonData = try encoder.encode(summary)
+            print(String(data: jsonData, encoding: .utf8) ?? "{}")
+        } else {
+            print("Run: \(summary.runID)")
+            print("Status: \(summary.status)")
+            print("Backend: \(summary.backendID)")
+            print("Corners: \(summary.corners.count)")
+            print("")
+
+            for cs in summary.corners {
+                print("Corner: \(cs.cornerID) (\(cs.status))")
+                print("  Nets: \(cs.netCount), Elements: \(cs.elementCount)")
+                if !cs.topNets.isEmpty {
+                    print("  Top \(cs.topNets.count) nets by capacitance:")
+                    for net in cs.topNets {
+                        print("    \(net.name): gnd=\(formatEngineering(net.groundCapF))F cc=\(formatEngineering(net.couplingCapF))F R=\(formatEngineering(net.resistanceOhm))Ohm")
+                    }
+                }
+                print("")
+            }
+        }
+    }
+
+    func buildSummary() throws -> RunSummary {
         let manifestURL = runPath.appending(path: "manifest.json")
         let data: Data
         do {
@@ -70,7 +98,7 @@ public struct SummarizeCommand: Sendable {
         }
 
         let serializer = PEXIRSerializer()
-        let irDirectory = runPath.appending(path: "ir")
+        let pathResolver = PEXArtifactPathResolver(runDirectory: runPath)
         var cornerSummaries: [CornerSummary] = []
 
         let cornersToProcess: [PEXManifest.CornerEntry]
@@ -84,7 +112,11 @@ public struct SummarizeCommand: Sendable {
         }
 
         for entry in cornersToProcess {
-            let irURL = irDirectory.appending(path: "\(entry.cornerID.value).json")
+            guard let irFile = entry.irFile else {
+                cornerSummaries.append(CornerSummary(cornerID: entry.cornerID.value, status: entry.status.rawValue, netCount: 0, elementCount: 0, topNets: []))
+                continue
+            }
+            let irURL = pathResolver.irURL(fileName: irFile, cornerID: entry.cornerID)
             let irData: Data
             do {
                 irData = try Data(contentsOf: irURL)
@@ -112,36 +144,12 @@ public struct SummarizeCommand: Sendable {
             }
         }
 
-        if jsonOutput {
-            let summary = RunSummary(
-                runID: manifest.runID.description,
-                status: manifest.status.rawValue,
-                backendID: manifest.backendID,
-                corners: cornerSummaries
-            )
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let jsonData = try encoder.encode(summary)
-            print(String(data: jsonData, encoding: .utf8) ?? "{}")
-        } else {
-            print("Run: \(manifest.runID)")
-            print("Status: \(manifest.status.rawValue)")
-            print("Backend: \(manifest.backendID)")
-            print("Corners: \(manifest.corners.count)")
-            print("")
-
-            for cs in cornerSummaries {
-                print("Corner: \(cs.cornerID) (\(cs.status))")
-                print("  Nets: \(cs.netCount), Elements: \(cs.elementCount)")
-                if !cs.topNets.isEmpty {
-                    print("  Top \(cs.topNets.count) nets by capacitance:")
-                    for net in cs.topNets {
-                        print("    \(net.name): gnd=\(formatEngineering(net.groundCapF))F cc=\(formatEngineering(net.couplingCapF))F R=\(formatEngineering(net.resistanceOhm))Ohm")
-                    }
-                }
-                print("")
-            }
-        }
+        return RunSummary(
+            runID: manifest.runID.description,
+            status: manifest.status.rawValue,
+            backendID: manifest.backendID,
+            corners: cornerSummaries
+        )
     }
 
     func formatEngineering(_ value: Double) -> String {
