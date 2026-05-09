@@ -48,7 +48,10 @@ public struct ParseCommand: Sendable {
             throw PEXError.invalidInput("Input file path is required")
         }
         self.inputPath = inputPath
-        self.format = PEXOutputFormat(rawValue: fmt) ?? .spef
+        guard let format = PEXOutputFormat(rawValue: fmt), format == .spef else {
+            throw PEXError.invalidInput("Unsupported format '\(fmt)'. Supported: spef")
+        }
+        self.format = format
         self.cornerID = corner
         self.jsonOutput = json
     }

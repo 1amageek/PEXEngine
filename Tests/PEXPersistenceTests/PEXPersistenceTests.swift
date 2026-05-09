@@ -165,12 +165,7 @@ struct PEXPersistenceTests {
         let ir = makeTestIR()
         try store.saveIR(ir, for: successCorner)
 
-        // Save IR for fail corner too (loadResult needs it)
-        let failIR = ParasiticIR(
-            version: "1.0", cornerID: failCorner, units: .canonical,
-            nets: [], elements: [], metadata: [:]
-        )
-        try store.saveIR(failIR, for: failCorner)
+        // 失敗コーナには IR を保存しない（実際の動作を再現）
 
         let manifest = PEXManifest(
             runID: runID,
@@ -194,7 +189,10 @@ struct PEXPersistenceTests {
         let ttResult = result.cornerResults.first { $0.cornerID == successCorner }
         let ssResult = result.cornerResults.first { $0.cornerID == failCorner }
         #expect(ttResult?.status == .success)
+        #expect(ttResult?.ir != nil)
+        #expect(ttResult?.ir?.nets.count == 1)
         #expect(ssResult?.status == .failed)
+        #expect(ssResult?.ir == nil)
     }
 
     @Test func loadManifestRejectsMissingFile() {

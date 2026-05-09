@@ -15,6 +15,9 @@ let package = Package(
         .library(name: "PEXCLICore", targets: ["PEXCLICore"]),
         .executable(name: "pexengine", targets: ["PEXCLI"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-configuration", .upToNextMinor(from: "0.1.0")),
+    ],
     targets: [
         .target(name: "PEXCore"),
         .target(name: "PEXAdapters", dependencies: ["PEXCore"]),
@@ -26,7 +29,10 @@ let package = Package(
         .target(name: "PEXEngine", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence", "PEXRuntime",
         ]),
-        .target(name: "PEXCLICore", dependencies: ["PEXEngine"]),
+        .target(name: "PEXCLICore", dependencies: [
+            "PEXEngine",
+            .product(name: "Configuration", package: "swift-configuration"),
+        ]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 
         .testTarget(name: "PEXCoreTests", dependencies: ["PEXCore"]),

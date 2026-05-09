@@ -8,10 +8,6 @@ public struct TechnologyResolver: Sendable {
         switch input {
         case .jsonFile(let url):
             return try resolveJSON(url)
-        case .tomlFile:
-            throw PEXError.technologyResolutionFailed("TOML technology files are not yet supported")
-        case .directory:
-            throw PEXError.technologyResolutionFailed("Directory-based technology packages are not yet supported")
         case .inline(let ir):
             return ir
         }

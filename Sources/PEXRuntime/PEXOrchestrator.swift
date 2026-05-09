@@ -89,20 +89,7 @@ public actor PEXOrchestrator {
         // 10. Build artifacts index
         let artifacts = store.buildArtifactIndex(corners: cornerIDs)
 
-        // 11. Build result
-        let result = PEXRunResult(
-            runID: runID,
-            requestHash: requestHash,
-            status: status,
-            startedAt: startedAt,
-            finishedAt: finishedAt,
-            cornerResults: cornerResults,
-            warnings: allWarnings,
-            artifacts: artifacts,
-            metrics: metrics
-        )
-
-        // 12. Save manifest
+        // 11. Save manifest
         let manifest = PEXManifest(
             runID: runID,
             requestHash: requestHash,
@@ -127,16 +114,34 @@ public actor PEXOrchestrator {
             allWarnings.append(PEXWarning(stage: .persistence, message: "Failed to save manifest: \(error)"))
         }
 
-        // 13. Generate and save report
+        // 12. Generate and save report
         let reportGenerator = PEXReportGenerator()
-        let report = reportGenerator.generateSummary(result: result)
+        let report = reportGenerator.generateSummary(
+            cornerResults: cornerResults,
+            status: status,
+            runID: runID,
+            requestHash: requestHash,
+            metrics: metrics,
+            warnings: allWarnings
+        )
         do {
             try store.saveReport(report)
         } catch {
             allWarnings.append(PEXWarning(stage: .reporting, message: "Failed to save report: \(error)"))
         }
 
-        return result
+        // 13. Build final result with all warnings collected during persistence and reporting.
+        return PEXRunResult(
+            runID: runID,
+            requestHash: requestHash,
+            status: status,
+            startedAt: startedAt,
+            finishedAt: finishedAt,
+            cornerResults: cornerResults,
+            warnings: allWarnings,
+            artifacts: artifacts,
+            metrics: metrics
+        )
     }
 
     private func executeCorners(

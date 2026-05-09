@@ -201,9 +201,8 @@ public protocol PEXParser: Sendable {
 ## 8. Technology Input and Normalization
 
 ### 8.1 Supported technology input styles
-- Style A: Directory package (decks + layer map + optional cross-section files).
-- Style B: JSON overlay (`tech.json`) for app workflows.
-- Style C: TOML project config (`pex.toml`) for CLI/CI reproducibility.
+- Style A: JSON file (`tech.json`) for app workflows and CLI/CI reproducibility.
+- Style B: Inline `TechnologyIR` for programmatic usage.
 
 ### 8.2 Internal normalization target
 All styles must resolve to `TechnologyIR`:
@@ -334,7 +333,7 @@ The package must ship an executable command: `pexengine`.
 - `pexengine doctor`
 
 ### 13.2 Global options
-- `--config <path>`: `pex.toml` path.
+- `--config <path>`: project config JSON path.
 - `--workspace <path>`: artifact root.
 - `--log-level <trace|debug|info|warn|error>`
 - `--json`: machine-readable result output.
@@ -410,27 +409,27 @@ Purpose: environment diagnostics.
 - `4`: parse/IR validation failure
 - `5`: persistence/internal failure
 
-## 14. Config Schema (`pex.toml`)
+## 14. Config Schema (JSON)
 
-Top-level tables:
-- `[project]`
-- `[inputs]`
-- `[technology]`
-- `[runtime]`
-- `[output]`
-- `[[corners]]`
+Configuration is loaded via `apple/swift-configuration` with a provider hierarchy:
+1. CLI flags (highest precedence)
+2. JSON config file (`--config <path>`)
+3. In-memory defaults (lowest precedence)
+
+JSON config top-level keys:
+- `topCell`
+- `inputs.layout`, `inputs.netlist`, `inputs.technology`
+- `backendID`
+- `corners` (array of corner ID strings)
+- `options.includeCouplingCaps`, `options.maxParallelJobs`, `options.strictValidation`
+- `output.workspace`
 
 Required fields:
 - `inputs.layout`
 - `inputs.netlist`
-- `inputs.top_cell`
-- `technology.path`
-- `runtime.backend`
-- at least one `corners.id`
-
-Merge rule:
-- CLI flags override `pex.toml`.
-- `pex.toml` overrides internal defaults.
+- `topCell`
+- `inputs.technology`
+- at least one entry in `corners`
 
 ## 15. Integration Contract for Host Apps
 
@@ -482,7 +481,7 @@ Recommended app query surface:
 - M1: Core domain, run model, error model, mock adapter.
 - M2: Runtime actor + persistence + deterministic manifests.
 - M3: SPEF parser + IR validator + `extract`/`parse` CLI commands.
-- M4: technology resolvers (`tech.json`, `pex.toml`, package directory) + `validate-tech`.
+- M4: technology resolvers (`tech.json`, inline) + `validate-tech` + `swift-configuration` integration.
 - M5: summarize/list-backends/doctor commands + integration API stabilization.
 
 ## 19. Acceptance Criteria (Detailed)

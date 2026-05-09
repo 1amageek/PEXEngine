@@ -259,31 +259,6 @@ struct PEXRuntimeTests {
         }
     }
 
-    @Test func technologyResolverRejectsToml() {
-        let resolver = TechnologyResolver()
-        do {
-            _ = try resolver.resolve(.tomlFile(URL(filePath: "/tmp/tech.toml")))
-            #expect(Bool(false), "Should have thrown")
-        } catch let error as PEXError {
-            #expect(error.kind == .technologyResolutionFailed)
-            #expect(error.message.contains("TOML"))
-        } catch {
-            #expect(Bool(false), "Unexpected error type: \(error)")
-        }
-    }
-
-    @Test func technologyResolverRejectsDirectory() {
-        let resolver = TechnologyResolver()
-        do {
-            _ = try resolver.resolve(.directory(URL(filePath: "/tmp/tech-pkg/")))
-            #expect(Bool(false), "Should have thrown")
-        } catch let error as PEXError {
-            #expect(error.kind == .technologyResolutionFailed)
-            #expect(error.message.contains("Directory"))
-        } catch {
-            #expect(Bool(false), "Unexpected error type: \(error)")
-        }
-    }
 
     @Test func technologyResolverRejectsMissingJSON() {
         let resolver = TechnologyResolver()

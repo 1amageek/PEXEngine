@@ -5,17 +5,35 @@ public struct PEXReportGenerator: Sendable {
     public init() {}
 
     public func generateSummary(result: PEXRunResult) -> String {
+        generateSummary(
+            cornerResults: result.cornerResults,
+            status: result.status,
+            runID: result.runID,
+            requestHash: result.requestHash,
+            metrics: result.metrics,
+            warnings: result.warnings
+        )
+    }
+
+    public func generateSummary(
+        cornerResults: [PEXCornerResult],
+        status: PEXRunStatus,
+        runID: PEXRunID,
+        requestHash: PEXRequestHash,
+        metrics: PEXRunMetrics,
+        warnings: [PEXWarning]
+    ) -> String {
         var lines: [String] = []
 
         lines.append("# PEX Extraction Summary")
         lines.append("")
         lines.append("| Field | Value |")
         lines.append("|-------|-------|")
-        lines.append("| Run ID | `\(result.runID)` |")
-        lines.append("| Request Hash | `\(result.requestHash)` |")
-        lines.append("| Status | \(result.status.rawValue) |")
-        lines.append("| Duration | \(String(format: "%.2f", result.metrics.totalDurationSeconds))s |")
-        lines.append("| Corners | \(result.metrics.cornerCount) (\(result.metrics.successCount) succeeded, \(result.metrics.failureCount) failed) |")
+        lines.append("| Run ID | `\(runID)` |")
+        lines.append("| Request Hash | `\(requestHash)` |")
+        lines.append("| Status | \(status.rawValue) |")
+        lines.append("| Duration | \(String(format: "%.2f", metrics.totalDurationSeconds))s |")
+        lines.append("| Corners | \(metrics.cornerCount) (\(metrics.successCount) succeeded, \(metrics.failureCount) failed) |")
         lines.append("")
 
         // Per-corner table
@@ -23,13 +41,13 @@ public struct PEXReportGenerator: Sendable {
         lines.append("")
         lines.append("| Corner | Status | Nets | Elements | Duration |")
         lines.append("|--------|--------|------|----------|----------|")
-        for cr in result.cornerResults {
+        for cr in cornerResults {
             lines.append("| \(cr.cornerID) | \(cr.status.rawValue) | \(cr.metrics.netCount) | \(cr.metrics.elementCount) | \(String(format: "%.2f", cr.metrics.durationSeconds))s |")
         }
         lines.append("")
 
         // Top nets by capacitance (from first successful corner)
-        if let firstSuccess = result.cornerResults.first(where: { $0.status == .success }),
+        if let firstSuccess = cornerResults.first(where: { $0.status == .success }),
            let ir = firstSuccess.ir {
             let topNets = ir.nets.sorted { $0.totalGroundCapF + $0.totalCouplingCapF > $1.totalGroundCapF + $1.totalCouplingCapF }
                 .prefix(10)
@@ -47,10 +65,10 @@ public struct PEXReportGenerator: Sendable {
         }
 
         // Warnings
-        if !result.warnings.isEmpty {
+        if !warnings.isEmpty {
             lines.append("## Warnings")
             lines.append("")
-            for warning in result.warnings {
+            for warning in warnings {
                 lines.append("- [\(warning.stage.rawValue)] \(warning.message)")
             }
             lines.append("")

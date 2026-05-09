@@ -94,22 +94,38 @@ public struct PEXArtifactStore: Sendable {
 
         var cornerResults: [PEXCornerResult] = []
         for cornerID in cornerIDs {
-            let ir = try loadIR(for: cornerID)
             let manifestCorner = manifest.corners.first { $0.cornerID == cornerID }
-            let status = manifestCorner?.status ?? .success
-            cornerResults.append(PEXCornerResult(
-                cornerID: cornerID,
-                status: status,
-                ir: ir,
-                rawOutputURLs: [],
-                logURL: workspace.cornerLogURL(cornerID),
-                warnings: [],
-                metrics: PEXCornerMetrics(
-                    durationSeconds: 0,
-                    netCount: ir.nets.count,
-                    elementCount: ir.elements.count
-                )
-            ))
+
+            if manifestCorner?.irFile != nil {
+                let ir = try loadIR(for: cornerID)
+                cornerResults.append(PEXCornerResult(
+                    cornerID: cornerID,
+                    status: manifestCorner?.status ?? .success,
+                    ir: ir,
+                    rawOutputURLs: [],
+                    logURL: workspace.cornerLogURL(cornerID),
+                    warnings: [],
+                    metrics: PEXCornerMetrics(
+                        durationSeconds: 0,
+                        netCount: ir.nets.count,
+                        elementCount: ir.elements.count
+                    )
+                ))
+            } else {
+                cornerResults.append(PEXCornerResult(
+                    cornerID: cornerID,
+                    status: manifestCorner?.status ?? .failed,
+                    ir: nil,
+                    rawOutputURLs: [],
+                    logURL: workspace.cornerLogURL(cornerID),
+                    warnings: [],
+                    metrics: PEXCornerMetrics(
+                        durationSeconds: 0,
+                        netCount: 0,
+                        elementCount: 0
+                    )
+                ))
+            }
         }
 
         let successCount = cornerResults.filter { $0.status == .success }.count

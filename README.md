@@ -10,7 +10,8 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 - **Multi-corner extraction** -- Parallel corner processing with configurable job limits
 - **Immutable artifact persistence** -- Manifest, raw outputs, normalized IR, and summary reports
 - **CLI tool** -- `pexengine` commands for extraction, parsing, validation, and diagnostics
-- **Fully testable** -- 91 tests across 10 suites, zero external dependencies
+- **Configuration via `swift-configuration`** -- JSON config with provider hierarchy (file > defaults)
+- **Fully testable** -- 89 tests across 10 suites
 
 ## Requirements
 

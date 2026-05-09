@@ -70,9 +70,9 @@ public enum CLIRouter {
             --strict              Enable strict validation
             --json                Output results as JSON
 
-          parse           Parse a SPEF/DSPF file
-            --input <path>    Path to SPEF/DSPF file
-            --format <fmt>    Format: spef, dspf (default: spef)
+          parse           Parse a SPEF file
+            --input <path>    Path to SPEF file
+            --format <fmt>    Format: spef (default: spef)
             --corner <id>     Corner ID (default: default)
             --json            Output results as JSON
 
