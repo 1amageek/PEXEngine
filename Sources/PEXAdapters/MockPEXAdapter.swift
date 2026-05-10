@@ -31,7 +31,7 @@ public struct MockPEXAdapter: PEXAdapter {
         }
     }
 
-    public func execute(_ context: PEXExecutionContext) async throws -> PEXRawOutput {
+    public func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
         let generator = MockParasiticGenerator(
             topCell: context.topCell,
             corner: context.corner,
@@ -54,11 +54,23 @@ public struct MockPEXAdapter: PEXAdapter {
             )
         }
 
-        return PEXRawOutput(
+        let rawOutput = PEXRawOutput(
             format: .spef,
             fileURLs: [outputURL],
             logURL: nil,
             metadata: ["generator": "mock", "version": "1.0"]
+        )
+        return PEXAdapterExecutionResult(
+            rawOutput: rawOutput,
+            generatedArtifacts: [
+                PEXGeneratedArtifact(
+                    kind: .rawOutput,
+                    stage: .backendExecution,
+                    cornerID: context.corner.id,
+                    url: outputURL,
+                    provenance: PEXArtifactProvenance(note: "mock SPEF output")
+                )
+            ]
         )
     }
 

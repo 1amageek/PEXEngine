@@ -8,7 +8,8 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
     public let finishedAt: Date
     public let cornerResults: [PEXCornerResult]
     public let warnings: [PEXWarning]
-    public let artifacts: PEXArtifactIndex
+    public let artifacts: PEXArtifactManifest
+    public let manifestURL: URL
     public let metrics: PEXRunMetrics
 
     public init(
@@ -19,7 +20,8 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
         finishedAt: Date,
         cornerResults: [PEXCornerResult],
         warnings: [PEXWarning],
-        artifacts: PEXArtifactIndex,
+        artifacts: PEXArtifactManifest,
+        manifestURL: URL,
         metrics: PEXRunMetrics
     ) {
         self.runID = runID
@@ -30,6 +32,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
         self.cornerResults = cornerResults
         self.warnings = warnings
         self.artifacts = artifacts
+        self.manifestURL = manifestURL
         self.metrics = metrics
     }
 }

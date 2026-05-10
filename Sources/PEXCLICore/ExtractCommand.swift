@@ -170,10 +170,19 @@ public struct ExtractCommand: Sendable {
 
         // 結果を出力（CI で stdout から診断情報を取得できるように先に出力）
         if jsonOutput {
+            let resolver = try PEXArtifactResolver(manifestURL: result.manifestURL)
+            let output = ExtractJSONOutput(
+                runID: result.runID.description,
+                status: result.status.rawValue,
+                manifestURL: result.manifestURL,
+                completeness: resolver.completenessReport(),
+                metrics: result.metrics,
+                warnings: result.warnings
+            )
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             encoder.dateEncodingStrategy = .iso8601
-            let data = try encoder.encode(result)
+            let data = try encoder.encode(output)
             print(String(data: data, encoding: .utf8) ?? "{}")
         } else {
             let formatter = CLIOutputFormatter()
@@ -336,4 +345,13 @@ public struct ExtractCommand: Sendable {
         }
         return .gds
     }
+}
+
+private struct ExtractJSONOutput: Sendable, Codable {
+    let runID: String
+    let status: String
+    let manifestURL: URL
+    let completeness: PEXArtifactCompletenessReport
+    let metrics: PEXRunMetrics
+    let warnings: [PEXWarning]
 }

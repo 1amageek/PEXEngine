@@ -306,9 +306,17 @@ struct PEXCLITests {
             metadata: [:]
         )
         let serializer = PEXIRSerializer()
-        try serializer.encode(ir).write(to: customIRDirectory.appending(path: "tt-custom.json"))
+        let irURL = customIRDirectory.appending(path: "tt-custom.json")
+        try serializer.encode(ir).write(to: irURL)
+        let irRecord = try PEXArtifactRecorder(workspace: workspace).recordExistingArtifact(
+            url: irURL,
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: cornerID,
+            id: "ir-tt"
+        )
 
-        let manifest = PEXManifest(
+        let manifest = PEXArtifactManifest(
             runID: runID,
             requestHash: PEXRequestHash("summary"),
             backendID: "mock",
@@ -316,14 +324,13 @@ struct PEXCLITests {
             startedAt: Date(),
             finishedAt: Date(),
             corners: [
-                PEXManifest.CornerEntry(
+                PEXArtifactCorner(
                     cornerID: cornerID,
                     status: .success,
-                    rawFiles: [],
-                    irFile: "custom-ir/tt-custom.json",
-                    logFile: nil
+                    artifactIDs: [irRecord.id]
                 )
             ],
+            artifacts: [irRecord],
             warnings: []
         )
         try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
@@ -379,7 +386,7 @@ struct PEXCLITests {
     // MARK: - CLIOutputFormatter
 
     @Test func outputFormatterSuccess() {
-        let result = PEXRunResult(
+        let result = makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .success,
@@ -393,7 +400,6 @@ struct PEXCLITests {
                 )
             ],
             warnings: [PEXWarning(stage: .irValidation, cornerID: "tt", message: "test warn")],
-            artifacts: PEXArtifactIndex(manifestURL: URL(filePath: "/tmp/m.json"), requestURL: URL(filePath: "/tmp/r.json"), cornerArtifacts: [:]),
             metrics: PEXRunMetrics(totalDurationSeconds: 0.5, cornerCount: 1, successCount: 1, failureCount: 0)
         )
 
@@ -409,7 +415,7 @@ struct PEXCLITests {
     }
 
     @Test func outputFormatterPartialSuccess() {
-        let result = PEXRunResult(
+        let result = makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .partialSuccess,
@@ -428,7 +434,6 @@ struct PEXCLITests {
                 ),
             ],
             warnings: [],
-            artifacts: PEXArtifactIndex(manifestURL: URL(filePath: "/tmp/m.json"), requestURL: URL(filePath: "/tmp/r.json"), cornerArtifacts: [:]),
             metrics: PEXRunMetrics(totalDurationSeconds: 0.4, cornerCount: 2, successCount: 1, failureCount: 1)
         )
 
@@ -442,7 +447,7 @@ struct PEXCLITests {
     }
 
     @Test func outputFormatterFailed() {
-        let result = PEXRunResult(
+        let result = makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .failed,
@@ -456,7 +461,6 @@ struct PEXCLITests {
                 ),
             ],
             warnings: [],
-            artifacts: PEXArtifactIndex(manifestURL: URL(filePath: "/tmp/m.json"), requestURL: URL(filePath: "/tmp/r.json"), cornerArtifacts: [:]),
             metrics: PEXRunMetrics(totalDurationSeconds: 0.1, cornerCount: 1, successCount: 0, failureCount: 1)
         )
 
@@ -501,4 +505,46 @@ private func removeTemporaryItem(_ url: URL) {
     } catch {
         Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
+}
+
+private func makeCLIResult(
+    runID: PEXRunID,
+    requestHash: PEXRequestHash,
+    status: PEXRunStatus,
+    startedAt: Date,
+    finishedAt: Date,
+    cornerResults: [PEXCornerResult],
+    warnings: [PEXWarning],
+    metrics: PEXRunMetrics
+) -> PEXRunResult {
+    let cornerEntries = cornerResults.map { result in
+        PEXArtifactCorner(
+            cornerID: result.cornerID,
+            status: result.status,
+            artifactIDs: []
+        )
+    }
+    let manifest = PEXArtifactManifest(
+        runID: runID,
+        requestHash: requestHash,
+        backendID: "mock",
+        status: status,
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+        corners: cornerEntries,
+        artifacts: [],
+        warnings: warnings
+    )
+    return PEXRunResult(
+        runID: runID,
+        requestHash: requestHash,
+        status: status,
+        startedAt: startedAt,
+        finishedAt: finishedAt,
+        cornerResults: cornerResults,
+        warnings: warnings,
+        artifacts: manifest,
+        manifestURL: URL(filePath: "/tmp/m.json"),
+        metrics: metrics
+    )
 }

@@ -64,6 +64,7 @@ struct PEXRuntimeTests {
 
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let tech = TechnologyIR(
             processName: "test_process",
@@ -75,9 +76,9 @@ struct PEXRuntimeTests {
         )
 
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt_25c_1v0"), PEXCorner(id: "ss_125c_0v81")],
@@ -108,6 +109,7 @@ struct PEXRuntimeTests {
     @Test func defaultPEXServiceExtractAndLoadRun() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_service_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let service = DefaultPEXService.withDefaults()
 
@@ -122,9 +124,9 @@ struct PEXRuntimeTests {
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt")],
@@ -142,18 +144,20 @@ struct PEXRuntimeTests {
         #expect(loaded.status == .success)
         #expect(loaded.cornerResults.count == 1)
         #expect(loaded.cornerResults[0].ir != nil)
-        #expect(loaded.artifacts.cornerArtifacts[PEXCornerID("tt")] == result.artifacts.cornerArtifacts[PEXCornerID("tt")])
+        #expect(loaded.artifacts.artifacts(kind: .parasiticIR, cornerID: PEXCornerID("tt")).count == 1)
 
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
-        #expect(manifestCorner.rawFiles == ["raw/tt/tt.spef"])
-        #expect(manifestCorner.irFile == "ir/tt.json")
+        #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.relativePath.value == "raw/tt/tt.spef")
+        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.relativePath.value == "ir/tt.json")
+        #expect(manifestCorner.artifactIDs.contains("ir-tt"))
     }
 
     @Test func defaultPEXServiceQueryNet() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_query_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let tech = TechnologyIR(
             processName: "test_process",
@@ -166,9 +170,9 @@ struct PEXRuntimeTests {
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt")],
@@ -201,6 +205,7 @@ struct PEXRuntimeTests {
     @Test func loadRunDoesNotRequireIRWhenIRJSONEmissionIsDisabled() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_no_ir_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let options = PEXRunOptions(
             extractMode: .rc,
@@ -214,9 +219,9 @@ struct PEXRuntimeTests {
         )
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt")],
@@ -230,10 +235,10 @@ struct PEXRuntimeTests {
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let store = PEXArtifactStore(workspace: workspace)
         let manifest = try store.loadManifest()
-        let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
-        #expect(manifestCorner.irFile == nil)
+        _ = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
+        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.status == .omitted)
 
-        let loaded = try store.loadResult(cornerIDs: [PEXCornerID("tt")], manifest: manifest)
+        let loaded = try store.loadResult(manifest: manifest)
         #expect(loaded.status == .success)
         #expect(loaded.cornerResults.first?.ir == nil)
     }
@@ -337,12 +342,13 @@ struct PEXRuntimeTests {
     @Test func queryNetRejectsUnknownNet() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_qerr_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt")],
@@ -387,6 +393,7 @@ struct PEXRuntimeTests {
 
         let techFile = tempDir.appending(path: "tech.json")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let inputs = try makeInputFiles(in: tempDir)
         let tech = makeTestTech()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -394,8 +401,8 @@ struct PEXRuntimeTests {
 
         let service = DefaultPEXService.withDefaults()
         let selection = LayoutSelection(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
-            netlistURL: URL(filePath: "/tmp/test.cir"),
+            layoutURL: inputs.layoutURL,
+            netlistURL: inputs.netlistURL,
             topCell: "TOP",
             technologyPath: techFile
         )
@@ -412,12 +419,13 @@ struct PEXRuntimeTests {
     @Test func multiCornerLoadRunPreservesAll() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_multi_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
 
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
-            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
-            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistURL: inputs.netlistURL,
             sourceNetlistFormat: .spice,
             topCell: "TESTCELL",
             corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss"), PEXCorner(id: "ff")],
@@ -461,6 +469,20 @@ struct PEXRuntimeTests {
         } catch {
             Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
         }
+    }
+
+    private struct TestInputFiles {
+        let layoutURL: URL
+        let netlistURL: URL
+    }
+
+    private func makeInputFiles(in directory: URL) throws -> TestInputFiles {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let layoutURL = directory.appending(path: "layout.gds")
+        let netlistURL = directory.appending(path: "source.cir")
+        try Data("layout".utf8).write(to: layoutURL)
+        try Data(".subckt TESTCELL\n.ends\n".utf8).write(to: netlistURL)
+        return TestInputFiles(layoutURL: layoutURL, netlistURL: netlistURL)
     }
 
     // MARK: - Direct Parameter Tests

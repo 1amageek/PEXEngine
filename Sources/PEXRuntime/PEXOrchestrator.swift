@@ -24,38 +24,34 @@ public actor PEXOrchestrator {
         let startedAt = Date()
         var allWarnings: [PEXWarning] = []
 
-        // 1. Validate request
         try pipeline.validateRequest(request)
 
-        // 2. Resolve technology
         let technology = try technologyResolver.resolve(request.technology)
 
-        // 3. Resolve adapter
         let adapter = try pipeline.resolveAdapter(for: request.backendSelection.backendID)
 
-        // 4. Create workspace
         let baseURL = request.workingDirectory ?? URL(filePath: FileManager.default.temporaryDirectory.path(percentEncoded: false))
         let workspace = PEXRunWorkspace(baseURL: baseURL, runID: runID)
         let cornerIDs = request.corners.map(\.id)
         try workspace.createDirectories(corners: cornerIDs)
 
-        // 5. Save request
         let store = PEXArtifactStore(workspace: workspace)
-        try store.saveRequest(request)
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let inputArtifacts = try captureInputs(request: request, technology: technology, recorder: recorder)
 
-        // 6. Execute corners with bounded parallelism
-        let cornerResults = await executeCorners(
+        let cornerOutcomes = await executeCorners(
             request: request,
             adapter: adapter,
             technology: technology,
             workspace: workspace,
             runID: runID,
+            recorder: recorder,
             warnings: &allWarnings
         )
+        let cornerResults = cornerOutcomes.map(\.result)
 
         let finishedAt = Date()
 
-        // 7. Compute overall status
         let successCount = cornerResults.filter { $0.status == .success }.count
         let failureCount = cornerResults.filter { $0.status == .failed }.count
         let status: PEXRunStatus
@@ -67,18 +63,10 @@ public actor PEXOrchestrator {
             status = .failed
         }
 
-        // 8. Compute request hash
-        let requestHash: PEXRequestHash
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .sortedKeys
-            let data = try encoder.encode(request)
-            requestHash = PEXRequestHash.compute(from: data)
-        } catch {
-            requestHash = PEXRequestHash("unknown")
-        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let requestHash = PEXRequestHash.compute(from: try encoder.encode(request))
 
-        // 9. Build metrics
         let metrics = PEXRunMetrics(
             totalDurationSeconds: finishedAt.timeIntervalSince(startedAt),
             cornerCount: cornerResults.count,
@@ -86,36 +74,6 @@ public actor PEXOrchestrator {
             failureCount: failureCount
         )
 
-        // 10. Build and save manifest
-        let pathResolver = PEXArtifactPathResolver(runDirectory: workspace.runDirectory)
-        let manifest = PEXManifest(
-            runID: runID,
-            requestHash: requestHash,
-            backendID: request.backendSelection.backendID,
-            status: status,
-            startedAt: startedAt,
-            finishedAt: finishedAt,
-            corners: cornerResults.map { cr in
-                PEXManifest.CornerEntry(
-                    cornerID: cr.cornerID,
-                    status: cr.status,
-                    rawFiles: cr.rawOutputURLs.map { pathResolver.manifestPath(for: $0) },
-                    irFile: request.options.emitIRJSON && cr.ir != nil ? pathResolver.manifestPath(for: workspace.cornerIRURL(cr.cornerID)) : nil,
-                    logFile: cr.logURL.map { pathResolver.manifestPath(for: $0) }
-                )
-            },
-            warnings: allWarnings.map(\.message)
-        )
-        do {
-            try store.saveManifest(manifest)
-        } catch {
-            allWarnings.append(PEXWarning(stage: .persistence, message: "Failed to save manifest: \(error)"))
-        }
-
-        // 11. Build artifacts index from the same manifest persisted for later review.
-        let artifacts = store.buildArtifactIndex(corners: cornerIDs, manifest: manifest)
-
-        // 12. Generate and save report
         let reportGenerator = PEXReportGenerator()
         let report = reportGenerator.generateSummary(
             cornerResults: cornerResults,
@@ -125,13 +83,48 @@ public actor PEXOrchestrator {
             metrics: metrics,
             warnings: allWarnings
         )
+
+        let reportArtifact: PEXArtifactRecord
         do {
             try store.saveReport(report)
+            reportArtifact = try recorder.recordExistingArtifact(
+                url: workspace.reportURL,
+                kind: .report,
+                stage: .reporting,
+                id: "report-summary"
+            )
         } catch {
             allWarnings.append(PEXWarning(stage: .reporting, message: "Failed to save report: \(error)"))
+            reportArtifact = try recorder.recordMissingArtifact(
+                kind: .report,
+                stage: .reporting,
+                expectedURL: workspace.reportURL,
+                id: "report-summary",
+                note: "report persistence failed"
+            )
         }
 
-        // 13. Build final result with all warnings collected during persistence and reporting.
+        let cornerArtifacts = cornerOutcomes.flatMap(\.artifacts)
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: requestHash,
+            backendID: request.backendSelection.backendID,
+            status: status,
+            startedAt: startedAt,
+            finishedAt: finishedAt,
+            corners: cornerOutcomes.map { outcome in
+                PEXArtifactCorner(
+                    cornerID: outcome.result.cornerID,
+                    status: outcome.result.status,
+                    artifactIDs: outcome.artifacts.map(\.id),
+                    failure: outcome.failure
+                )
+            },
+            artifacts: inputArtifacts + cornerArtifacts + [reportArtifact],
+            warnings: allWarnings
+        )
+        try store.saveManifest(manifest)
+
         return PEXRunResult(
             runID: runID,
             requestHash: requestHash,
@@ -140,9 +133,28 @@ public actor PEXOrchestrator {
             finishedAt: finishedAt,
             cornerResults: cornerResults,
             warnings: allWarnings,
-            artifacts: artifacts,
+            artifacts: manifest,
+            manifestURL: workspace.manifestURL,
             metrics: metrics
         )
+    }
+
+    private func captureInputs(
+        request: PEXRunRequest,
+        technology: TechnologyIR,
+        recorder: PEXArtifactRecorder
+    ) throws -> [PEXArtifactRecord] {
+        var artifacts: [PEXArtifactRecord] = []
+        artifacts.append(try recorder.captureInput(url: request.layoutURL, kind: .layoutInput))
+        artifacts.append(try recorder.captureInput(url: request.sourceNetlistURL, kind: .netlistInput))
+        switch request.technology {
+        case .jsonFile(let url):
+            artifacts.append(try recorder.captureInput(url: url, kind: .technologyInput))
+        case .inline:
+            artifacts.append(try recorder.captureInlineTechnology(technology))
+        }
+        artifacts.append(try recorder.recordRequest(request, inputArtifacts: artifacts))
+        return artifacts
     }
 
     private func executeCorners(
@@ -151,21 +163,20 @@ public actor PEXOrchestrator {
         technology: TechnologyIR,
         workspace: PEXRunWorkspace,
         runID: PEXRunID,
+        recorder: PEXArtifactRecorder,
         warnings: inout [PEXWarning]
-    ) async -> [PEXCornerResult] {
-        let store = PEXArtifactStore(workspace: workspace)
+    ) async -> [PEXCornerExecutionOutcome] {
         let maxJobs = max(1, request.options.maxParallelJobs)
 
-        // Execute corners with bounded parallelism
-        var results: [PEXCornerResult] = []
+        var outcomes: [PEXCornerExecutionOutcome] = []
 
-        await withTaskGroup(of: PEXCornerResult.self) { group in
+        await withTaskGroup(of: PEXCornerExecutionOutcome.self) { group in
             var running = 0
 
             for corner in request.corners {
                 if running >= maxJobs {
-                    if let result = await group.next() {
-                        results.append(result)
+                    if let outcome = await group.next() {
+                        outcomes.append(outcome)
                         running -= 1
                     }
                 }
@@ -186,39 +197,62 @@ public actor PEXOrchestrator {
                     await self.executeSingleCorner(
                         adapter: adapter,
                         context: context,
-                        store: store,
+                        store: PEXArtifactStore(workspace: workspace),
+                        recorder: recorder,
                         options: request.options
                     )
                 }
                 running += 1
             }
 
-            for await result in group {
-                results.append(result)
+            for await outcome in group {
+                outcomes.append(outcome)
             }
         }
 
-        // Collect warnings from corner results after TaskGroup completes (thread-safe)
-        for result in results {
-            warnings.append(contentsOf: result.warnings)
+        for outcome in outcomes {
+            warnings.append(contentsOf: outcome.result.warnings)
         }
-        return results
+        return outcomes
     }
 
     private func executeSingleCorner(
         adapter: any PEXAdapter,
         context: PEXExecutionContext,
         store: PEXArtifactStore,
+        recorder: PEXArtifactRecorder,
         options: PEXRunOptions
-    ) async -> PEXCornerResult {
+    ) async -> PEXCornerExecutionOutcome {
         let cornerStart = Date()
         let cornerID = context.corner.id
+        var artifacts: [PEXArtifactRecord] = []
+        var artifactWarnings: [PEXWarning] = []
 
         do {
-            // Execute adapter
-            let rawOutput = try await pipeline.executeCorner(adapter: adapter, context: context)
+            let execution = try await pipeline.executeCorner(adapter: adapter, context: context)
+            let rawOutput = execution.rawOutput
+            for generated in execution.generatedArtifacts {
+                artifacts.append(try recorder.recordGeneratedArtifact(generated))
+            }
+            if artifacts.filter({ $0.kind == .rawOutput && $0.cornerID == cornerID }).isEmpty {
+                for url in rawOutput.fileURLs {
+                    artifacts.append(try recorder.recordExistingArtifact(
+                        url: url,
+                        kind: .rawOutput,
+                        stage: .backendExecution,
+                        cornerID: cornerID
+                    ))
+                }
+            }
+            if let logURL = rawOutput.logURL, artifacts.filter({ $0.kind == .log && $0.cornerID == cornerID }).isEmpty {
+                artifacts.append(try recorder.recordExistingArtifact(
+                    url: logURL,
+                    kind: .log,
+                    stage: .backendExecution,
+                    cornerID: cornerID
+                ))
+            }
 
-            // Parse output
             let parseContext = PEXParseContext(
                 cornerID: cornerID,
                 runID: context.runID,
@@ -227,24 +261,33 @@ public actor PEXOrchestrator {
             )
             let ir = try pipeline.parseOutput(raw: rawOutput, context: parseContext)
 
-            // Validate IR
             let (validatedIR, validationWarnings) = try pipeline.validateIR(ir, strict: options.strictValidation)
 
-            // Persist IR
-            var cornerWarnings = validationWarnings
+            let cornerWarnings = validationWarnings
             if options.emitIRJSON {
-                do {
-                    try store.saveIR(validatedIR, for: cornerID)
-                } catch {
-                    cornerWarnings.append(PEXWarning(stage: .persistence, cornerID: cornerID, message: "Failed to save IR: \(error)"))
-                }
+                try store.saveIR(validatedIR, for: cornerID)
+                artifacts.append(try recorder.recordExistingArtifact(
+                    url: context.workingDirectory.appending(path: "ir").appending(path: "\(cornerID.value).json"),
+                    kind: .parasiticIR,
+                    stage: .persistence,
+                    cornerID: cornerID,
+                    id: "ir-\(cornerID.value)"
+                ))
+            } else {
+                artifacts.append(try recorder.recordOmittedArtifact(
+                    kind: .parasiticIR,
+                    stage: .persistence,
+                    cornerID: cornerID,
+                    expectedURL: context.workingDirectory.appending(path: "ir").appending(path: "\(cornerID.value).json"),
+                    id: "ir-\(cornerID.value)",
+                    note: "IR JSON emission disabled"
+                ))
             }
 
-            // Cleanup
             await adapter.cleanup(context)
 
             let cornerEnd = Date()
-            return PEXCornerResult(
+            let result = PEXCornerResult(
                 cornerID: cornerID,
                 status: .success,
                 ir: validatedIR,
@@ -258,16 +301,35 @@ public actor PEXOrchestrator {
                     peakMemoryBytes: nil
                 )
             )
+            return PEXCornerExecutionOutcome(result: result, artifacts: artifacts)
         } catch {
+            if let failure = error as? PEXAdapterExecutionFailure {
+                for generated in failure.generatedArtifacts {
+                    do {
+                        artifacts.append(try recorder.recordGeneratedArtifact(generated))
+                    } catch {
+                        artifactWarnings.append(PEXWarning(
+                            stage: .persistence,
+                            cornerID: cornerID,
+                            message: "Failed to record partial artifact \(generated.url.path(percentEncoded: false)): \(error)"
+                        ))
+                    }
+                }
+            }
             await adapter.cleanup(context)
             let cornerEnd = Date()
-            return PEXCornerResult(
+            let pexError = error as? PEXError
+            let stage = pexError?.stage ?? (error as? PEXAdapterExecutionFailure)?.stage ?? .backendExecution
+            let message = pexError?.message ?? (error as? PEXAdapterExecutionFailure)?.message ?? String(describing: error)
+            let rawOutputURLs = artifacts.filter { $0.kind == .rawOutput && $0.status == .available }.map { context.workingDirectory.appending(path: $0.relativePath.value) }
+            let logURL = artifacts.first { $0.kind == .log && $0.status == .available }.map { context.workingDirectory.appending(path: $0.relativePath.value) }
+            let result = PEXCornerResult(
                 cornerID: cornerID,
                 status: .failed,
                 ir: nil,
-                rawOutputURLs: [],
-                logURL: nil,
-                warnings: [],
+                rawOutputURLs: rawOutputURLs,
+                logURL: logURL,
+                warnings: [PEXWarning(stage: stage, cornerID: cornerID, message: message)] + artifactWarnings,
                 metrics: PEXCornerMetrics(
                     durationSeconds: cornerEnd.timeIntervalSince(cornerStart),
                     netCount: 0,
@@ -275,6 +337,46 @@ public actor PEXOrchestrator {
                     peakMemoryBytes: nil
                 )
             )
+            return PEXCornerExecutionOutcome(
+                result: result,
+                artifacts: artifacts,
+                failure: PEXArtifactFailure(
+                    stage: stage,
+                    message: message,
+                    suggestedActions: suggestedActions(for: stage)
+                )
+            )
         }
+    }
+
+    private func suggestedActions(for stage: PEXStage) -> [String] {
+        switch stage {
+        case .parsing:
+            return ["inspect_raw_output", "verify_output_format", "rerun_adapter_with_diagnostics"]
+        case .irValidation:
+            return ["inspect_ir_validation_report", "check_extraction_rules", "rerun_without_strict_validation"]
+        case .backendExecution:
+            return ["inspect_backend_log", "verify_backend_inputs", "rerun_backend"]
+        case .persistence:
+            return ["inspect_run_directory_permissions", "verify_available_disk_space"]
+        default:
+            return ["inspect_run_log"]
+        }
+    }
+}
+
+private struct PEXCornerExecutionOutcome: Sendable {
+    let result: PEXCornerResult
+    let artifacts: [PEXArtifactRecord]
+    let failure: PEXArtifactFailure?
+
+    init(
+        result: PEXCornerResult,
+        artifacts: [PEXArtifactRecord],
+        failure: PEXArtifactFailure? = nil
+    ) {
+        self.result = result
+        self.artifacts = artifacts
+        self.failure = failure
     }
 }

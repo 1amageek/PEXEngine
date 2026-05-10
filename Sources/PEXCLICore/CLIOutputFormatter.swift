@@ -33,7 +33,7 @@ public struct CLIOutputFormatter: Sendable {
         }
 
         lines.append("")
-        lines.append("Artifacts: \(result.artifacts.manifestURL.path(percentEncoded: false))")
+        lines.append("Artifacts: \(result.manifestURL.path(percentEncoded: false))")
 
         return lines.joined(separator: "\n")
     }

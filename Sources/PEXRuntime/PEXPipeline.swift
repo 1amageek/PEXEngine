@@ -38,10 +38,9 @@ struct PEXPipeline: Sendable {
     func executeCorner(
         adapter: any PEXAdapter,
         context: PEXExecutionContext
-    ) async throws -> PEXRawOutput {
+    ) async throws -> PEXAdapterExecutionResult {
         try await adapter.prepare(context)
-        let output = try await adapter.execute(context)
-        return output
+        return try await adapter.execute(context)
     }
 
     func parseOutput(

@@ -80,18 +80,31 @@ struct PEXCoreModelTests {
         #expect(error.message == "test invariant")
     }
 
-    @Test func artifactIndexLogURLOptional() {
-        let artifacts = PEXArtifactIndex.CornerArtifacts(
-            rawDirectory: URL(filePath: "/tmp/raw"),
-            irURL: URL(filePath: "/tmp/ir.json")
+    @Test func artifactRecordUsesRunRelativePathAndHashMetadata() throws {
+        let record = PEXArtifactRecord(
+            id: "raw-tt",
+            kind: .rawOutput,
+            stage: .backendExecution,
+            cornerID: "tt",
+            relativePath: try PEXArtifactPath("raw/tt/tt.spef"),
+            sha256: String(repeating: "a", count: 64),
+            byteCount: 5,
+            status: .available
         )
-        #expect(artifacts.logURL == nil)
+        #expect(record.relativePath.value == "raw/tt/tt.spef")
+        #expect(record.status == .available)
+        #expect(record.sha256 != nil)
+        #expect(record.byteCount == 5)
+    }
 
-        let withLog = PEXArtifactIndex.CornerArtifacts(
-            rawDirectory: URL(filePath: "/tmp/raw"),
-            irURL: URL(filePath: "/tmp/ir.json"),
-            logURL: URL(filePath: "/tmp/log.txt")
-        )
-        #expect(withLog.logURL != nil)
+    @Test func artifactPathRejectsAbsoluteOrEscapingPaths() {
+        do {
+            _ = try PEXArtifactPath("/tmp/raw.spef")
+            #expect(Bool(false), "Should reject absolute paths")
+        } catch {}
+        do {
+            _ = try PEXArtifactPath("../raw.spef")
+            #expect(Bool(false), "Should reject escaping paths")
+        } catch {}
     }
 }

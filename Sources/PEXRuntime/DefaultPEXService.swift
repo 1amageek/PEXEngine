@@ -35,9 +35,7 @@ public struct DefaultPEXService: PEXService, Sendable {
     public func loadRun(_ runID: PEXRunID, workspace: URL) throws -> PEXRunResult {
         let ws = PEXRunWorkspace(baseURL: workspace, runID: runID)
         let store = PEXArtifactStore(workspace: ws)
-        let manifest = try store.loadManifest()
-        let cornerIDs = manifest.corners.map(\.cornerID)
-        return try store.loadResult(cornerIDs: cornerIDs, manifest: manifest)
+        return try store.loadResult()
     }
 
     public func queryNet(
@@ -47,8 +45,8 @@ public struct DefaultPEXService: PEXService, Sendable {
         workspace: URL
     ) throws -> NetParasiticSummary {
         let ws = PEXRunWorkspace(baseURL: workspace, runID: runID)
-        let store = PEXArtifactStore(workspace: ws)
-        let ir = try store.loadIR(for: corner)
+        let resolver = try PEXArtifactResolver(workspace: ws)
+        let ir = try resolver.loadIR(cornerID: corner)
 
         guard let parasiticNet = ir.nets.first(where: { $0.name == net }) else {
             throw PEXError.invalidInput("Net '\(net.value)' not found in IR for corner \(corner.value)")

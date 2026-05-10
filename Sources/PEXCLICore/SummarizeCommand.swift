@@ -81,27 +81,11 @@ public struct SummarizeCommand: Sendable {
 
     func buildSummary() throws -> RunSummary {
         let manifestURL = runPath.appending(path: "manifest.json")
-        let data: Data
-        do {
-            data = try Data(contentsOf: manifestURL)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to read manifest at \(manifestURL.path(percentEncoded: false))", underlying: error)
-        }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let manifest: PEXManifest
-        do {
-            manifest = try decoder.decode(PEXManifest.self, from: data)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to decode manifest", underlying: error)
-        }
-
-        let serializer = PEXIRSerializer()
-        let pathResolver = PEXArtifactPathResolver(runDirectory: runPath)
+        let resolver = try PEXArtifactResolver(manifestURL: manifestURL)
+        let manifest = resolver.manifest
         var cornerSummaries: [CornerSummary] = []
 
-        let cornersToProcess: [PEXManifest.CornerEntry]
+        let cornersToProcess: [PEXArtifactCorner]
         if let filter = cornerFilter {
             cornersToProcess = manifest.corners.filter { $0.cornerID == filter }
             if cornersToProcess.isEmpty {
@@ -112,20 +96,12 @@ public struct SummarizeCommand: Sendable {
         }
 
         for entry in cornersToProcess {
-            guard let irFile = entry.irFile else {
-                cornerSummaries.append(CornerSummary(cornerID: entry.cornerID.value, status: entry.status.rawValue, netCount: 0, elementCount: 0, topNets: []))
-                continue
-            }
-            let irURL = pathResolver.irURL(fileName: irFile, cornerID: entry.cornerID)
-            let irData: Data
-            do {
-                irData = try Data(contentsOf: irURL)
-            } catch {
+            guard !resolver.records(kind: .parasiticIR, cornerID: entry.cornerID, status: .available).isEmpty else {
                 cornerSummaries.append(CornerSummary(cornerID: entry.cornerID.value, status: entry.status.rawValue, netCount: 0, elementCount: 0, topNets: []))
                 continue
             }
             do {
-                let ir = try serializer.decode(from: irData)
+                let ir = try resolver.loadIR(cornerID: entry.cornerID)
                 let sortedNets = ir.nets
                     .sorted { ($0.totalGroundCapF + $0.totalCouplingCapF) > ($1.totalGroundCapF + $1.totalCouplingCapF) }
                     .prefix(topNets)

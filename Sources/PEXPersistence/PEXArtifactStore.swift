@@ -4,15 +4,13 @@ import PEXCore
 public struct PEXArtifactStore: Sendable {
     public let workspace: PEXRunWorkspace
     private let serializer: PEXIRSerializer
-    private let pathResolver: PEXArtifactPathResolver
 
     public init(workspace: PEXRunWorkspace) {
         self.workspace = workspace
         self.serializer = PEXIRSerializer()
-        self.pathResolver = PEXArtifactPathResolver(runDirectory: workspace.runDirectory)
     }
 
-    public func saveManifest(_ manifest: PEXManifest) throws {
+    public func saveManifest(_ manifest: PEXArtifactManifest) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
@@ -20,28 +18,34 @@ public struct PEXArtifactStore: Sendable {
         do {
             data = try encoder.encode(manifest)
         } catch {
-            throw PEXError.persistenceFailed("Failed to encode manifest", underlying: error)
+            throw PEXError.persistenceFailed("Failed to encode artifact manifest", underlying: error)
         }
         do {
             try data.write(to: workspace.manifestURL)
         } catch {
-            throw PEXError.persistenceFailed("Failed to write manifest to \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
+            throw PEXError.persistenceFailed("Failed to write artifact manifest to \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
         }
     }
 
-    public func loadManifest() throws -> PEXManifest {
+    public func loadManifest() throws -> PEXArtifactManifest {
         let data: Data
         do {
             data = try Data(contentsOf: workspace.manifestURL)
         } catch {
-            throw PEXError.persistenceFailed("Failed to read manifest from \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
+            throw PEXError.persistenceFailed("Failed to read artifact manifest from \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
         }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         do {
-            return try decoder.decode(PEXManifest.self, from: data)
+            let manifest = try decoder.decode(PEXArtifactManifest.self, from: data)
+            guard manifest.version == PEXArtifactManifest.currentVersion else {
+                throw PEXError.persistenceFailed("Unsupported PEX artifact manifest version \(manifest.version)")
+            }
+            return manifest
+        } catch let error as PEXError {
+            throw error
         } catch {
-            throw PEXError.persistenceFailed("Failed to decode manifest", underlying: error)
+            throw PEXError.persistenceFailed("Failed to decode artifact manifest", underlying: error)
         }
     }
 
@@ -72,14 +76,8 @@ public struct PEXArtifactStore: Sendable {
     }
 
     public func loadIR(for cornerID: PEXCornerID) throws -> ParasiticIR {
-        let url = workspace.cornerIRURL(cornerID)
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to read IR for corner \(cornerID)", underlying: error)
-        }
-        return try serializer.decode(from: data)
+        let resolver = try PEXArtifactResolver(workspace: workspace)
+        return try resolver.loadIR(cornerID: cornerID)
     }
 
     public func saveReport(_ report: String) throws {
@@ -91,45 +89,36 @@ public struct PEXArtifactStore: Sendable {
         }
     }
 
-    public func loadResult(cornerIDs: [PEXCornerID], manifest: PEXManifest? = nil) throws -> PEXRunResult {
+    public func loadResult(manifest: PEXArtifactManifest? = nil) throws -> PEXRunResult {
         let manifest = try manifest ?? loadManifest()
-
+        let resolver = try PEXArtifactResolver(workspace: workspace, manifest: manifest)
         var cornerResults: [PEXCornerResult] = []
-        for cornerID in cornerIDs {
-            let manifestCorner = manifest.corners.first { $0.cornerID == cornerID }
-            let rawOutputURLs = manifestCorner.map(rawOutputURLs(for:)) ?? []
-            let logURL = manifestCorner.flatMap(logURL(for:))
 
-            if let irFile = manifestCorner?.irFile {
-                let ir = try loadIR(fileName: irFile, for: cornerID)
-                cornerResults.append(PEXCornerResult(
-                    cornerID: cornerID,
-                    status: manifestCorner?.status ?? .success,
-                    ir: ir,
-                    rawOutputURLs: rawOutputURLs,
-                    logURL: logURL,
-                    warnings: [],
-                    metrics: PEXCornerMetrics(
-                        durationSeconds: 0,
-                        netCount: ir.nets.count,
-                        elementCount: ir.elements.count
-                    )
-                ))
+        for corner in manifest.corners {
+            let rawOutputURLs = resolver.records(kind: .rawOutput, cornerID: corner.cornerID, status: .available)
+                .map { resolver.url(for: $0) }
+            let logURL = resolver.records(kind: .log, cornerID: corner.cornerID, status: .available)
+                .first
+                .map { resolver.url(for: $0) }
+            let ir: ParasiticIR?
+            if resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, status: .available).isEmpty {
+                ir = nil
             } else {
-                cornerResults.append(PEXCornerResult(
-                    cornerID: cornerID,
-                    status: manifestCorner?.status ?? .failed,
-                    ir: nil,
-                    rawOutputURLs: rawOutputURLs,
-                    logURL: logURL,
-                    warnings: [],
-                    metrics: PEXCornerMetrics(
-                        durationSeconds: 0,
-                        netCount: 0,
-                        elementCount: 0
-                    )
-                ))
+                ir = try resolver.loadIR(cornerID: corner.cornerID)
             }
+            cornerResults.append(PEXCornerResult(
+                cornerID: corner.cornerID,
+                status: corner.status,
+                ir: ir,
+                rawOutputURLs: rawOutputURLs,
+                logURL: logURL,
+                warnings: [],
+                metrics: PEXCornerMetrics(
+                    durationSeconds: 0,
+                    netCount: ir?.nets.count ?? 0,
+                    elementCount: ir?.elements.count ?? 0
+                )
+            ))
         }
 
         let successCount = cornerResults.filter { $0.status == .success }.count
@@ -142,83 +131,15 @@ public struct PEXArtifactStore: Sendable {
             startedAt: manifest.startedAt,
             finishedAt: manifest.finishedAt,
             cornerResults: cornerResults,
-            warnings: manifest.warnings.map { PEXWarning(stage: .reporting, message: $0) },
-            artifacts: buildArtifactIndex(corners: cornerIDs, manifest: manifest),
+            warnings: manifest.warnings,
+            artifacts: manifest,
+            manifestURL: workspace.manifestURL,
             metrics: PEXRunMetrics(
                 totalDurationSeconds: manifest.finishedAt.timeIntervalSince(manifest.startedAt),
-                cornerCount: cornerIDs.count,
+                cornerCount: manifest.corners.count,
                 successCount: successCount,
                 failureCount: failureCount
             )
         )
-    }
-
-    public func buildArtifactIndex() -> PEXArtifactIndex {
-        // Build from workspace paths - actual file existence is not checked here
-        let cornerArtifacts: [PEXCornerID: PEXArtifactIndex.CornerArtifacts] = [:]
-
-        // We don't know corners at this point, so return what we have
-        return PEXArtifactIndex(
-            manifestURL: workspace.manifestURL,
-            requestURL: workspace.requestURL,
-            cornerArtifacts: cornerArtifacts,
-            reportURL: workspace.reportURL
-        )
-    }
-
-    public func buildArtifactIndex(corners: [PEXCornerID]) -> PEXArtifactIndex {
-        buildArtifactIndex(corners: corners, manifest: nil)
-    }
-
-    public func buildArtifactIndex(corners: [PEXCornerID], manifest: PEXManifest?) -> PEXArtifactIndex {
-        var cornerArtifacts: [PEXCornerID: PEXArtifactIndex.CornerArtifacts] = [:]
-        for corner in corners {
-            let manifestCorner = manifest?.corners.first { $0.cornerID == corner }
-            let rawURLs = manifestCorner.map(rawOutputURLs(for:)) ?? []
-            let logURL = manifestCorner.flatMap(logURL(for:))
-            let rawDirectory = (rawURLs.first ?? logURL)?.deletingLastPathComponent() ?? workspace.cornerRawDirectory(corner)
-            let irURL = manifestCorner?.irFile.map { resolveIRURL($0, cornerID: corner) } ?? workspace.cornerIRURL(corner)
-            cornerArtifacts[corner] = PEXArtifactIndex.CornerArtifacts(
-                rawDirectory: rawDirectory,
-                irURL: irURL,
-                logURL: logURL
-            )
-        }
-        return PEXArtifactIndex(
-            manifestURL: workspace.manifestURL,
-            requestURL: workspace.requestURL,
-            cornerArtifacts: cornerArtifacts,
-            reportURL: workspace.reportURL
-        )
-    }
-
-    public func loadIR(fileName: String, for cornerID: PEXCornerID) throws -> ParasiticIR {
-        let url = resolveIRURL(fileName, cornerID: cornerID)
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to read IR for corner \(cornerID)", underlying: error)
-        }
-        return try serializer.decode(from: data)
-    }
-
-    private func rawOutputURLs(for corner: PEXManifest.CornerEntry) -> [URL] {
-        corner.rawFiles.map { fileName in
-            resolveRawURL(fileName, cornerID: corner.cornerID)
-        }
-    }
-
-    private func logURL(for corner: PEXManifest.CornerEntry) -> URL? {
-        guard let logFile = corner.logFile else { return nil }
-        return resolveRawURL(logFile, cornerID: corner.cornerID)
-    }
-
-    private func resolveIRURL(_ fileName: String, cornerID: PEXCornerID) -> URL {
-        pathResolver.irURL(fileName: fileName, cornerID: cornerID)
-    }
-
-    private func resolveRawURL(_ fileName: String, cornerID: PEXCornerID) -> URL {
-        pathResolver.rawURL(fileName: fileName, cornerID: cornerID)
     }
 }
