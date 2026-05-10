@@ -243,6 +243,69 @@ struct PEXRuntimeTests {
         #expect(loaded.cornerResults.first?.ir == nil)
     }
 
+    @Test func adapterFailurePreservesPartialRawAndLogArtifacts() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_adapter_failure_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let engine = makeEngine(adapter: PartialFailurePEXAdapter())
+        let request = PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: PEXBackendSelection(backendID: "partial-failure"),
+            options: .default,
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        let resolver = try PEXArtifactResolver(manifestURL: result.manifestURL)
+        let manifestCorner = try #require(resolver.manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
+        let report = resolver.completenessReport()
+
+        #expect(result.status == .failed)
+        #expect(manifestCorner.failure?.stage == .backendExecution)
+        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
+        #expect(resolver.records(kind: .log, cornerID: "tt", status: .available).count == 1)
+        #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
+        #expect(!report.issues.contains { $0.kind == .failedCornerWithoutEvidence })
+    }
+
+    @Test func parseFailurePreservesRawEvidenceAndMissingIRRecord() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_parse_failure_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let engine = makeEngine(adapter: UnsupportedFormatPEXAdapter())
+        let request = PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: PEXBackendSelection(backendID: "unsupported-format"),
+            options: .default,
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        let resolver = try PEXArtifactResolver(manifestURL: result.manifestURL)
+        let manifestCorner = try #require(resolver.manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
+        let irRecord = try #require(resolver.records(kind: .parasiticIR, cornerID: "tt").first)
+        let report = resolver.completenessReport()
+
+        #expect(result.status == .failed)
+        #expect(manifestCorner.failure?.stage == .parsing)
+        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
+        #expect(irRecord.status == .missing)
+        #expect(report.status == .incomplete)
+        #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
+    }
+
     // MARK: - Error Path Tests
 
     @Test func pipelineRejectsEmptyTopCell() async throws {
@@ -463,6 +526,13 @@ struct PEXRuntimeTests {
         )
     }
 
+    private func makeEngine(adapter: any PEXAdapter) -> DefaultPEXEngine {
+        let adapters = PEXAdapterRegistry(adapters: [adapter])
+        let parsers = PEXParserRegistry()
+        parsers.register(SPEFPEXParser())
+        return DefaultPEXEngine(adapterRegistry: adapters, parserRegistry: parsers)
+    }
+
     private func removeTemporaryItem(_ url: URL) {
         do {
             try FileManager.default.removeItem(at: url)
@@ -520,4 +590,66 @@ struct PEXRuntimeTests {
         #expect(request.backendSelection.backendID == "mock")
         #expect(request.workingDirectory != nil)
     }
+}
+
+private struct PartialFailurePEXAdapter: PEXAdapter {
+    let backendID = "partial-failure"
+    let capabilities = PEXBackendCapabilities(
+        supportsCouplingCaps: false,
+        supportsCornerSweep: false,
+        supportsIncremental: false,
+        supportsRCReduction: false,
+        nativeOutputFormats: [.spef]
+    )
+
+    func prepare(_ context: PEXExecutionContext) async throws {
+        try FileManager.default.createDirectory(at: context.rawOutputDirectory, withIntermediateDirectories: true)
+    }
+
+    func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        let rawURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spef")
+        let logURL = context.rawOutputDirectory.appending(path: "extraction.log")
+        try Data("*SPEF partial".utf8).write(to: rawURL)
+        try Data("backend failed".utf8).write(to: logURL)
+        throw PEXAdapterExecutionFailure(
+            message: "backend failed after evidence",
+            stage: .backendExecution,
+            cornerID: context.corner.id,
+            generatedArtifacts: [
+                PEXGeneratedArtifact(kind: .rawOutput, stage: .backendExecution, cornerID: context.corner.id, url: rawURL),
+                PEXGeneratedArtifact(kind: .log, stage: .backendExecution, cornerID: context.corner.id, url: logURL),
+            ]
+        )
+    }
+
+    func cleanup(_ context: PEXExecutionContext) async {}
+}
+
+private struct UnsupportedFormatPEXAdapter: PEXAdapter {
+    let backendID = "unsupported-format"
+    let capabilities = PEXBackendCapabilities(
+        supportsCouplingCaps: false,
+        supportsCornerSweep: false,
+        supportsIncremental: false,
+        supportsRCReduction: false,
+        nativeOutputFormats: [.spef]
+    )
+
+    func prepare(_ context: PEXExecutionContext) async throws {
+        try FileManager.default.createDirectory(at: context.rawOutputDirectory, withIntermediateDirectories: true)
+    }
+
+    func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        let rawURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spef")
+        try Data("not a valid spef".utf8).write(to: rawURL)
+        let rawOutput = PEXRawOutput(format: .custom, fileURLs: [rawURL])
+        return PEXAdapterExecutionResult(
+            rawOutput: rawOutput,
+            generatedArtifacts: [
+                PEXGeneratedArtifact(kind: .rawOutput, stage: .backendExecution, cornerID: context.corner.id, url: rawURL),
+            ]
+        )
+    }
+
+    func cleanup(_ context: PEXExecutionContext) async {}
 }

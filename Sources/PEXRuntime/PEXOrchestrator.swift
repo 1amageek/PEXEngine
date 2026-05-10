@@ -321,6 +321,24 @@ public actor PEXOrchestrator {
             let pexError = error as? PEXError
             let stage = pexError?.stage ?? (error as? PEXAdapterExecutionFailure)?.stage ?? .backendExecution
             let message = pexError?.message ?? (error as? PEXAdapterExecutionFailure)?.message ?? String(describing: error)
+            if stage == .parsing || stage == .irValidation {
+                do {
+                    artifacts.append(try recorder.recordMissingArtifact(
+                        kind: .parasiticIR,
+                        stage: stage,
+                        cornerID: cornerID,
+                        expectedURL: context.workingDirectory.appending(path: "ir").appending(path: "\(cornerID.value).json"),
+                        id: "ir-\(cornerID.value)",
+                        note: message
+                    ))
+                } catch {
+                    artifactWarnings.append(PEXWarning(
+                        stage: .persistence,
+                        cornerID: cornerID,
+                        message: "Failed to record missing IR artifact: \(error)"
+                    ))
+                }
+            }
             let rawOutputURLs = artifacts.filter { $0.kind == .rawOutput && $0.status == .available }.map { context.workingDirectory.appending(path: $0.relativePath.value) }
             let logURL = artifacts.first { $0.kind == .log && $0.status == .available }.map { context.workingDirectory.appending(path: $0.relativePath.value) }
             let result = PEXCornerResult(

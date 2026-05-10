@@ -179,6 +179,7 @@ public enum PEXArtifactCompletenessIssueKind: String, Sendable, Codable, Hashabl
     case invalidHash
     case missingHash
     case missingIR
+    case failedCorner
     case failedCornerWithoutEvidence
     case pathEscapesRunDirectory
 }

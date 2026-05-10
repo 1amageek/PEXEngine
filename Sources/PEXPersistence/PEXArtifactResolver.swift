@@ -156,6 +156,13 @@ public struct PEXArtifactResolver: Sendable {
             }
 
             if corner.status == .failed {
+                if let failure = corner.failure {
+                    issues.append(PEXArtifactCompletenessIssue(
+                        kind: .failedCorner,
+                        cornerID: corner.cornerID,
+                        message: "\(failure.stage.rawValue): \(failure.message)"
+                    ))
+                }
                 let evidenceCount = records(kind: .rawOutput, cornerID: corner.cornerID, status: .available).count
                     + records(kind: .log, cornerID: corner.cornerID, status: .available).count
                 if evidenceCount == 0 {
