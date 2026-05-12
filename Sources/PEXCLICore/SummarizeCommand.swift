@@ -52,13 +52,15 @@ public struct SummarizeCommand: Sendable {
     }
 
     public func run() async throws {
-        let summary = try buildSummary()
+        let output = try buildSummary()
         if jsonOutput {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let jsonData = try encoder.encode(summary)
+            encoder.dateEncodingStrategy = .iso8601
+            let jsonData = try encoder.encode(output)
             print(String(data: jsonData, encoding: .utf8) ?? "{}")
         } else {
+            let summary = output.summary
             print("Run: \(summary.runID)")
             print("Status: \(summary.status)")
             print("Backend: \(summary.backendID)")
@@ -79,10 +81,11 @@ public struct SummarizeCommand: Sendable {
         }
     }
 
-    func buildSummary() throws -> RunSummary {
-        let manifestURL = runPath.appending(path: "manifest.json")
+    func buildSummary() throws -> SummarizeJSONOutput {
+        let manifestURL = resolveManifestURL()
         let resolver = try PEXArtifactResolver(manifestURL: manifestURL)
         let manifest = resolver.manifest
+        let completeness = resolver.completenessReport()
         var cornerSummaries: [CornerSummary] = []
 
         let cornersToProcess: [PEXArtifactCorner]
@@ -120,11 +123,15 @@ public struct SummarizeCommand: Sendable {
             }
         }
 
-        return RunSummary(
-            runID: manifest.runID.description,
-            status: manifest.status.rawValue,
-            backendID: manifest.backendID,
-            corners: cornerSummaries
+        return SummarizeJSONOutput(
+            manifestURL: manifestURL,
+            completeness: completeness,
+            summary: RunSummary(
+                runID: manifest.runID.description,
+                status: manifest.status.rawValue,
+                backendID: manifest.backendID,
+                corners: cornerSummaries
+            )
         )
     }
 
@@ -143,6 +150,19 @@ public struct SummarizeCommand: Sendable {
         if absValue >= 1e-15 { return "\(sign)\(String(format: "%.3f", absValue * 1e15))f" }
         return "\(sign)\(String(format: "%.3e", absValue))"
     }
+
+    private func resolveManifestURL() -> URL {
+        if runPath.lastPathComponent == "manifest.json" {
+            return runPath
+        }
+        return runPath.appending(path: "manifest.json")
+    }
+}
+
+struct SummarizeJSONOutput: Codable {
+    let manifestURL: URL
+    let completeness: PEXArtifactCompletenessReport
+    let summary: RunSummary
 }
 
 struct RunSummary: Codable {

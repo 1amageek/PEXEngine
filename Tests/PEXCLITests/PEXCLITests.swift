@@ -339,11 +339,45 @@ struct PEXCLITests {
             "--run",
             workspace.runDirectory.path(percentEncoded: false),
         ])
-        let summary = try cmd.buildSummary()
-        let corner = try #require(summary.corners.first)
+        let output = try cmd.buildSummary()
+        let corner = try #require(output.summary.corners.first)
+        #expect(output.manifestURL == workspace.manifestURL)
+        #expect(output.completeness.status == .complete)
         #expect(corner.netCount == 1)
         #expect(corner.elementCount == 0)
         #expect(corner.topNets.first?.name == "OUT")
+    }
+
+    @Test func summarizeCommandAcceptsManifestPath() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-summary-manifest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("summary"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [],
+            artifacts: [],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let cmd = try SummarizeCommand(arguments: [
+            "--run",
+            workspace.manifestURL.path(percentEncoded: false),
+        ])
+        let output = try cmd.buildSummary()
+
+        #expect(output.manifestURL == workspace.manifestURL)
+        #expect(output.summary.runID == runID.description)
     }
 
     // MARK: - DoctorCommand Argument Parsing
