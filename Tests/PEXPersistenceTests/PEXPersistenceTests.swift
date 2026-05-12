@@ -62,6 +62,66 @@ struct PEXPersistenceTests {
         #expect(layout.provenance?.sourcePath == inputs.layoutURL.path(percentEncoded: false))
     }
 
+    @Test func requestHashIgnoresExternalAbsoluteInputPaths() throws {
+        let firstDir = makeTemporaryDirectory("pex_hash_first")
+        let secondDir = makeTemporaryDirectory("pex_hash_second")
+        defer { removeTemporaryItem(firstDir) }
+        defer { removeTemporaryItem(secondDir) }
+
+        let firstWorkspace = PEXRunWorkspace(baseURL: firstDir, runID: PEXRunID())
+        let secondWorkspace = PEXRunWorkspace(baseURL: secondDir, runID: PEXRunID())
+        try firstWorkspace.createDirectories(corners: ["tt"])
+        try secondWorkspace.createDirectories(corners: ["tt"])
+
+        let firstInputs = try makeInputFiles(in: firstDir.appending(path: "external"))
+        let secondInputs = try makeInputFiles(in: secondDir.appending(path: "external"))
+        let firstRecorder = PEXArtifactRecorder(workspace: firstWorkspace)
+        let secondRecorder = PEXArtifactRecorder(workspace: secondWorkspace)
+        let firstArtifacts: [PEXArtifactRecord] = [
+            try firstRecorder.captureInput(url: firstInputs.layoutURL, kind: .layoutInput),
+            try firstRecorder.captureInput(url: firstInputs.netlistURL, kind: .netlistInput),
+        ]
+        let secondArtifacts: [PEXArtifactRecord] = [
+            try secondRecorder.captureInput(url: secondInputs.layoutURL, kind: .layoutInput),
+            try secondRecorder.captureInput(url: secondInputs.netlistURL, kind: .netlistInput),
+        ]
+
+        let firstRequest = makeRequest(inputs: firstInputs, workspace: firstDir)
+        let secondRequest = makeRequest(inputs: secondInputs, workspace: secondDir)
+        let firstHash = try PEXRequestHash.compute(for: firstRequest, inputArtifacts: firstArtifacts)
+        let secondHash = try PEXRequestHash.compute(for: secondRequest, inputArtifacts: secondArtifacts)
+
+        #expect(firstRequest.layoutURL.path(percentEncoded: false) != secondRequest.layoutURL.path(percentEncoded: false))
+        #expect(firstRequest.workingDirectory?.path(percentEncoded: false) != secondRequest.workingDirectory?.path(percentEncoded: false))
+        #expect(firstHash == secondHash)
+    }
+
+    @Test func recorderDoesNotOverwriteNameCollisions() throws {
+        let tempDir = makeTemporaryDirectory("pex_collision")
+        defer { removeTemporaryItem(tempDir) }
+
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: PEXRunID())
+        try workspace.createDirectories(corners: ["tt"])
+        let firstDirectory = tempDir.appending(path: "first")
+        let secondDirectory = tempDir.appending(path: "second")
+        try FileManager.default.createDirectory(at: firstDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondDirectory, withIntermediateDirectories: true)
+        let firstURL = firstDirectory.appending(path: "same.dat")
+        let secondURL = secondDirectory.appending(path: "same.dat")
+        try Data("first".utf8).write(to: firstURL)
+        try Data("second".utf8).write(to: secondURL)
+
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let first = try recorder.captureInput(url: firstURL, kind: .layoutInput)
+        let second = try recorder.captureInput(url: secondURL, kind: .netlistInput)
+        let firstCapturedURL = workspace.runDirectory.appending(path: first.relativePath.value)
+        let secondCapturedURL = workspace.runDirectory.appending(path: second.relativePath.value)
+
+        #expect(first.relativePath != second.relativePath)
+        #expect(try String(contentsOf: firstCapturedURL, encoding: .utf8) == "first")
+        #expect(try String(contentsOf: secondCapturedURL, encoding: .utf8) == "second")
+    }
+
     @Test func resolverLoadsIRThroughManifestRecord() throws {
         let tempDir = makeTemporaryDirectory("pex_resolver")
         defer { removeTemporaryItem(tempDir) }

@@ -78,6 +78,57 @@ struct SPEFParserTests {
         #expect(tree.nets[0].resistors.count == 1)
     }
 
+    @Test func parserRejectsUnsupportedTopLevelKeyword() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *UNSUPPORTED
+        value
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+        let parser = SPEFParser()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try parser.parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsUnsupportedNetSection() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *CONN
+        *CAP
+        1 net1:a 0.5
+        *INDUC
+        1 net1:a net1:b 2.0
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+        let parser = SPEFParser()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try parser.parse(tokens: tokens)
+        }
+    }
+
     @Test func connectionsParsedCorrectly() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()

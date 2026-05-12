@@ -63,9 +63,7 @@ public actor PEXOrchestrator {
             status = .failed
         }
 
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        let requestHash = PEXRequestHash.compute(from: try encoder.encode(request))
+        let requestHash = try PEXRequestHash.compute(for: request, inputArtifacts: inputArtifacts)
 
         let metrics = PEXRunMetrics(
             totalDurationSeconds: finishedAt.timeIntervalSince(startedAt),

@@ -92,6 +92,12 @@ public struct SPEFParser: Sendable {
             if cursor.currentKeyword == "D_NET" {
                 let net = try parseNetBlock(&cursor)
                 nets.append(net)
+            } else if let keyword = cursor.currentKeyword {
+                throw SPEFParserDiagnostic(
+                    severity: .error,
+                    message: "Unsupported top-level SPEF keyword *\(keyword)",
+                    location: cursor.currentLocation
+                )
             } else {
                 cursor.advance()
             }
@@ -176,9 +182,11 @@ public struct SPEFParser: Sendable {
             case "NAME_MAP", "PORTS", "D_NET":
                 break // End of header section
             default:
-                cursor.advance()
-                cursor.skipToNextKeyword()
-                continue
+                throw SPEFParserDiagnostic(
+                    severity: .error,
+                    message: "Unsupported SPEF header keyword *\(kw)",
+                    location: cursor.currentLocation
+                )
             }
 
             if kw == "NAME_MAP" || kw == "PORTS" || kw == "D_NET" { break }
@@ -291,9 +299,11 @@ public struct SPEFParser: Sendable {
                     connections: connections, capacitors: capacitors, resistors: resistors
                 )
             default:
-                // Unknown section, skip
-                cursor.advance()
-                cursor.skipNewlines()
+                throw SPEFParserDiagnostic(
+                    severity: .error,
+                    message: "Unsupported SPEF net section *\(kw)",
+                    location: cursor.currentLocation
+                )
             }
         }
 
@@ -403,6 +413,11 @@ struct TokenCursor: Sendable {
     var currentKeyword: String? {
         if case .keyword(let kw) = currentToken { return kw }
         return nil
+    }
+
+    var currentLocation: SPEFSourceLocation? {
+        guard index < tokens.count else { return nil }
+        return tokens[index].location
     }
 
     mutating func advance() {

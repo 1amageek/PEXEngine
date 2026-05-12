@@ -11,13 +11,13 @@ public struct PEXArtifactRecorder: Sendable {
 
     public func captureInput(url sourceURL: URL, kind: PEXArtifactKind) throws -> PEXArtifactRecord {
         let destination = workspace.inputsDirectory.appending(path: sanitizedFileName(sourceURL.lastPathComponent))
-        try copy(sourceURL, to: destination)
+        let capturedURL = try copy(sourceURL, to: destination)
         return try availableRecord(
             id: "input-\(kind.rawValue)",
             kind: kind,
             stage: .inputValidation,
             cornerID: nil,
-            url: destination,
+            url: capturedURL,
             provenance: PEXArtifactProvenance(sourcePath: sourceURL.path(percentEncoded: false))
         )
     }
@@ -95,15 +95,18 @@ public struct PEXArtifactRecorder: Sendable {
     ) throws -> PEXArtifactRecord {
         let destination = destinationURL(for: generated)
         if generated.status == .available {
+            let capturedURL: URL
             if generated.url.standardizedFileURL != destination.standardizedFileURL {
-                try copy(generated.url, to: destination)
+                capturedURL = try copy(generated.url, to: destination)
+            } else {
+                capturedURL = generated.url
             }
             return try availableRecord(
-                id: id ?? artifactID(kind: generated.kind, cornerID: generated.cornerID, url: destination),
+                id: id ?? artifactID(kind: generated.kind, cornerID: generated.cornerID, url: capturedURL),
                 kind: generated.kind,
                 stage: generated.stage,
                 cornerID: generated.cornerID,
-                url: destination,
+                url: capturedURL,
                 provenance: generated.provenance
             )
         }
@@ -227,7 +230,7 @@ public struct PEXArtifactRecorder: Sendable {
         return "\(kind.rawValue)-\(corner)\(sanitizedIdentifier(stem))"
     }
 
-    private func copy(_ sourceURL: URL, to destinationURL: URL) throws {
+    private func copy(_ sourceURL: URL, to destinationURL: URL) throws -> URL {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: sourceURL.path(percentEncoded: false)) else {
             throw PEXError.persistenceFailed("Artifact source file does not exist: \(sourceURL.path(percentEncoded: false))")
@@ -235,16 +238,57 @@ public struct PEXArtifactRecorder: Sendable {
         do {
             try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             if sourceURL.standardizedFileURL != destinationURL.standardizedFileURL {
-                if fileManager.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
-                    try fileManager.removeItem(at: destinationURL)
+                let sourceData = try Data(contentsOf: sourceURL)
+                let destination = try immutableDestinationURL(
+                    requestedURL: destinationURL,
+                    sourceData: sourceData
+                )
+                if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
+                    return destination
                 }
-                try fileManager.copyItem(at: sourceURL, to: destinationURL)
+                try fileManager.copyItem(at: sourceURL, to: destination)
+                return destination
             }
+            return destinationURL
         } catch let error as PEXError {
             throw error
         } catch {
             throw PEXError.persistenceFailed("Failed to capture artifact \(sourceURL.path(percentEncoded: false))", underlying: error)
         }
+    }
+
+    private func immutableDestinationURL(requestedURL: URL, sourceData: Data) throws -> URL {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: requestedURL.path(percentEncoded: false)) else {
+            return requestedURL
+        }
+        let requestedData = try Data(contentsOf: requestedURL)
+        if Self.sha256(data: requestedData) == Self.sha256(data: sourceData) {
+            return requestedURL
+        }
+
+        let hashPrefix = String(Self.sha256(data: sourceData).prefix(12))
+        let directory = requestedURL.deletingLastPathComponent()
+        let extensionValue = requestedURL.pathExtension
+        let stem = requestedURL.deletingPathExtension().lastPathComponent
+        var candidate = directory.appending(path: "\(stem)-\(hashPrefix)")
+        if !extensionValue.isEmpty {
+            candidate = candidate.appendingPathExtension(extensionValue)
+        }
+        var suffix = 2
+        while fileManager.fileExists(atPath: candidate.path(percentEncoded: false)) {
+            let candidateData = try Data(contentsOf: candidate)
+            if Self.sha256(data: candidateData) == Self.sha256(data: sourceData) {
+                return candidate
+            }
+            var next = directory.appending(path: "\(stem)-\(hashPrefix)-\(suffix)")
+            if !extensionValue.isEmpty {
+                next = next.appendingPathExtension(extensionValue)
+            }
+            candidate = next
+            suffix += 1
+        }
+        return candidate
     }
 
     private func relativePath(for url: URL) throws -> PEXArtifactPath {
