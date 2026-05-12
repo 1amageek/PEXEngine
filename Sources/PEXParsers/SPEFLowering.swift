@@ -22,7 +22,10 @@ public struct SPEFLowering: Sendable {
             for cap in netBlock.capacitors {
                 nodeSet.insert(resolveNameMap(cap.nodeA, nameMap: tree.nameMap))
                 if let nodeB = cap.nodeB {
-                    nodeSet.insert(resolveNameMap(nodeB, nameMap: tree.nameMap))
+                    let resolvedB = resolveNameMap(nodeB, nameMap: tree.nameMap)
+                    if ownerNetName(of: resolvedB, delimiter: delimiter) == netName.value {
+                        nodeSet.insert(resolvedB)
+                    }
                 }
             }
             for res in netBlock.resistors {
@@ -52,8 +55,8 @@ public struct SPEFLowering: Sendable {
 
                 if let nodeB = cap.nodeB {
                     let resolvedB = resolveNameMap(nodeB, nameMap: tree.nameMap)
-                    // Determine if coupling (cross-net) or internal
-                    let isCrossNet = !nodeSet.contains(resolvedB)
+                    let nodeBNetName = ownerNetName(of: resolvedB, delimiter: delimiter)
+                    let isCrossNet = nodeBNetName != netName.value
                     let kind: ElementKind = isCrossNet ? .coupling : .capacitor
 
                     let element = ParasiticElement(
@@ -61,7 +64,7 @@ public struct SPEFLowering: Sendable {
                         kind: kind,
                         nodeA: NodeRef(netName: netName, nodeName: NodeName(resolvedA)),
                         nodeB: NodeRef(
-                            netName: isCrossNet ? NetName(resolvedB.components(separatedBy: delimiter).first ?? resolvedB) : netName,
+                            netName: isCrossNet ? NetName(nodeBNetName) : netName,
                             nodeName: NodeName(resolvedB)
                         ),
                         value: scaledValue,
@@ -162,5 +165,9 @@ public struct SPEFLowering: Sendable {
             }
         }
         return name
+    }
+
+    private func ownerNetName(of nodeName: String, delimiter: String) -> String {
+        nodeName.components(separatedBy: delimiter).first ?? nodeName
     }
 }

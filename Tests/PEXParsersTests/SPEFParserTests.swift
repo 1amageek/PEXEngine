@@ -238,6 +238,38 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func loweringClassifiesCrossNetCapacitors() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "coupling"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET VDD 0.1
+        *CONN
+        *CAP
+        1 VDD:1 VSS:1 0.1
+        *END
+
+        *D_NET VSS 0.0
+        *CONN
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+
+        let coupling = try #require(ir.elements.first { $0.kind == .coupling })
+        let vddNet = try #require(ir.nets.first { $0.name == NetName("VDD") })
+        #expect(coupling.nodeA.netName == NetName("VDD"))
+        #expect(coupling.nodeB?.netName == NetName("VSS"))
+        #expect(!vddNet.nodes.contains { $0.name == NodeName("VSS:1") })
+    }
+
     @Test func endToEndSPEFPEXParser() throws {
         // Write sample SPEF to temp file
         let tempDir = FileManager.default.temporaryDirectory
