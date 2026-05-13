@@ -158,6 +158,92 @@ struct PEXPersistenceTests {
         #expect(resolver.completenessReport().status == .complete)
     }
 
+    @Test func resolverRejectsEscapingIRPathBeforeRead() throws {
+        let tempDir = makeTemporaryDirectory("pex_escape")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let outsideDirectory = tempDir.appending(path: "outside")
+        try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
+        let outsideIRURL = outsideDirectory.appending(path: "tt.json")
+        let irData = try PEXIRSerializer().encode(makeTestIR())
+        try irData.write(to: outsideIRURL)
+
+        let irRecord = PEXArtifactRecord(
+            id: "ir-tt",
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: "tt",
+            relativePath: PEXArtifactPath(validated: "../outside/tt.json"),
+            sha256: PEXArtifactResolver.sha256(data: irData),
+            byteCount: irData.count,
+            status: .available
+        )
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
+            artifacts: [irRecord],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let resolver = try PEXArtifactResolver(workspace: workspace)
+        #expect(throws: PEXError.self) {
+            _ = try resolver.loadIR(cornerID: "tt")
+        }
+        let report = resolver.completenessReport()
+        #expect(report.status == .invalid)
+        #expect(report.issues.contains { $0.kind == .pathEscapesRunDirectory && $0.artifactID == "ir-tt" })
+    }
+
+    @Test func completenessReportRejectsSymlinkEscapingRunDirectory() throws {
+        let tempDir = makeTemporaryDirectory("pex_symlink_escape")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let outsideURL = tempDir.appending(path: "outside.log")
+        try Data("outside".utf8).write(to: outsideURL)
+        let linkURL = workspace.cornerRawDirectory("tt").appending(path: "escape.log")
+        try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: outsideURL)
+        let outsideData = try Data(contentsOf: outsideURL)
+
+        let logRecord = PEXArtifactRecord(
+            id: "log-tt",
+            kind: .log,
+            stage: .backendExecution,
+            cornerID: "tt",
+            relativePath: try PEXArtifactPath("raw/tt/escape.log"),
+            sha256: PEXArtifactResolver.sha256(data: outsideData),
+            byteCount: outsideData.count,
+            status: .available
+        )
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .failed,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .failed, artifactIDs: [logRecord.id], failure: PEXArtifactFailure(stage: .backendExecution, message: "failed"))],
+            artifacts: [logRecord],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let report = try PEXArtifactResolver(workspace: workspace).completenessReport()
+        #expect(report.status == .invalid)
+        #expect(report.issues.contains { $0.kind == .pathEscapesRunDirectory && $0.artifactID == "log-tt" })
+    }
+
     @Test func completenessReportDetectsHashTampering() throws {
         let tempDir = makeTemporaryDirectory("pex_hash")
         defer { removeTemporaryItem(tempDir) }

@@ -95,11 +95,14 @@ public struct PEXArtifactStore: Sendable {
         var cornerResults: [PEXCornerResult] = []
 
         for corner in manifest.corners {
-            let rawOutputURLs = resolver.records(kind: .rawOutput, cornerID: corner.cornerID, status: .available)
-                .map { resolver.url(for: $0) }
-            let logURL = resolver.records(kind: .log, cornerID: corner.cornerID, status: .available)
-                .first
-                .map { resolver.url(for: $0) }
+            let rawOutputURLs = try resolver.records(kind: .rawOutput, cornerID: corner.cornerID, status: .available)
+                .map { try resolver.validatedURL(for: $0) }
+            let logURL: URL?
+            if let logRecord = resolver.records(kind: .log, cornerID: corner.cornerID, status: .available).first {
+                logURL = try resolver.validatedURL(for: logRecord)
+            } else {
+                logURL = nil
+            }
             let ir: ParasiticIR?
             if resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, status: .available).isEmpty {
                 ir = nil

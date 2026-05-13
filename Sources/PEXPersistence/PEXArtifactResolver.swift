@@ -65,11 +65,27 @@ public struct PEXArtifactResolver: Sendable {
         runDirectory.appending(path: record.relativePath.value)
     }
 
+    public func validatedURL(for record: PEXArtifactRecord) throws -> URL {
+        if pathEscapesRunDirectory(record.relativePath) {
+            throw PEXError.persistenceFailed("Artifact path escapes the run directory: \(record.relativePath.value)")
+        }
+
+        let artifactURL = url(for: record)
+        if FileManager.default.fileExists(atPath: artifactURL.path(percentEncoded: false)) {
+            let runPath = normalizedPath(runDirectory)
+            let artifactPath = normalizedPath(artifactURL)
+            guard artifactPath == runPath || artifactPath.hasPrefix(runPath + "/") else {
+                throw PEXError.persistenceFailed("Artifact target escapes the run directory: \(record.relativePath.value)")
+            }
+        }
+        return artifactURL
+    }
+
     public func loadIR(cornerID: PEXCornerID) throws -> ParasiticIR {
         guard let record = records(kind: .parasiticIR, cornerID: cornerID, status: .available).first else {
             throw PEXError.persistenceFailed("No available ParasiticIR artifact for corner \(cornerID.value)")
         }
-        let url = url(for: record)
+        let url = try validatedURL(for: record)
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -83,8 +99,10 @@ public struct PEXArtifactResolver: Sendable {
         var issues: [PEXArtifactCompletenessIssue] = []
 
         for record in manifest.artifacts {
-            let artifactURL = url(for: record)
-            if pathEscapesRunDirectory(record.relativePath) {
+            let artifactURL: URL
+            do {
+                artifactURL = try validatedURL(for: record)
+            } catch {
                 issues.append(PEXArtifactCompletenessIssue(
                     kind: .pathEscapesRunDirectory,
                     artifactID: record.id,
@@ -193,5 +211,13 @@ public struct PEXArtifactResolver: Sendable {
 
     private func pathEscapesRunDirectory(_ path: PEXArtifactPath) -> Bool {
         path.value.hasPrefix("/") || path.value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+    }
+
+    private func normalizedPath(_ url: URL) -> String {
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().path(percentEncoded: false)
+        guard path.count > 1, path.hasSuffix("/") else {
+            return path
+        }
+        return String(path.dropLast())
     }
 }
