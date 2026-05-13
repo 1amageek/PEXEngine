@@ -164,6 +164,122 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func parserRejectsMissingRequiredHeaderFields() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsUnterminatedNetBlock() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *CAP
+        1 net1:a 0.5
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsMalformedConnection() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *CONN
+        *I net1:a X
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsMalformedCapacitor() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *CAP
+        1 net1:a net1:b
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsMalformedResistor() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *RES
+        1 net1:a net1:b
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
     @Test func connectionsParsedCorrectly() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()
