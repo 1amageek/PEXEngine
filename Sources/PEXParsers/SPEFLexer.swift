@@ -59,6 +59,9 @@ public struct SPEFLexer: Sendable {
                 let content = consumeWhile { $0 != "\"" && $0 != "\n" }
                 if position < characters.count && characters[position] == "\"" {
                     advance() // consume closing "
+                } else {
+                    tokens.append(SPEFToken.Located(token: .invalid("Unterminated string literal"), location: loc))
+                    continue
                 }
                 tokens.append(SPEFToken.Located(token: .string(content), location: loc))
                 continue
@@ -107,7 +110,7 @@ public struct SPEFLexer: Sendable {
                 continue
             }
 
-            // Unknown character - skip
+            tokens.append(SPEFToken.Located(token: .invalid("Invalid character '\(ch)'"), location: loc))
             advance()
         }
 

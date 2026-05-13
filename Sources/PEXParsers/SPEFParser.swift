@@ -81,6 +81,7 @@ public struct SPEFParser: Sendable {
     public init() {}
 
     public func parse(tokens: [SPEFToken.Located]) throws -> SPEFParseTree {
+        try rejectInvalidTokens(tokens)
         var cursor = TokenCursor(tokens: tokens)
 
         let header = try parseHeader(&cursor)
@@ -104,6 +105,19 @@ public struct SPEFParser: Sendable {
         }
 
         return SPEFParseTree(header: header, nameMap: nameMap, ports: ports, nets: nets)
+    }
+
+    private func rejectInvalidTokens(_ tokens: [SPEFToken.Located]) throws {
+        for token in tokens {
+            guard case .invalid(let message) = token.token else {
+                continue
+            }
+            throw SPEFParserDiagnostic(
+                severity: .error,
+                message: message,
+                location: token.location
+            )
+        }
     }
 
     // MARK: - Header parsing

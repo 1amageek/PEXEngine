@@ -129,6 +129,41 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func parserRejectsInvalidLexerCharacters() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        @
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
+    @Test func parserRejectsUnterminatedStringLiteral() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top
+        *DIVIDER /
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tokens = lexer.tokenize()
+
+        #expect(throws: SPEFParserDiagnostic.self) {
+            try SPEFParser().parse(tokens: tokens)
+        }
+    }
+
     @Test func connectionsParsedCorrectly() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()

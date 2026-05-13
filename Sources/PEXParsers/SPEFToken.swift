@@ -9,6 +9,7 @@ public enum SPEFToken: Sendable, Hashable {
     case leftBracket            // [
     case rightBracket           // ]
     case newline
+    case invalid(String)         // lexer diagnostic
     case endOfFile
 
     public struct Located: Sendable, Hashable {
