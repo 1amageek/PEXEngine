@@ -85,12 +85,16 @@ public struct MagicPEXAdapter: PEXAdapter {
         // coupling elements), because Magic's `cthresh infinite` would discard the
         // grounded caps too — yielding zero parasitics instead of "ground only".
         let cthresh = "0"
+        // Extract resistance for RC / R-only modes; capacitance-only otherwise.
+        let extractResistance = context.options.extractMode == .rc
+            || context.options.extractMode == .rOnly
         var environment = ProcessInfo.processInfo.environment
         environment["PDK_ROOT"] = toolchain.pdkRoot
         environment["PEX_GDS"] = context.layoutURL.path(percentEncoded: false)
         environment["PEX_CELL"] = context.topCell
         environment["PEX_OUT"] = outputURL.path(percentEncoded: false)
         environment["PEX_CTHRESH"] = cthresh
+        environment["PEX_EXTRESIST"] = extractResistance ? "on" : "off"
 
         let result: ProcessRunner.ProcessResult
         do {
@@ -134,7 +138,11 @@ public struct MagicPEXAdapter: PEXAdapter {
             format: .spice,
             fileURLs: [outputURL],
             logURL: nil,
-            metadata: ["generator": "magic", "cthresh": cthresh]
+            metadata: [
+                "generator": "magic",
+                "cthresh": cthresh,
+                "extresist": extractResistance ? "on" : "off",
+            ]
         )
         return PEXAdapterExecutionResult(
             rawOutput: rawOutput,

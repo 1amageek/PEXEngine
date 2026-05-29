@@ -44,10 +44,11 @@ Capacitance extraction is wired and validated (it matches the documented Sky130
 met1 substrate cap, ~25.8 aF/µm² + 40.6 aF/µm fringe, and reproduces the correct
 RC time constant in ngspice — see `validation/pex-backannotation.sh`).
 
-Resistance extraction (`extresist`) is **not yet wired**: in the headless
-`-dnull` build it did not emit resistors across several documented invocations.
-The SPICE parser already lowers `R` lines (grouping resistor-connected sub-nodes
-into one net), so enabling it later is a driver-only change.
+Resistance extraction is wired for `extractMode = .rc` / `.rOnly`: the driver runs
+`extresist threshold 0` after `select top cell` (the default threshold lumps away
+small resistors, and without selecting the top cell `extresist all` targets the
+empty `(UNNAMED)` cell). The parser groups the resulting resistor sub-nodes
+(`Y`/`Y.n0`/`Y.t0` …) back into one net. `.cOnly` stays capacitance-only.
 
 Multi-corner extraction is **not supported** (`supportsCornerSweep == false`):
 Magic's base `ext2spice` uses a single capacitance table and the open Sky130 PDK

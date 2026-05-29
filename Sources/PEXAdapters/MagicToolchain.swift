@@ -19,13 +19,14 @@ public struct MagicToolchain: Sendable {
 
     /// The Tcl driver that extracts parasitics and writes a SPICE netlist.
     /// Inputs are passed via environment: `PEX_CELL`, `PEX_OUT`, `PEX_CTHRESH`,
-    /// and optionally `PEX_GDS` (read before loading the cell).
+    /// and optionally `PEX_GDS` (read before loading the cell). When
+    /// `PEX_EXTRESIST == on`, resistance is also extracted (`extresist`).
     ///
-    /// Capacitance only for now (`ext2spice cthresh`). Resistance extraction
-    /// (`extresist`) is intentionally not wired: in the headless `-dnull` build it
-    /// did not emit resistors across several documented invocations. The downstream
-    /// parser already lowers `R` lines (grouping resistor-connected sub-nodes into
-    /// one net), so enabling `extresist` later is purely a driver change.
+    /// Resistance extraction requires `extresist threshold 0` (the default
+    /// threshold lumps away every small resistor) and `select top cell` so
+    /// `extresist all` targets the loaded cell rather than the empty (UNNAMED)
+    /// cell. The parser groups the resulting resistor sub-nodes (Y/Y.n0/Y.t0...)
+    /// back into one net.
     public static let extractionDriver = """
     # Headless parasitic extraction driver for PEXEngine.
     if {![info exists env(PEX_CELL)]} { puts "PEX_ERROR PEX_CELL not set"; quit -noprompt }
@@ -45,7 +46,19 @@ public struct MagicToolchain: Sendable {
     }
     extract do local
     extract all
+    set extresist 0
+    if {[info exists env(PEX_EXTRESIST)] && $env(PEX_EXTRESIST) eq "on"} {
+        set extresist 1
+        extresist threshold 0
+        extresist tolerance 1
+        extresist extout on
+        extresist all
+    }
     ext2spice cthresh $env(PEX_CTHRESH)
+    if {$extresist} {
+        ext2spice rthresh 0
+        ext2spice extresist on
+    }
     ext2spice -o $env(PEX_OUT)
     puts "PEX_DONE"
     quit -noprompt
