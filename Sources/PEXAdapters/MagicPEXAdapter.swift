@@ -73,9 +73,11 @@ public struct MagicPEXAdapter: PEXAdapter {
         }
 
         let outputURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spice")
-        // cthresh 0 keeps every coupling capacitor; lumping them to ground when
-        // coupling is not requested keeps the extraction honest about what it did.
-        let cthresh = context.options.includeCouplingCaps ? "0" : "infinite"
+        // Always extract every capacitor (cthresh 0). The includeCouplingCaps
+        // option is honored when lowering to IR (MagicSPICEParasiticParser drops
+        // coupling elements), because Magic's `cthresh infinite` would discard the
+        // grounded caps too — yielding zero parasitics instead of "ground only".
+        let cthresh = "0"
         var environment = ProcessInfo.processInfo.environment
         environment["PDK_ROOT"] = toolchain.pdkRoot
         environment["PEX_GDS"] = context.layoutURL.path(percentEncoded: false)

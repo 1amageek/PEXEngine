@@ -8,10 +8,10 @@ import Foundation
 @Suite("MagicSPICEParasiticParser")
 struct MagicSPICEParasiticParserTests {
 
-    private func options() -> PEXRunOptions {
+    private func options(includeCoupling: Bool = true) -> PEXRunOptions {
         PEXRunOptions(
             extractMode: .rc,
-            includeCouplingCaps: true,
+            includeCouplingCaps: includeCoupling,
             minCapacitanceF: nil,
             minResistanceOhm: nil,
             maxParallelJobs: 1,
@@ -21,7 +21,7 @@ struct MagicSPICEParasiticParserTests {
         )
     }
 
-    private func parse(_ spice: String) throws -> ParasiticIR {
+    private func parse(_ spice: String, includeCoupling: Bool = true) throws -> ParasiticIR {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "magicpex-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -30,7 +30,8 @@ struct MagicSPICEParasiticParserTests {
         try Data(spice.utf8).write(to: file)
         let raw = PEXRawOutput(format: .spice, fileURLs: [file])
         let context = PEXParseContext(
-            cornerID: PEXCornerID("tt"), runID: PEXRunID(), technology: nil, options: options()
+            cornerID: PEXCornerID("tt"), runID: PEXRunID(), technology: nil,
+            options: options(includeCoupling: includeCoupling)
         )
         return try MagicSPICEParasiticParser().parse(raw, context: context)
     }
@@ -63,6 +64,46 @@ struct MagicSPICEParasiticParserTests {
         #expect(abs(values[0] - 0.04571e-15) < 1e-20)
         #expect(abs(values[1] - 0.0476e-15) < 1e-20)
         #expect(ParasiticIRValidator().validate(ir).isValid)
+    }
+
+    @Test("A coupling cap is counted once across nets (matches SPEFLowering), not on both ends")
+    func couplingCountedOnce() throws {
+        let ir = try parse("""
+        C1 A VPWR 0.04571f
+        C9 A Y 0.0476f
+        """)
+        let perNetSum = ir.nets.map(\.totalCouplingCapF).reduce(0, +)
+        let elementSum = ir.elements.filter { $0.kind == .coupling }.map(\.value).reduce(0, +)
+        #expect(abs(perNetSum - elementSum) < 1e-21,
+                "sum of per-net coupling totals (\(perNetSum)) must equal the coupling element sum (\(elementSum))")
+    }
+
+    @Test("A resistor is counted once across nets, not on both endpoints")
+    func resistorCountedOnce() throws {
+        let ir = try parse("""
+        R0 a b 10
+        R1 b c 20
+        """)
+        let perNetSum = ir.nets.map(\.totalResistanceOhm).reduce(0, +)
+        #expect(abs(perNetSum - 30.0) < 1e-9, "expected 10+20=30 total, got \(perNetSum)")
+    }
+
+    @Test("includeCouplingCaps=false drops coupling elements but keeps ground caps")
+    func dropsCouplingWhenNotRequested() throws {
+        let ir = try parse("""
+        C0 m1_0_0# VSUBS 4.2008f
+        C1 A VPWR 0.04571f
+        """, includeCoupling: false)
+        #expect(ir.elements.contains { $0.kind == .capacitor }, "ground cap must be kept")
+        #expect(!ir.elements.contains { $0.kind == .coupling }, "coupling must be dropped")
+        #expect(ParasiticIRValidator().validate(ir).isValid)
+    }
+
+    @Test("Ground-node classification is case-insensitive")
+    func groundCaseInsensitive() throws {
+        let ir = try parse("C0 net1 vsubs 1f")  // lowercase substrate node
+        #expect(ir.elements.first?.kind == .capacitor)
+        #expect(ir.elements.first?.nodeB == nil)
     }
 
     @Test("A resistor line is lowered to a resistor element")

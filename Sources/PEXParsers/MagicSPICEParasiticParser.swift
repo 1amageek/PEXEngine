@@ -16,11 +16,18 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
     public let format: PEXOutputFormat = .spice
 
     /// Node names treated as the global ground / substrate (a capacitor to one of
-    /// these is a grounded capacitor, not coupling).
+    /// these is a grounded capacitor, not coupling). Matched case-insensitively.
+    /// Intentionally narrow: it holds only the substrate / global-ground node, not
+    /// design ground rails like Sky130's `VGND`/`VPWR`, which are real nets whose
+    /// capacitors must stay coupling.
     public let groundNodes: Set<String>
 
     public init(groundNodes: Set<String> = ["VSUBS", "0", "gnd!"]) {
-        self.groundNodes = groundNodes
+        self.groundNodes = Set(groundNodes.map { $0.lowercased() })
+    }
+
+    private func isGround(_ node: String) -> Bool {
+        groundNodes.contains(node.lowercased())
     }
 
     public func parse(_ raw: PEXRawOutput, context: PEXParseContext) throws -> ParasiticIR {
@@ -41,18 +48,23 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             )
         }
 
+        // Coupling caps are dropped when the run does not request them, matching
+        // MockParasiticGenerator (Magic's own `cthresh infinite` cannot do this —
+        // it discards grounded caps too — so the filtering happens here).
+        let includeCoupling = context.options.includeCouplingCaps
+
         var elements: [ParasiticElement] = []
         var capIndex = 0
         var resIndex = 0
-        // Per-net running totals; order preserved for deterministic output.
+        // Per-net running totals; first-seen order preserved for deterministic output.
         var netOrder: [String] = []
+        var seenNets: Set<String> = []
         var groundCap: [String: Double] = [:]
         var couplingCap: [String: Double] = [:]
         var resistance: [String: Double] = [:]
 
         func register(_ net: String) {
-            if groundCap[net] == nil && couplingCap[net] == nil && resistance[net] == nil
-                && !netOrder.contains(net) {
+            if seenNets.insert(net).inserted {
                 netOrder.append(net)
             }
         }
@@ -78,8 +90,8 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             }
 
             if kind == "c" {
-                let aGround = groundNodes.contains(nodeA)
-                let bGround = groundNodes.contains(nodeB)
+                let aGround = isGround(nodeA)
+                let bGround = isGround(nodeB)
                 if aGround && bGround { continue }
                 if aGround || bGround {
                     let signal = aGround ? nodeB : nodeA
@@ -93,11 +105,15 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
                         value: value,
                         source: .extracted
                     ))
+                    capIndex += 1
                 } else {
+                    guard includeCoupling else { continue }
                     register(nodeA)
                     register(nodeB)
+                    // Attribute the coupling value to one net only (nodeA, the
+                    // owner) — matching SPEFLowering, so per-net totals and their
+                    // sum agree across both parsers feeding ParasiticIR.
                     couplingCap[nodeA, default: 0] += value
-                    couplingCap[nodeB, default: 0] += value
                     elements.append(ParasiticElement(
                         id: "C\(capIndex)",
                         kind: .coupling,
@@ -106,13 +122,13 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
                         value: value,
                         source: .extracted
                     ))
+                    capIndex += 1
                 }
-                capIndex += 1
             } else { // resistor
                 register(nodeA)
                 register(nodeB)
+                // Count the resistor once (on nodeA), as SPEFLowering does.
                 resistance[nodeA, default: 0] += value
-                resistance[nodeB, default: 0] += value
                 elements.append(ParasiticElement(
                     id: "R\(resIndex)",
                     kind: .resistor,
