@@ -10,6 +10,13 @@ import PEXCore
 public struct MagicPEXAdapter: PEXAdapter {
 
     public let backendID = "magic"
+    // supportsCornerSweep is false on purpose: Magic's base `ext2spice` extracts
+    // from a single capacitance table (the open Sky130 PDK ships only sky130A.tech,
+    // no per-corner cap tech), so a "corner sweep" would emit identical parasitics
+    // for every corner. Genuine multi-corner extraction needs per-corner cap data
+    // that this tool/PDK does not provide; declaring true here (e.g. via a linear
+    // cap scale) would be a silent approximation, so it stays false until real
+    // corner tables are available.
     public let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
         supportsCornerSweep: false,

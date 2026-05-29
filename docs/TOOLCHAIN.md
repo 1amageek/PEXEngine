@@ -49,6 +49,13 @@ Resistance extraction (`extresist`) is **not yet wired**: in the headless
 The SPICE parser already lowers `R` lines (grouping resistor-connected sub-nodes
 into one net), so enabling it later is a driver-only change.
 
+Multi-corner extraction is **not supported** (`supportsCornerSweep == false`):
+Magic's base `ext2spice` uses a single capacitance table and the open Sky130 PDK
+ships only `sky130A.tech` (no per-corner cap tech), so every corner would yield
+identical parasitics. Real corner spreads require per-corner cap tables that the
+tool/PDK does not provide; the backend reports this honestly rather than emitting
+a scaled approximation.
+
 ## Verify
 
 ```sh
