@@ -36,7 +36,11 @@ let package = Package(
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 
         .testTarget(name: "PEXCoreTests", dependencies: ["PEXCore"]),
-        .testTarget(name: "PEXAdaptersTests", dependencies: ["PEXAdapters", "PEXCore"]),
+        .testTarget(
+            name: "PEXAdaptersTests",
+            dependencies: ["PEXAdapters", "PEXCore"],
+            resources: [.copy("Fixtures/pex_plate.gds")]
+        ),
         .testTarget(name: "PEXParsersTests", dependencies: ["PEXParsers", "PEXCore"]),
         .testTarget(name: "PEXPersistenceTests", dependencies: ["PEXPersistence", "PEXCore"]),
         .testTarget(name: "PEXRuntimeTests", dependencies: [

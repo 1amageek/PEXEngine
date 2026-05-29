@@ -16,9 +16,13 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
     }
 
     public static func withDefaults() -> DefaultPEXEngine {
-        let adapters = PEXAdapterRegistry(adapters: [MockPEXAdapter()])
+        // The mock backend stays registered (mandatory for tests/preview); the
+        // real Magic backend is selectable by backendID "magic" and fails loudly
+        // at execute time if the toolchain is not installed.
+        let adapters = PEXAdapterRegistry(adapters: [MockPEXAdapter(), MagicPEXAdapter()])
         let parsers = PEXParserRegistry()
         parsers.register(SPEFPEXParser())
+        parsers.register(MagicSpiceParasiticParser())
         return DefaultPEXEngine(
             adapterRegistry: adapters,
             parserRegistry: parsers
