@@ -1,0 +1,41 @@
+name: real-tool tests
+
+# Runs the gated real-tool tests (MagicPEXAdapter / MagicBackendEndToEnd /
+# MagicResistanceExtraction) against a real Magic + Sky130 toolchain, so the
+# real PEX path is exercised on every push — not just on a developer's machine.
+# Without the toolchain those tests skip; here they actually run.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  realtool:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode (Swift 6.2)
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app || true
+
+      - name: Cache toolchain (Magic + Sky130 PDK)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/magic
+            ~/.volare
+          key: pex-toolchain-${{ runner.os }}-${{ hashFiles('scripts/install-toolchain.sh') }}
+
+      - name: Install / detect toolchain
+        run: bash scripts/install-toolchain.sh   # appends MAGIC_BIN / PDK_ROOT to $GITHUB_ENV
+
+      - name: Doctor
+        run: |
+          test -x "$MAGIC_BIN" && echo "magic: $MAGIC_BIN"
+          test -d "$PDK_ROOT/sky130A" && echo "pdk: $PDK_ROOT"
+
+      - name: Run tests (gated real-tool tests now execute)
+        run: swift test

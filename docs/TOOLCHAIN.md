@@ -10,6 +10,14 @@ MagicPEXAdapterTests, MagicBackendEndToEndTests   ← skipped unless Magic + Sky
 validation/pex-backannotation.sh                  ← skips without Magic + ngspice + PDK
 ```
 
+## Scripted setup / CI
+
+`scripts/install-toolchain.sh` installs (or detects) Magic + Sky130 and exports
+`MAGIC_BIN` / `PDK_ROOT`. `.github/workflows/realtool.yml` runs it on `macos-15`
+(caching the built tools) and then `swift test`, so the gated real-tool tests run
+on every push. The tests honor `MAGIC_BIN`/`PDK_ROOT`, so CI points them at the
+installed tools.
+
 ## What you need
 
 | Tool | Used for | Discovery (override) |
