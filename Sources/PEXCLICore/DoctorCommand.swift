@@ -17,9 +17,10 @@ public struct DoctorCommand: Sendable {
     public func run() async throws {
         let engine = DefaultPEXEngine.withDefaults()
 
-        let adapterRegistry = PEXAdapterRegistry(adapters: [MockPEXAdapter()])
+        let adapterRegistry = PEXAdapterRegistry(adapters: PEXDefaultBackends.makeAll())
         let parserRegistry = PEXParserRegistry()
         parserRegistry.register(SPEFPEXParser())
+        parserRegistry.register(MagicSPICEParasiticParser())
 
         var checks: [DiagnosticCheck] = []
 

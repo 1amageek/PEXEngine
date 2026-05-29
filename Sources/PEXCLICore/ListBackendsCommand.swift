@@ -9,7 +9,7 @@ public struct ListBackendsCommand: Sendable {
     }
 
     public func run() throws {
-        let adapterRegistry = PEXAdapterRegistry(adapters: [MockPEXAdapter()])
+        let adapterRegistry = PEXAdapterRegistry(adapters: PEXDefaultBackends.makeAll())
         let backends = adapterRegistry.registeredBackends
 
         if jsonOutput {
