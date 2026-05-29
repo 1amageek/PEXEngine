@@ -53,20 +53,35 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
         // it discards grounded caps too — so the filtering happens here).
         let includeCoupling = context.options.includeCouplingCaps
 
-        var elements: [ParasiticElement] = []
-        var capIndex = 0
-        var resIndex = 0
-        // Per-net running totals; first-seen order preserved for deterministic output.
-        var netOrder: [String] = []
-        var seenNets: Set<String> = []
-        var groundCap: [String: Double] = [:]
-        var couplingCap: [String: Double] = [:]
-        var resistance: [String: Double] = [:]
+        // Coupling caps are dropped when the run does not request them, matching
+        // MockParasiticGenerator.
+        struct GroundCapRecord { let signal: String; let value: Double }
+        struct PairRecord { let a: String; let b: String; let value: Double }
+        var grounds: [GroundCapRecord] = []
+        var couplings: [PairRecord] = []
+        var resistors: [PairRecord] = []
 
-        func register(_ net: String) {
-            if seenNets.insert(net).inserted {
-                netOrder.append(net)
-            }
+        // First-seen node order, and a union-find over resistor endpoints so that
+        // resistor-connected sub-nodes (Magic splits a net at resistors) collapse
+        // into one net — matching SPEFLowering, where a net's resistors are
+        // intra-net. Capacitors never merge nets (coupling is cross-net).
+        var nodeOrder: [String] = []
+        var seenNodes: Set<String> = []
+        var parent: [String: String] = [:]
+        func see(_ n: String) {
+            if parent[n] == nil { parent[n] = n }
+            if seenNodes.insert(n).inserted { nodeOrder.append(n) }
+        }
+        func find(_ x: String) -> String {
+            var root = x
+            while parent[root]! != root { root = parent[root]! }
+            var cursor = x
+            while parent[cursor]! != root { let next = parent[cursor]!; parent[cursor] = root; cursor = next }
+            return root
+        }
+        func union(_ a: String, _ b: String) {
+            let ra = find(a), rb = find(b)
+            if ra != rb { parent[rb] = ra }
         }
 
         for rawLine in source.split(whereSeparator: \.isNewline) {
@@ -95,56 +110,82 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
                 if aGround && bGround { continue }
                 if aGround || bGround {
                     let signal = aGround ? nodeB : nodeA
-                    register(signal)
-                    groundCap[signal, default: 0] += value
-                    elements.append(ParasiticElement(
-                        id: "C\(capIndex)",
-                        kind: .capacitor,
-                        nodeA: ref(signal),
-                        nodeB: nil,
-                        value: value,
-                        source: .extracted
-                    ))
-                    capIndex += 1
+                    see(signal)
+                    grounds.append(GroundCapRecord(signal: signal, value: value))
                 } else {
                     guard includeCoupling else { continue }
-                    register(nodeA)
-                    register(nodeB)
-                    // Attribute the coupling value to one net only (nodeA, the
-                    // owner) — matching SPEFLowering, so per-net totals and their
-                    // sum agree across both parsers feeding ParasiticIR.
-                    couplingCap[nodeA, default: 0] += value
-                    elements.append(ParasiticElement(
-                        id: "C\(capIndex)",
-                        kind: .coupling,
-                        nodeA: ref(nodeA),
-                        nodeB: ref(nodeB),
-                        value: value,
-                        source: .extracted
-                    ))
-                    capIndex += 1
+                    see(nodeA); see(nodeB)
+                    couplings.append(PairRecord(a: nodeA, b: nodeB, value: value))
                 }
             } else { // resistor
-                register(nodeA)
-                register(nodeB)
-                // Count the resistor once (on nodeA), as SPEFLowering does.
-                resistance[nodeA, default: 0] += value
-                elements.append(ParasiticElement(
-                    id: "R\(resIndex)",
-                    kind: .resistor,
-                    nodeA: ref(nodeA),
-                    nodeB: ref(nodeB),
-                    value: value,
-                    source: .extracted
-                ))
-                resIndex += 1
+                see(nodeA); see(nodeB)
+                union(nodeA, nodeB)
+                resistors.append(PairRecord(a: nodeA, b: nodeB, value: value))
             }
         }
 
+        // Net name per node = the lexicographically smallest node in its
+        // resistor-connected component (the clean base name, e.g. "Y" over
+        // "Y_ext_1#"). Nodes with no resistors are their own singleton net, so the
+        // capacitance-only case is unchanged (one net per node).
+        var componentNodes: [String: [String]] = [:]
+        for n in nodeOrder { componentNodes[find(n), default: []].append(n) }
+        var netNameOf: [String: String] = [:]
+        for (_, nodes) in componentNodes {
+            let netName = nodes.min() ?? nodes[0]
+            for n in nodes { netNameOf[n] = netName }
+        }
+        func netName(_ n: String) -> String { netNameOf[n] ?? n }
+        func nodeRef(_ n: String) -> NodeRef {
+            NodeRef(netName: NetName(netName(n)), nodeName: NodeName(n))
+        }
+
+        var elements: [ParasiticElement] = []
+        var capIndex = 0
+        var resIndex = 0
+        var groundCap: [String: Double] = [:]
+        var couplingCap: [String: Double] = [:]
+        var resistance: [String: Double] = [:]
+
+        for g in grounds {
+            elements.append(ParasiticElement(
+                id: "C\(capIndex)", kind: .capacitor,
+                nodeA: nodeRef(g.signal), nodeB: nil, value: g.value, source: .extracted
+            ))
+            capIndex += 1
+            groundCap[netName(g.signal), default: 0] += g.value
+        }
+        for c in couplings {
+            elements.append(ParasiticElement(
+                id: "C\(capIndex)", kind: .coupling,
+                nodeA: nodeRef(c.a), nodeB: nodeRef(c.b), value: c.value, source: .extracted
+            ))
+            capIndex += 1
+            // Attribute coupling to one net only (a's net), matching SPEFLowering.
+            couplingCap[netName(c.a), default: 0] += c.value
+        }
+        for r in resistors {
+            elements.append(ParasiticElement(
+                id: "R\(resIndex)", kind: .resistor,
+                nodeA: nodeRef(r.a), nodeB: nodeRef(r.b), value: r.value, source: .extracted
+            ))
+            resIndex += 1
+            // Count the resistor once (on a's net), matching SPEFLowering.
+            resistance[netName(r.a), default: 0] += r.value
+        }
+
+        // Nets in first-seen order of their net name; each carries all its nodes.
+        var netOrder: [String] = []
+        var seenNets: Set<String> = []
+        for n in nodeOrder where seenNets.insert(netName(n)).inserted {
+            netOrder.append(netName(n))
+        }
         let nets = netOrder.map { name in
             ParasiticNet(
                 name: NetName(name),
-                nodes: [ParasiticNode(name: NodeName(name), kind: .internal, instancePath: nil, coordinate: nil)],
+                nodes: nodeOrder.filter { netName($0) == name }.map {
+                    ParasiticNode(name: NodeName($0), kind: .internal, instancePath: nil, coordinate: nil)
+                },
                 totalGroundCapF: groundCap[name] ?? 0,
                 totalCouplingCapF: couplingCap[name] ?? 0,
                 totalResistanceOhm: resistance[name] ?? 0
@@ -162,10 +203,6 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
                 "sourceFile": fileURL.lastPathComponent,
             ]
         )
-    }
-
-    private func ref(_ name: String) -> NodeRef {
-        NodeRef(netName: NetName(name), nodeName: NodeName(name))
     }
 
     /// Parses a SPICE-style number with an optional engineering suffix into a

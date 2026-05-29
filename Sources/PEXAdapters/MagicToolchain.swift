@@ -20,6 +20,12 @@ public struct MagicToolchain: Sendable {
     /// The Tcl driver that extracts parasitics and writes a SPICE netlist.
     /// Inputs are passed via environment: `PEX_CELL`, `PEX_OUT`, `PEX_CTHRESH`,
     /// and optionally `PEX_GDS` (read before loading the cell).
+    ///
+    /// Capacitance only for now (`ext2spice cthresh`). Resistance extraction
+    /// (`extresist`) is intentionally not wired: in the headless `-dnull` build it
+    /// did not emit resistors across several documented invocations. The downstream
+    /// parser already lowers `R` lines (grouping resistor-connected sub-nodes into
+    /// one net), so enabling `extresist` later is purely a driver change.
     public static let extractionDriver = """
     # Headless parasitic extraction driver for PEXEngine.
     if {![info exists env(PEX_CELL)]} { puts "PEX_ERROR PEX_CELL not set"; quit -noprompt }

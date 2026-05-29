@@ -88,6 +88,34 @@ struct MagicSPICEParasiticParserTests {
         #expect(abs(perNetSum - 30.0) < 1e-9, "expected 10+20=30 total, got \(perNetSum)")
     }
 
+    @Test("Resistor-connected sub-nodes collapse into one intra-net (matches SPEFLowering)")
+    func resistorsGroupIntoOneNet() throws {
+        // A net split by Magic into Y, Y_1, Y_2 connected by series resistors, plus
+        // a ground cap on a sub-node — all belong to the single net "Y".
+        let ir = try parse("""
+        R0 Y Y_1 5
+        R1 Y_1 Y_2 7
+        C0 Y_2 VSUBS 1f
+        """)
+        // One net, named after the clean base node "Y", holding all three nodes.
+        #expect(ir.nets.count == 1)
+        let net = try #require(ir.nets.first)
+        #expect(net.name.value == "Y")
+        #expect(Set(net.nodes.map(\.name.value)) == ["Y", "Y_1", "Y_2"])
+        // Both resistors and the ground cap are attributed to that one net.
+        #expect(abs(net.totalResistanceOhm - 12.0) < 1e-9)
+        #expect(abs(net.totalGroundCapF - 1e-15) < 1e-20)
+        // Every element references nodes that live in the net (validator-clean).
+        #expect(ParasiticIRValidator().validate(ir).isValid)
+        #expect(ir.elements.allSatisfy { $0.nodeA.netName.value == "Y" })
+    }
+
+    @Test("Capacitors never merge nets (coupling stays cross-net)")
+    func couplingDoesNotMergeNets() throws {
+        let ir = try parse("C0 A B 0.05f")
+        #expect(ir.nets.count == 2, "a coupling cap must not union its two nets")
+    }
+
     @Test("includeCouplingCaps=false drops coupling elements but keeps ground caps")
     func dropsCouplingWhenNotRequested() throws {
         let ir = try parse("""
