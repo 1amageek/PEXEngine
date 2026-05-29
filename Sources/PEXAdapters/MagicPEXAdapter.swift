@@ -4,7 +4,7 @@ import PEXCore
 /// Real parasitic-extraction adapter driven by Magic against a Sky130-class PDK.
 ///
 /// Extracts parasitic capacitance from `context.layoutURL` for `context.topCell`
-/// and writes a SPICE netlist (parsed downstream by `MagicSpiceParasiticParser`).
+/// and writes a SPICE netlist (parsed downstream by `MagicSPICEParasiticParser`).
 /// Unlike `MockPEXAdapter`, it produces real parasitics from the layout; if the
 /// Magic toolchain is unavailable it fails loudly rather than fabricating output.
 public struct MagicPEXAdapter: PEXAdapter {

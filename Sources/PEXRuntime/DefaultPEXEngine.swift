@@ -22,7 +22,7 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
         let adapters = PEXAdapterRegistry(adapters: [MockPEXAdapter(), MagicPEXAdapter()])
         let parsers = PEXParserRegistry()
         parsers.register(SPEFPEXParser())
-        parsers.register(MagicSpiceParasiticParser())
+        parsers.register(MagicSPICEParasiticParser())
         return DefaultPEXEngine(
             adapterRegistry: adapters,
             parserRegistry: parsers

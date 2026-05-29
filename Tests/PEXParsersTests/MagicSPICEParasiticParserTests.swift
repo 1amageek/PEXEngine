@@ -5,8 +5,8 @@ import Foundation
 
 /// Pure parser tests for the Magic parasitic-SPICE lowering — no Magic install
 /// needed, so the normalization/units contract is covered in CI.
-@Suite("MagicSpiceParasiticParser")
-struct MagicSpiceParasiticParserTests {
+@Suite("MagicSPICEParasiticParser")
+struct MagicSPICEParasiticParserTests {
 
     private func options() -> PEXRunOptions {
         PEXRunOptions(
@@ -32,7 +32,7 @@ struct MagicSpiceParasiticParserTests {
         let context = PEXParseContext(
             cornerID: PEXCornerID("tt"), runID: PEXRunID(), technology: nil, options: options()
         )
-        return try MagicSpiceParasiticParser().parse(raw, context: context)
+        return try MagicSPICEParasiticParser().parse(raw, context: context)
     }
 
     @Test("A capacitor to the substrate becomes a grounded capacitor with the right value")
@@ -77,15 +77,15 @@ struct MagicSpiceParasiticParserTests {
 
     @Test("SPICE engineering suffixes scale to canonical SI values")
     func spiceValueScaling() {
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("4.2008f").map { abs($0 - 4.2008e-15) < 1e-21 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("2p").map { abs($0 - 2e-12) < 1e-18 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("3.5n").map { abs($0 - 3.5e-9) < 1e-15 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("10meg").map { abs($0 - 1e7) < 1 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("5k").map { abs($0 - 5000) < 1e-6 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("0.65").map { abs($0 - 0.65) < 1e-9 } == true)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("1e+06u").map { abs($0 - 1.0) < 1e-9 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("4.2008f").map { abs($0 - 4.2008e-15) < 1e-21 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("2p").map { abs($0 - 2e-12) < 1e-18 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("3.5n").map { abs($0 - 3.5e-9) < 1e-15 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("10meg").map { abs($0 - 1e7) < 1 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("5k").map { abs($0 - 5000) < 1e-6 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("0.65").map { abs($0 - 0.65) < 1e-9 } == true)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("1e+06u").map { abs($0 - 1.0) < 1e-9 } == true)
         // Unrecognized suffix fails loud (nil) rather than mis-scaling.
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("5x") == nil)
-        #expect(MagicSpiceParasiticParser.parseSPICEValue("abc") == nil)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("5x") == nil)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("abc") == nil)
     }
 }

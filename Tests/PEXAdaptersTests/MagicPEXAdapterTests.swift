@@ -83,7 +83,7 @@ struct MagicPEXAdapterTests {
         let parseContext = PEXParseContext(
             cornerID: context.corner.id, runID: context.runID, technology: nil, options: options()
         )
-        let ir = try MagicSpiceParasiticParser().parse(result.rawOutput, context: parseContext)
+        let ir = try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
         #expect(ParasiticIRValidator().validate(ir).isValid)
 
         // A 10x10 um met1 plate over substrate: Sky130 met1 areacap (~25.8 aF/um^2)
