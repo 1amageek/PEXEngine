@@ -106,6 +106,60 @@ struct PEXRuntimeTests {
 
     }
 
+    @Test func mockGoldenCorpusMatchesExpectedParasiticTotals() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_golden_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let result = try await DefaultPEXEngine.withDefaults().run(PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: .default,
+            workingDirectory: tempDir
+        ))
+        let ir = try #require(result.cornerResults.first?.ir)
+        let capacitorElements = ir.elements.filter { $0.kind == .capacitor }
+        let couplingElements = ir.elements.filter { $0.kind == .coupling }
+        let resistorElements = ir.elements.filter { $0.kind == .resistor }
+
+        #expect(result.status == .success)
+        #expect(ir.nets.count == 10)
+        #expect(ir.elements.count == 39)
+        #expect(capacitorElements.count == 20)
+        #expect(couplingElements.count == 9)
+        #expect(resistorElements.count == 10)
+        #expect(abs(ir.nets.map(\.totalGroundCapF).reduce(0, +) - 1.925e-12) < 1e-24)
+        #expect(abs(ir.nets.map(\.totalCouplingCapF).reduce(0, +) - 2.25e-13) < 1e-25)
+        #expect(abs(ir.nets.map(\.totalResistanceOhm).reduce(0, +) - 550.0) < 1e-9)
+        #expect(abs(capacitorElements.map(\.value).reduce(0, +) - 2.75e-12) < 1e-24)
+        #expect(abs(couplingElements.map(\.value).reduce(0, +) - 2.25e-13) < 1e-25)
+        #expect(abs(resistorElements.map(\.value).reduce(0, +) - 550.0) < 1e-9)
+        #expect(ParasiticIRValidator().validate(ir).isValid)
+    }
+
+    @Test func repeatedRunsAreDeterministicForSameInputs() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_determinism_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir.appending(path: "inputs"))
+        let firstWorkspace = tempDir.appending(path: "first")
+        let secondWorkspace = tempDir.appending(path: "second")
+        let first = try await DefaultPEXEngine.withDefaults().run(makeMockRequest(inputs: inputs, workspace: firstWorkspace))
+        let second = try await DefaultPEXEngine.withDefaults().run(makeMockRequest(inputs: inputs, workspace: secondWorkspace))
+        let firstIR = try #require(first.cornerResults.first?.ir)
+        let secondIR = try #require(second.cornerResults.first?.ir)
+
+        #expect(first.status == .success)
+        #expect(second.status == .success)
+        #expect(first.requestHash == second.requestHash)
+        #expect(firstIR == secondIR)
+        #expect(canonicalArtifactGraph(first.artifacts) == canonicalArtifactGraph(second.artifacts))
+    }
+
     @Test func defaultPEXServiceExtractAndLoadRun() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_service_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
@@ -643,6 +697,48 @@ struct PEXRuntimeTests {
         try Data("layout".utf8).write(to: layoutURL)
         try Data(".subckt TESTCELL\n.ends\n".utf8).write(to: netlistURL)
         return TestInputFiles(layoutURL: layoutURL, netlistURL: netlistURL)
+    }
+
+    private func makeMockRequest(inputs: TestInputFiles, workspace: URL) -> PEXRunRequest {
+        PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss")],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: .default,
+            workingDirectory: workspace
+        )
+    }
+
+    private struct CanonicalArtifactRecord: Hashable {
+        let id: String
+        let kind: PEXArtifactKind
+        let stage: PEXStage
+        let cornerID: PEXCornerID?
+        let relativePath: String
+        let sha256: String?
+        let byteCount: Int?
+        let status: PEXArtifactStatus
+    }
+
+    private func canonicalArtifactGraph(_ manifest: PEXArtifactManifest) -> [CanonicalArtifactRecord] {
+        manifest.artifacts.map {
+            let isRunSpecificReport = $0.kind == .report
+            return CanonicalArtifactRecord(
+                id: $0.id,
+                kind: $0.kind,
+                stage: $0.stage,
+                cornerID: $0.cornerID,
+                relativePath: $0.relativePath.value,
+                sha256: isRunSpecificReport ? nil : $0.sha256,
+                byteCount: isRunSpecificReport ? nil : $0.byteCount,
+                status: $0.status
+            )
+        }.sorted { $0.id < $1.id }
     }
 
     // MARK: - Direct Parameter Tests

@@ -280,6 +280,91 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func pexParserRejectsMalformedCorpusAtRawEntrypoint() throws {
+        let context = PEXParseContext(
+            cornerID: "tt",
+            runID: PEXRunID(),
+            technology: nil,
+            options: .default
+        )
+        #expect(throws: PEXError.self) {
+            _ = try SPEFPEXParser().parse(PEXRawOutput(format: .spef, fileURLs: []), context: context)
+        }
+
+        let malformedCorpus: [(name: String, source: String)] = [
+            (
+                name: "empty-file",
+                source: ""
+            ),
+            (
+                name: "missing-cap-unit",
+                source: """
+                *SPEF "IEEE 1481-1998"
+                *DESIGN "top"
+                *DIVIDER /
+                *DELIMITER :
+                *BUS_DELIMITER [ ]
+                *T_UNIT 1 NS
+                *R_UNIT 1 OHM
+
+                *D_NET net1 0.5
+                *END
+                """
+            ),
+            (
+                name: "malformed-capacitor",
+                source: """
+                *SPEF "IEEE 1481-1998"
+                *DESIGN "top"
+                *DIVIDER /
+                *DELIMITER :
+                *BUS_DELIMITER [ ]
+                *T_UNIT 1 NS
+                *C_UNIT 1 PF
+                *R_UNIT 1 OHM
+
+                *D_NET net1 0.5
+                *CAP
+                1 net1:a net1:b
+                *END
+                """
+            ),
+            (
+                name: "unsupported-section",
+                source: """
+                *SPEF "IEEE 1481-1998"
+                *DESIGN "top"
+                *DIVIDER /
+                *DELIMITER :
+                *BUS_DELIMITER [ ]
+                *T_UNIT 1 NS
+                *C_UNIT 1 PF
+                *R_UNIT 1 OHM
+
+                *D_NET net1 0.5
+                *INDUC
+                1 net1:a net1:b 2.0
+                *END
+                """
+            ),
+        ]
+
+        for item in malformedCorpus {
+            let directory = FileManager.default.temporaryDirectory
+                .appending(path: "spef-malformed-\(item.name)-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let file = directory.appending(path: "\(item.name).spef")
+            try Data(item.source.utf8).write(to: file)
+            do {
+                _ = try SPEFPEXParser().parse(PEXRawOutput(format: .spef, fileURLs: [file]), context: context)
+                #expect(Bool(false), "Malformed SPEF corpus item should fail: \(item.name)")
+            } catch let error as PEXError {
+                #expect(error.kind == .parseFailed, "Expected parseFailed for \(item.name), got \(error.kind)")
+            }
+            removeTemporaryItem(directory)
+        }
+    }
+
     @Test func connectionsParsedCorrectly() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()
