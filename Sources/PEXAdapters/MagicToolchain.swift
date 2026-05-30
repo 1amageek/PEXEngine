@@ -94,7 +94,12 @@ public struct MagicToolchain: Sendable {
             return root
         }
         let versions = NSString(string: "~/.volare/volare/sky130/versions").expandingTildeInPath
-        guard let entries = try? fileManager.contentsOfDirectory(atPath: versions) else { return nil }
+        let entries: [String]
+        do {
+            entries = try fileManager.contentsOfDirectory(atPath: versions)
+        } catch {
+            return nil
+        }
         let builds = entries.filter { !$0.hasPrefix(".") }
         guard builds.count == 1 else { return nil }
         return versions + "/" + builds[0]

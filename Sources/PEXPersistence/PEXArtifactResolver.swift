@@ -97,6 +97,16 @@ public struct PEXArtifactResolver: Sendable {
 
     public func completenessReport() -> PEXArtifactCompletenessReport {
         var issues: [PEXArtifactCompletenessIssue] = []
+        let artifactIDCounts = Dictionary(grouping: manifest.artifacts, by: \.id).mapValues(\.count)
+        let duplicateArtifactIDs = artifactIDCounts.filter { $0.value > 1 }.keys.sorted()
+        for artifactID in duplicateArtifactIDs {
+            issues.append(PEXArtifactCompletenessIssue(
+                kind: .duplicateArtifactID,
+                artifactID: artifactID,
+                message: "Artifact id is duplicated in manifest"
+            ))
+        }
+        let artifactIDSet = Set(manifest.artifacts.map(\.id))
 
         for record in manifest.artifacts {
             let artifactURL: URL
@@ -164,6 +174,25 @@ public struct PEXArtifactResolver: Sendable {
         }
 
         for corner in manifest.corners {
+            for artifactID in corner.artifactIDs where !artifactIDSet.contains(artifactID) {
+                issues.append(PEXArtifactCompletenessIssue(
+                    kind: .missingCornerArtifactReference,
+                    artifactID: artifactID,
+                    cornerID: corner.cornerID,
+                    message: "Corner references an artifact id that is not present in manifest artifacts"
+                ))
+            }
+
+            for record in manifest.artifacts where record.cornerID == corner.cornerID && !corner.artifactIDs.contains(record.id) {
+                issues.append(PEXArtifactCompletenessIssue(
+                    kind: .missingCornerArtifactReference,
+                    artifactID: record.id,
+                    cornerID: corner.cornerID,
+                    path: record.relativePath,
+                    message: "Corner-scoped artifact is not referenced by the corner artifact graph"
+                ))
+            }
+
             let irRecords = records(kind: .parasiticIR, cornerID: corner.cornerID)
             if corner.status == .success && irRecords.allSatisfy({ $0.status != .available && $0.status != .omitted }) {
                 issues.append(PEXArtifactCompletenessIssue(
@@ -174,13 +203,19 @@ public struct PEXArtifactResolver: Sendable {
             }
 
             if corner.status == .failed {
-                if let failure = corner.failure {
+                guard let failure = corner.failure else {
                     issues.append(PEXArtifactCompletenessIssue(
-                        kind: .failedCorner,
+                        kind: .missingFailure,
                         cornerID: corner.cornerID,
-                        message: "\(failure.stage.rawValue): \(failure.message)"
+                        message: "Failed corner has no structured failure record"
                     ))
+                    continue
                 }
+                issues.append(PEXArtifactCompletenessIssue(
+                    kind: .failedCorner,
+                    cornerID: corner.cornerID,
+                    message: "\(failure.stage.rawValue): \(failure.message)"
+                ))
                 let evidenceCount = records(kind: .rawOutput, cornerID: corner.cornerID, status: .available).count
                     + records(kind: .log, cornerID: corner.cornerID, status: .available).count
                 if evidenceCount == 0 {
@@ -196,7 +231,7 @@ public struct PEXArtifactResolver: Sendable {
         let status: PEXArtifactCompletenessStatus
         if issues.isEmpty {
             status = .complete
-        } else if issues.contains(where: { $0.kind == .invalidHash || $0.kind == .pathEscapesRunDirectory }) {
+        } else if issues.contains(where: { $0.kind == .invalidHash || $0.kind == .pathEscapesRunDirectory || $0.kind == .duplicateArtifactID || $0.kind == .missingCornerArtifactReference }) {
             status = .invalid
         } else {
             status = .incomplete

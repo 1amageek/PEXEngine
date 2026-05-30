@@ -274,6 +274,118 @@ struct PEXPersistenceTests {
         #expect(report.issues.contains { $0.kind == .invalidHash })
     }
 
+    @Test func completenessReportRejectsDuplicateArtifactIDs() throws {
+        let tempDir = makeTemporaryDirectory("pex_duplicate_ids")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let rawURL = workspace.cornerRawDirectory("tt").appending(path: "tt.spef")
+        try Data("*SPEF".utf8).write(to: rawURL)
+        let rawData = try Data(contentsOf: rawURL)
+        let first = PEXArtifactRecord(
+            id: "raw-duplicate",
+            kind: .rawOutput,
+            stage: .backendExecution,
+            cornerID: "tt",
+            relativePath: try PEXArtifactPath("raw/tt/tt.spef"),
+            sha256: PEXArtifactResolver.sha256(data: rawData),
+            byteCount: rawData.count,
+            status: .available
+        )
+        let second = PEXArtifactRecord(
+            id: "raw-duplicate",
+            kind: .log,
+            stage: .backendExecution,
+            cornerID: "tt",
+            relativePath: try PEXArtifactPath("raw/tt/tt.spef"),
+            sha256: PEXArtifactResolver.sha256(data: rawData),
+            byteCount: rawData.count,
+            status: .available
+        )
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .failed,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .failed, artifactIDs: [first.id], failure: PEXArtifactFailure(stage: .backendExecution, message: "failed"))],
+            artifacts: [first, second],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let report = try PEXArtifactResolver(workspace: workspace).completenessReport()
+        #expect(report.status == .invalid)
+        #expect(report.issues.contains { $0.kind == .duplicateArtifactID && $0.artifactID == "raw-duplicate" })
+    }
+
+    @Test func completenessReportRejectsCornerArtifactGraphGaps() throws {
+        let tempDir = makeTemporaryDirectory("pex_graph_gap")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveIR(makeTestIR(), for: "tt")
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let irRecord = try recorder.recordExistingArtifact(
+            url: workspace.cornerIRURL("tt"),
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: "tt",
+            id: "ir-tt"
+        )
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [])],
+            artifacts: [irRecord],
+            warnings: []
+        )
+        try store.saveManifest(manifest)
+
+        let report = try PEXArtifactResolver(workspace: workspace).completenessReport()
+        #expect(report.status == .invalid)
+        #expect(report.issues.contains { $0.kind == .missingCornerArtifactReference && $0.artifactID == "ir-tt" })
+    }
+
+    @Test func completenessReportRequiresStructuredFailureForFailedCorner() throws {
+        let tempDir = makeTemporaryDirectory("pex_missing_failure")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let rawURL = workspace.cornerRawDirectory("tt").appending(path: "tt.spef")
+        try Data("*SPEF partial".utf8).write(to: rawURL)
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let rawRecord = try recorder.recordExistingArtifact(url: rawURL, kind: .rawOutput, stage: .backendExecution, cornerID: "tt")
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .failed,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .failed, artifactIDs: [rawRecord.id])],
+            artifacts: [rawRecord],
+            warnings: []
+        )
+        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
+
+        let report = try PEXArtifactResolver(workspace: workspace).completenessReport()
+        #expect(report.status == .incomplete)
+        #expect(report.issues.contains { $0.kind == .missingFailure && $0.cornerID == "tt" })
+    }
+
     @Test func storeLoadResultPreservesFailureEvidence() throws {
         let tempDir = makeTemporaryDirectory("pex_load")
         defer { removeTemporaryItem(tempDir) }

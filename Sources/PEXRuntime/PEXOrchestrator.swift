@@ -208,6 +208,10 @@ public actor PEXOrchestrator {
             }
         }
 
+        let cornerOrder = Dictionary(uniqueKeysWithValues: request.corners.enumerated().map { ($0.element.id, $0.offset) })
+        outcomes.sort {
+            (cornerOrder[$0.result.cornerID] ?? Int.max) < (cornerOrder[$1.result.cornerID] ?? Int.max)
+        }
         for outcome in outcomes {
             warnings.append(contentsOf: outcome.result.warnings)
         }

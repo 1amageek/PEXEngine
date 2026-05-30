@@ -175,10 +175,13 @@ public enum PEXArtifactCompletenessStatus: String, Sendable, Codable, Hashable {
 }
 
 public enum PEXArtifactCompletenessIssueKind: String, Sendable, Codable, Hashable {
+    case duplicateArtifactID
     case missingArtifact
     case invalidHash
     case missingHash
     case missingIR
+    case missingCornerArtifactReference
+    case missingFailure
     case failedCorner
     case failedCornerWithoutEvidence
     case pathEscapesRunDirectory

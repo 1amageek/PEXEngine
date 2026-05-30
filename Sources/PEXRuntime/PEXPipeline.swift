@@ -15,6 +15,32 @@ struct PEXPipeline: Sendable {
         if request.corners.isEmpty {
             throw PEXError.invalidInput("At least one corner must be specified")
         }
+        var cornerIDs: Set<PEXCornerID> = []
+        for corner in request.corners {
+            if corner.id.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw PEXError.invalidInput("corner id must not be empty")
+            }
+            if corner.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw PEXError.invalidInput("corner name must not be empty")
+            }
+            if !cornerIDs.insert(corner.id).inserted {
+                throw PEXError.invalidInput("corner id '\(corner.id.value)' is duplicated")
+            }
+        }
+        if request.backendSelection.backendID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw PEXError.invalidInput("backendID must not be empty")
+        }
+        if request.options.maxParallelJobs < 1 {
+            throw PEXError.invalidInput("maxParallelJobs must be at least 1")
+        }
+        if let minCapacitanceF = request.options.minCapacitanceF,
+           !minCapacitanceF.isFinite || minCapacitanceF < 0 {
+            throw PEXError.invalidInput("minCapacitanceF must be finite and non-negative")
+        }
+        if let minResistanceOhm = request.options.minResistanceOhm,
+           !minResistanceOhm.isFinite || minResistanceOhm < 0 {
+            throw PEXError.invalidInput("minResistanceOhm must be finite and non-negative")
+        }
     }
 
     func resolveAdapter(for backendID: String) throws -> any PEXAdapter {

@@ -352,6 +352,60 @@ struct PEXRuntimeTests {
         }
     }
 
+    @Test func pipelineRejectsDuplicateCornerIDs() async throws {
+        let engine = DefaultPEXEngine.withDefaults()
+        let request = PEXRunRequest(
+            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutFormat: .gds,
+            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistFormat: .spice,
+            topCell: "TOP",
+            corners: [PEXCorner(id: "tt"), PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: .default
+        )
+        do {
+            _ = try await engine.run(request)
+            #expect(Bool(false), "Should have thrown")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("duplicated"))
+        }
+    }
+
+    @Test func pipelineRejectsInvalidNumericOptions() async throws {
+        let engine = DefaultPEXEngine.withDefaults()
+        let invalidOptions = PEXRunOptions(
+            extractMode: .rc,
+            includeCouplingCaps: true,
+            minCapacitanceF: -1,
+            minResistanceOhm: Double.nan,
+            maxParallelJobs: 0,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
+        )
+        let request = PEXRunRequest(
+            layoutURL: URL(filePath: "/tmp/test.gds"),
+            layoutFormat: .gds,
+            sourceNetlistURL: URL(filePath: "/tmp/test.cir"),
+            sourceNetlistFormat: .spice,
+            topCell: "TOP",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: invalidOptions
+        )
+        do {
+            _ = try await engine.run(request)
+            #expect(Bool(false), "Should have thrown")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("maxParallelJobs"))
+        }
+    }
+
     @Test func pipelineRejectsUnknownBackend() async throws {
         let engine = DefaultPEXEngine.withDefaults()
         let request = PEXRunRequest(
@@ -513,6 +567,42 @@ struct PEXRuntimeTests {
         #expect(cornerIDs.contains(PEXCornerID("ff")))
     }
 
+    @Test func multiCornerResultsPreserveRequestedOrder() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_order_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let engine = makeEngine(adapter: DelayedMockPEXAdapter())
+        let request = PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "slow"), PEXCorner(id: "medium"), PEXCorner(id: "fast")],
+            technology: .inline(makeTestTech()),
+            backendSelection: PEXBackendSelection(backendID: "delayed-mock"),
+            options: PEXRunOptions(
+                extractMode: .rc,
+                includeCouplingCaps: true,
+                minCapacitanceF: nil,
+                minResistanceOhm: nil,
+                maxParallelJobs: 3,
+                emitRawArtifacts: true,
+                emitIRJSON: true,
+                strictValidation: false
+            ),
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        let resultOrder = result.cornerResults.map(\.cornerID)
+        let manifestOrder = result.artifacts.corners.map(\.cornerID)
+
+        #expect(result.status == .success)
+        #expect(resultOrder == [PEXCornerID("slow"), PEXCornerID("medium"), PEXCornerID("fast")])
+        #expect(manifestOrder == resultOrder)
+    }
+
     // MARK: - Helpers
 
     private func makeTestTech() -> TechnologyIR {
@@ -623,6 +713,32 @@ private struct PartialFailurePEXAdapter: PEXAdapter {
     }
 
     func cleanup(_ context: PEXExecutionContext) async {}
+}
+
+private struct DelayedMockPEXAdapter: PEXAdapter {
+    let backendID = "delayed-mock"
+    let capabilities = MockPEXAdapter().capabilities
+    private let base = MockPEXAdapter()
+
+    func prepare(_ context: PEXExecutionContext) async throws {
+        try await base.prepare(context)
+    }
+
+    func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        switch context.corner.id.value {
+        case "slow":
+            try await Task.sleep(nanoseconds: 120_000_000)
+        case "medium":
+            try await Task.sleep(nanoseconds: 60_000_000)
+        default:
+            break
+        }
+        return try await base.execute(context)
+    }
+
+    func cleanup(_ context: PEXExecutionContext) async {
+        await base.cleanup(context)
+    }
 }
 
 private struct UnsupportedFormatPEXAdapter: PEXAdapter {
