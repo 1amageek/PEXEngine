@@ -54,7 +54,7 @@ struct MagicResistanceExtractionTests {
     )
     func extractsResistors() async throws {
         let work = try makeDir("rc")
-        defer { try? FileManager.default.removeItem(at: work) }
+        defer { removeTemporaryItem(work) }
         let ir = try await extract(mode: .rc, work: work)
 
         let resistors = ir.elements.filter { $0.kind == .resistor }
@@ -76,9 +76,17 @@ struct MagicResistanceExtractionTests {
     )
     func capOnlyHasNoResistors() async throws {
         let work = try makeDir("conly")
-        defer { try? FileManager.default.removeItem(at: work) }
+        defer { removeTemporaryItem(work) }
         let ir = try await extract(mode: .cOnly, work: work)
         #expect(!ir.elements.contains { $0.kind == .resistor })
         #expect(ir.elements.contains { $0.kind == .capacitor || $0.kind == .coupling })
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

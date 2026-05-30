@@ -59,8 +59,8 @@ struct MagicPEXAdapterTests {
         let working = try makeDir("work")
         let rawOut = try makeDir("raw")
         defer {
-            try? FileManager.default.removeItem(at: working)
-            try? FileManager.default.removeItem(at: rawOut)
+            removeTemporaryItem(working)
+            removeTemporaryItem(rawOut)
         }
 
         let context = PEXExecutionContext(
@@ -93,5 +93,13 @@ struct MagicPEXAdapterTests {
             abs(totalGroundCap - 4.2008e-15) < 0.2e-15,
             "extracted \(totalGroundCap * 1e15) fF, expected ~4.20 fF (Sky130 met1)"
         )
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

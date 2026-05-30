@@ -27,7 +27,7 @@ struct MagicBackendEndToEndTests {
         let workDir = FileManager.default.temporaryDirectory
             .appending(path: "MagicBackendE2E-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: workDir) }
+        defer { removeTemporaryItem(workDir) }
 
         // The magic adapter ignores the source netlist, but the request requires one.
         let netlist = workDir.appending(path: "top.cir")
@@ -78,5 +78,13 @@ struct MagicBackendEndToEndTests {
             abs(groundCap - 4.2008e-15) < 0.2e-15,
             "extracted \(groundCap * 1e15) fF, expected ~4.20 fF (Sky130 met1)"
         )
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CryptoKit
 @testable import PEXCore
 @testable import PEXParsers
 
@@ -365,6 +366,38 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func openROADRCXFixturesParseAndLowerToExpectedSummaries() throws {
+        for fixture in openROADFixtures {
+            let url = try openROADFixtureURL(fileName: fixture.fileName)
+            let data = try Data(contentsOf: url)
+            #expect(sha256Hex(data) == fixture.sha256)
+
+            let source = String(decoding: data, as: UTF8.self)
+            var lexer = SPEFLexer(source: source, fileName: fixture.fileName)
+            let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+
+            #expect(tree.header.designName == fixture.designName)
+            #expect(tree.nameMap.count == fixture.nameMapCount)
+            #expect(tree.ports.count == fixture.portCount)
+            #expect(tree.nets.count == fixture.netCount)
+            #expect(tree.nets.reduce(0) { $0 + $1.connections.count } == fixture.connectionCount)
+            #expect(tree.nets.reduce(0) { $0 + $1.capacitors.count } == fixture.capacitorCount)
+            #expect(tree.nets.reduce(0) { $0 + $1.resistors.count } == fixture.resistorCount)
+
+            let ir = try SPEFLowering().lower(tree, cornerID: "openroad")
+            let validation = ParasiticIRValidator().validate(ir)
+            #expect(validation.isValid, "OpenROAD fixture should lower to valid ParasiticIR: \(fixture.fileName)")
+            #expect(ir.nets.count == fixture.loweredNetCount)
+            #expect(ir.elements.count == fixture.elementCount)
+            #expect(ir.elements.filter { $0.kind == .capacitor }.count == fixture.capacitorElementCount)
+            #expect(ir.elements.filter { $0.kind == .coupling }.count == fixture.couplingElementCount)
+            #expect(ir.elements.filter { $0.kind == .resistor }.count == fixture.resistorElementCount)
+            #expect(isClose(totalGroundCap(in: ir), fixture.totalGroundCapF, tolerance: fixture.capTolerance))
+            #expect(isClose(totalCouplingCap(in: ir), fixture.totalCouplingCapF, tolerance: fixture.capTolerance))
+            #expect(isClose(totalResistance(in: ir), fixture.totalResistanceOhm, tolerance: 1e-9))
+        }
+    }
+
     @Test func connectionsParsedCorrectly() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()
@@ -533,4 +566,101 @@ private func removeTemporaryItem(_ url: URL) {
     } catch {
         Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
+}
+
+private struct OpenROADFixtureExpectation: Sendable {
+    let fileName: String
+    let sha256: String
+    let designName: String
+    let nameMapCount: Int
+    let portCount: Int
+    let netCount: Int
+    let connectionCount: Int
+    let capacitorCount: Int
+    let resistorCount: Int
+    let loweredNetCount: Int
+    let elementCount: Int
+    let capacitorElementCount: Int
+    let couplingElementCount: Int
+    let resistorElementCount: Int
+    let totalGroundCapF: Double
+    let totalCouplingCapF: Double
+    let totalResistanceOhm: Double
+    let capTolerance: Double
+}
+
+private let openROADFixtures: [OpenROADFixtureExpectation] = [
+    OpenROADFixtureExpectation(
+        fileName: "net_name_consistency.spefok",
+        sha256: "570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd",
+        designName: "top",
+        nameMapCount: 10,
+        portCount: 0,
+        netCount: 3,
+        connectionCount: 7,
+        capacitorCount: 10,
+        resistorCount: 5,
+        loweredNetCount: 3,
+        elementCount: 15,
+        capacitorElementCount: 8,
+        couplingElementCount: 2,
+        resistorElementCount: 5,
+        totalGroundCapF: 3.521008e-16,
+        totalCouplingCapF: 6.2686e-17,
+        totalResistanceOhm: 68.30357,
+        capTolerance: 1e-24
+    ),
+    OpenROADFixtureExpectation(
+        fileName: "ext_pattern.spefok",
+        sha256: "de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab02",
+        designName: "blk",
+        nameMapCount: 9,
+        portCount: 30,
+        netCount: 9,
+        connectionCount: 18,
+        capacitorCount: 30,
+        resistorCount: 9,
+        loweredNetCount: 21,
+        elementCount: 39,
+        capacitorElementCount: 18,
+        couplingElementCount: 12,
+        resistorElementCount: 9,
+        totalGroundCapF: 8.6383066e-15,
+        totalCouplingCapF: 3.06947895e-15,
+        totalResistanceOhm: 3871.433308,
+        capTolerance: 1e-22
+    ),
+]
+
+private enum OpenROADFixtureError: Error {
+    case missingFixture(String)
+}
+
+private func openROADFixtureURL(fileName: String) throws -> URL {
+    guard let url = Bundle.module.url(forResource: fileName, withExtension: nil, subdirectory: "OpenROAD") else {
+        throw OpenROADFixtureError.missingFixture(fileName)
+    }
+    return url
+}
+
+private func sha256Hex(_ data: Data) -> String {
+    SHA256.hash(data: data)
+        .map { String(format: "%02x", $0) }
+        .joined()
+}
+
+private func totalGroundCap(in ir: ParasiticIR) -> Double {
+    ir.nets.reduce(0) { $0 + $1.totalGroundCapF }
+}
+
+private func totalCouplingCap(in ir: ParasiticIR) -> Double {
+    ir.nets.reduce(0) { $0 + $1.totalCouplingCapF }
+}
+
+private func totalResistance(in ir: ParasiticIR) -> Double {
+    ir.nets.reduce(0) { $0 + $1.totalResistanceOhm }
+}
+
+private func isClose(_ lhs: Double, _ rhs: Double, tolerance: Double) -> Bool {
+    abs(lhs - rhs) <= tolerance
 }

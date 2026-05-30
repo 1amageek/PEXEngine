@@ -25,7 +25,7 @@ struct MagicSPICEParasiticParserTests {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "magicpex-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: dir) }
+        defer { removeTemporaryItem(dir) }
         let file = dir.appending(path: "parasitics.spice")
         try Data(spice.utf8).write(to: file)
         let raw = PEXRawOutput(format: .spice, fileURLs: [file])
@@ -156,5 +156,13 @@ struct MagicSPICEParasiticParserTests {
         // Unrecognized suffix fails loud (nil) rather than mis-scaling.
         #expect(MagicSPICEParasiticParser.parseSPICEValue("5x") == nil)
         #expect(MagicSPICEParasiticParser.parseSPICEValue("abc") == nil)
+    }
+}
+
+private func removeTemporaryItem(_ url: URL) {
+    do {
+        try FileManager.default.removeItem(at: url)
+    } catch {
+        Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
 }

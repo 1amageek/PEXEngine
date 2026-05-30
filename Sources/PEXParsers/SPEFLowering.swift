@@ -7,12 +7,16 @@ public struct SPEFLowering: Sendable {
     public func lower(_ tree: SPEFParseTree, cornerID: PEXCornerID) throws -> ParasiticIR {
         let (capScale, resScale) = unitScaleFactors(from: tree.header)
         let delimiter = tree.header.delimiter
+        let explicitNodeOwners = explicitNodeOwnerMap(from: tree)
+        let portNames = Set(tree.ports.map { resolveNameMap($0.name, nameMap: tree.nameMap) })
 
         var nets: [ParasiticNet] = []
         var allElements: [ParasiticElement] = []
+        var externalNodesByNet: [NetName: Set<String>] = [:]
 
         for netBlock in tree.nets {
             let netName = NetName(resolveNameMap(netBlock.netName, nameMap: tree.nameMap))
+            let localNodeSet = localNodes(in: netBlock, nameMap: tree.nameMap)
 
             // Collect nodes from connections and element endpoints
             var nodeSet: Set<String> = []
@@ -20,12 +24,19 @@ public struct SPEFLowering: Sendable {
                 nodeSet.insert(resolveNameMap(conn.name, nameMap: tree.nameMap))
             }
             for cap in netBlock.capacitors {
-                nodeSet.insert(resolveNameMap(cap.nodeA, nameMap: tree.nameMap))
+                let resolvedA = resolveNameMap(cap.nodeA, nameMap: tree.nameMap)
                 if let nodeB = cap.nodeB {
                     let resolvedB = resolveNameMap(nodeB, nameMap: tree.nameMap)
-                    if ownerNetName(of: resolvedB, delimiter: delimiter) == netName.value {
+                    let localA = isLocalNode(resolvedA, netName: netName, localNodeSet: localNodeSet, explicitNodeOwners: explicitNodeOwners)
+                    let localB = isLocalNode(resolvedB, netName: netName, localNodeSet: localNodeSet, explicitNodeOwners: explicitNodeOwners)
+                    if localA || !localB {
+                        nodeSet.insert(resolvedA)
+                    }
+                    if localB {
                         nodeSet.insert(resolvedB)
                     }
+                } else {
+                    nodeSet.insert(resolvedA)
                 }
             }
             for res in netBlock.resistors {
@@ -55,24 +66,48 @@ public struct SPEFLowering: Sendable {
 
                 if let nodeB = cap.nodeB {
                     let resolvedB = resolveNameMap(nodeB, nameMap: tree.nameMap)
-                    let nodeBNetName = ownerNetName(of: resolvedB, delimiter: delimiter)
-                    let isCrossNet = nodeBNetName != netName.value
-                    let kind: ElementKind = isCrossNet ? .coupling : .capacitor
+                    let localA = isLocalNode(resolvedA, netName: netName, localNodeSet: localNodeSet, explicitNodeOwners: explicitNodeOwners)
+                    let localB = isLocalNode(resolvedB, netName: netName, localNodeSet: localNodeSet, explicitNodeOwners: explicitNodeOwners)
+                    let localNode: String
+                    let remoteNode: String?
+                    if localA && !localB {
+                        localNode = resolvedA
+                        remoteNode = resolvedB
+                    } else if localB && !localA {
+                        localNode = resolvedB
+                        remoteNode = resolvedA
+                    } else {
+                        localNode = resolvedA
+                        remoteNode = localA && localB ? nil : resolvedB
+                    }
+                    let kind: ElementKind = remoteNode == nil ? .capacitor : .coupling
+                    let remoteRef: NodeRef?
+                    if let remoteNode {
+                        let remoteNetName = externalNetName(
+                            for: remoteNode,
+                            explicitNodeOwners: explicitNodeOwners,
+                            delimiter: delimiter
+                        )
+                        remoteRef = NodeRef(
+                            netName: remoteNetName,
+                            nodeName: NodeName(remoteNode)
+                        )
+                        externalNodesByNet[remoteNetName, default: []].insert(remoteNode)
+                    } else {
+                        remoteRef = NodeRef(netName: netName, nodeName: NodeName(resolvedB))
+                    }
 
                     let element = ParasiticElement(
                         id: "\(netName.value)_C\(cap.id)",
                         kind: kind,
-                        nodeA: NodeRef(netName: netName, nodeName: NodeName(resolvedA)),
-                        nodeB: NodeRef(
-                            netName: isCrossNet ? NetName(nodeBNetName) : netName,
-                            nodeName: NodeName(resolvedB)
-                        ),
+                        nodeA: NodeRef(netName: netName, nodeName: NodeName(localNode)),
+                        nodeB: remoteRef,
                         value: scaledValue,
                         source: .extracted
                     )
                     allElements.append(element)
 
-                    if isCrossNet {
+                    if kind == .coupling {
                         totalCouplingCap += scaledValue
                     }
                 } else {
@@ -117,6 +152,25 @@ public struct SPEFLowering: Sendable {
                 totalResistanceOhm: totalResistance
             )
             nets.append(net)
+        }
+
+        let existingNetNames = Set(nets.map(\.name))
+        for netName in externalNodesByNet.keys.sorted(by: { $0.value < $1.value }) where !existingNetNames.contains(netName) {
+            let nodes = externalNodesByNet[netName, default: []].sorted().map { nodeName in
+                ParasiticNode(
+                    name: NodeName(nodeName),
+                    kind: portNames.contains(nodeName) ? .pin : .internal,
+                    instancePath: nil,
+                    coordinate: nil
+                )
+            }
+            nets.append(ParasiticNet(
+                name: netName,
+                nodes: nodes,
+                totalGroundCapF: 0,
+                totalCouplingCapF: 0,
+                totalResistanceOhm: 0
+            ))
         }
 
         return ParasiticIR(
@@ -165,6 +219,52 @@ public struct SPEFLowering: Sendable {
             }
         }
         return name
+    }
+
+    private func explicitNodeOwnerMap(from tree: SPEFParseTree) -> [String: NetName] {
+        var owners: [String: NetName] = [:]
+        for netBlock in tree.nets {
+            let netName = NetName(resolveNameMap(netBlock.netName, nameMap: tree.nameMap))
+            for node in localNodes(in: netBlock, nameMap: tree.nameMap) {
+                owners[node] = netName
+            }
+        }
+        return owners
+    }
+
+    private func localNodes(in netBlock: SPEFNetBlock, nameMap: [Int: String]) -> Set<String> {
+        var nodes: Set<String> = []
+        for connection in netBlock.connections {
+            nodes.insert(resolveNameMap(connection.name, nameMap: nameMap))
+        }
+        for capacitor in netBlock.capacitors where capacitor.nodeB == nil {
+            nodes.insert(resolveNameMap(capacitor.nodeA, nameMap: nameMap))
+        }
+        for resistor in netBlock.resistors {
+            nodes.insert(resolveNameMap(resistor.nodeA, nameMap: nameMap))
+            nodes.insert(resolveNameMap(resistor.nodeB, nameMap: nameMap))
+        }
+        return nodes
+    }
+
+    private func isLocalNode(
+        _ nodeName: String,
+        netName: NetName,
+        localNodeSet: Set<String>,
+        explicitNodeOwners: [String: NetName]
+    ) -> Bool {
+        localNodeSet.contains(nodeName) || explicitNodeOwners[nodeName] == netName
+    }
+
+    private func externalNetName(
+        for nodeName: String,
+        explicitNodeOwners: [String: NetName],
+        delimiter: String
+    ) -> NetName {
+        if let netName = explicitNodeOwners[nodeName] {
+            return netName
+        }
+        return NetName(ownerNetName(of: nodeName, delimiter: delimiter))
     }
 
     private func ownerNetName(of nodeName: String, delimiter: String) -> String {

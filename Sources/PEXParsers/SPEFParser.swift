@@ -164,7 +164,7 @@ public struct SPEFParser: Sendable {
                 program = try requireString(&cursor, field: "*PROGRAM")
             case "DESIGN_FLOW":
                 cursor.advance()
-                _ = try requireString(&cursor, field: "*DESIGN_FLOW")
+                cursor.skipUntilLineEnd()
             case "DIVIDER":
                 cursor.advance()
                 divider = try requireIdentifierOrPunctuation(&cursor, field: "*DIVIDER")
@@ -363,6 +363,7 @@ public struct SPEFParser: Sendable {
                         throw diagnostic("Invalid SPEF connection direction '\(dirStr)'", location: cursor.currentLocation)
                     }
                     connections.append(SPEFConnection(type: connType, name: name, direction: direction, coordinate: nil))
+                    cursor.skipUntilLineEnd()
                     cursor.skipNewlines()
                     continue
                 } else {
@@ -385,7 +386,7 @@ public struct SPEFParser: Sendable {
             case .number:
                 let value = try requireNumber(&cursor, field: "*CAP")
                 caps.append(SPEFCapacitor(id: id, nodeA: nodeA, nodeB: nil, value: value))
-            case .identifier:
+            case .identifier, .mappedName:
                 let nodeB = try requireIdentifier(&cursor, field: "*CAP")
                 let value = try requireNumber(&cursor, field: "*CAP")
                 caps.append(SPEFCapacitor(id: id, nodeA: nodeA, nodeB: nodeB, value: value))
@@ -487,6 +488,17 @@ struct TokenCursor: Sendable {
         }
     }
 
+    mutating func skipUntilLineEnd() {
+        while index < tokens.count {
+            switch tokens[index].token {
+            case .newline, .endOfFile:
+                return
+            default:
+                index += 1
+            }
+        }
+    }
+
     mutating func skipToNextKeyword() {
         while index < tokens.count {
             if case .keyword(_) = tokens[index].token { return }
@@ -507,13 +519,22 @@ struct TokenCursor: Sendable {
     mutating func consumeIdentifier() -> String? {
         skipNewlines()
         guard index < tokens.count else { return nil }
-        switch tokens[index].token {
-        case .identifier(let s):
-            index += 1
-            return s
-        default:
+        guard var value = consumeIdentifierComponent() else {
             return nil
         }
+
+        while index < tokens.count {
+            guard case .colon = tokens[index].token else {
+                break
+            }
+            index += 1
+            guard let suffix = consumeIdentifierComponent() else {
+                return nil
+            }
+            value += ":\(suffix)"
+        }
+
+        return value
     }
 
     mutating func consumeIdentifierOrPunctuation() -> String? {
@@ -566,5 +587,28 @@ struct TokenCursor: Sendable {
         guard i < tokens.count else { return nil }
         if case .number(let n) = tokens[i].token { return n }
         return nil
+    }
+
+    private mutating func consumeIdentifierComponent() -> String? {
+        guard index < tokens.count else {
+            return nil
+        }
+
+        switch tokens[index].token {
+        case .identifier(let s):
+            index += 1
+            return s
+        case .mappedName(let id):
+            index += 1
+            return "*\(id)"
+        case .number(let value):
+            index += 1
+            if value.rounded() == value {
+                return "\(Int(value))"
+            }
+            return "\(value)"
+        default:
+            return nil
+        }
     }
 }

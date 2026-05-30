@@ -44,7 +44,11 @@ let package = Package(
                 .copy("Fixtures/inv1.gds"),
             ]
         ),
-        .testTarget(name: "PEXParsersTests", dependencies: ["PEXParsers", "PEXCore"]),
+        .testTarget(
+            name: "PEXParsersTests",
+            dependencies: ["PEXParsers", "PEXCore"],
+            resources: [.copy("Fixtures/OpenROAD")]
+        ),
         .testTarget(name: "PEXPersistenceTests", dependencies: ["PEXPersistence", "PEXCore"]),
         .testTarget(
             name: "PEXRuntimeTests",
