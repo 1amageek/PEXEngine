@@ -366,6 +366,12 @@ public struct SPEFParser: Sendable {
                     cursor.skipUntilLineEnd()
                     cursor.skipNewlines()
                     continue
+                } else if kw == "N" {
+                    cursor.advance()
+                    _ = try requireIdentifier(&cursor, field: "*N")
+                    cursor.skipUntilLineEnd()
+                    cursor.skipNewlines()
+                    continue
                 } else {
                     break // Any other keyword (*CAP, *RES, *END, etc.) terminates CONN section
                 }

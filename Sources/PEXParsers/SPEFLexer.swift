@@ -102,9 +102,9 @@ public struct SPEFLexer: Sendable {
             }
 
             // Identifier (everything else that's not whitespace)
-            if ch.isLetter || ch == "_" || ch == "\\" {
+            if ch.isLetter || ch == "_" || ch == "\\" || ch == "$" {
                 let name = consumeWhile { c in
-                    c.isLetter || c.isNumber || c == "_" || c == "." || c == "\\" || c == "[" || c == "]" || c == "/" || c == ":"
+                    c.isLetter || c.isNumber || c == "_" || c == "." || c == "\\" || c == "[" || c == "]" || c == "/" || c == ":" || c == "$"
                 }
                 tokens.append(SPEFToken.Located(token: .identifier(name), location: loc))
                 continue

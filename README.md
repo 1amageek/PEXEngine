@@ -11,7 +11,7 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 - **Immutable artifact persistence** -- Manifest, raw outputs, normalized IR, and summary reports
 - **CLI tool** -- `pexengine` commands for extraction, parsing, validation, and diagnostics
 - **Configuration via `swift-configuration`** -- JSON config with provider hierarchy (file > defaults)
-- **Fully testable** -- 89 tests across 10 suites
+- **Real-data validation** -- OpenROAD OpenRCX SPEF fixtures and Sky130 back-annotation gates
 
 ## Requirements
 
@@ -193,6 +193,21 @@ swift test --filter PEXCLITests
 swift run pexengine --version
 swift run pexengine doctor
 ```
+
+## Real Data Validation
+
+PEXEngine keeps real extraction outputs in the test resources so parser and IR
+lowering regressions are caught without network access.
+
+| Corpus | Source | Gate |
+|---|---|---|
+| OpenROAD OpenRCX SPEF | `Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json` | `SPEFParserTests/openROADRCXFixturesParseAndLowerToExpectedSummaries` |
+| Sky130 Magic extraction | `Tests/PEXRuntimeTests/Fixtures/pex_plate.gds` | `validation/pex-backannotation.sh` and gated Magic adapter tests |
+
+Each OpenROAD fixture records source path, pinned commit, Git blob SHA, SHA-256,
+byte count, parse counts, and lowered `ParasiticIR` totals. The fixture corpus
+includes small name-map cases, coupling-heavy pattern cases, and several
+hundred-net GCD extractions.
 
 ## Artifact Output
 

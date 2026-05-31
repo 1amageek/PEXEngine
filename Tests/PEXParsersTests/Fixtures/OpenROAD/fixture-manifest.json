@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "sourceRepository": "https://github.com/The-OpenROAD-Project/OpenROAD",
+  "pinnedCommit": "5ff1293e2e81fe162f836073ae51f2534febca8f",
+  "sourceDirectory": "src/rcx/test",
+  "license": "BSD-3-Clause",
+  "fixtures": [
+    {
+      "fileName": "45_gcd.spefok",
+      "sourcePath": "src/rcx/test/45_gcd.spefok",
+      "gitBlobSHA": "ed360c65b073ef2e01c732675c611ddb515b84a4",
+      "sha256": "264512161111a9e6fe6ab1e389e3fefc168ba10ff17aebe84a3e8de436d5683c",
+      "byteCount": 358867,
+      "designName": "gcd",
+      "parseSummary": {
+        "nameMapCount": 2170,
+        "portCount": 54,
+        "netCount": 316,
+        "connectionCount": 998,
+        "capacitorCount": 8724,
+        "resistorCount": 2656
+      },
+      "loweredSummary": {
+        "netCount": 316,
+        "elementCount": 11380,
+        "capacitorElementCount": 2972,
+        "couplingElementCount": 5752,
+        "resistorElementCount": 2656,
+        "totalGroundCapF": 3.3303505242000047e-13,
+        "totalCouplingCapF": 1.6390300069491982e-13,
+        "totalResistanceOhm": 30601.932948,
+        "capTolerance": 1e-20
+      }
+    },
+    {
+      "fileName": "coordinates.spefok",
+      "sourcePath": "src/rcx/test/coordinates.spefok",
+      "gitBlobSHA": "86351f66ca1d5d35b4a6426c87ab242f05d586da",
+      "sha256": "37213c37df2c9d1326a6bb8e8d5052c31fdacc652a1322bcaf52265996c53d01",
+      "byteCount": 448059,
+      "designName": "gcd",
+      "parseSummary": {
+        "nameMapCount": 2170,
+        "portCount": 54,
+        "netCount": 316,
+        "connectionCount": 998,
+        "capacitorCount": 8724,
+        "resistorCount": 2656
+      },
+      "loweredSummary": {
+        "netCount": 316,
+        "elementCount": 11380,
+        "capacitorElementCount": 2972,
+        "couplingElementCount": 5752,
+        "resistorElementCount": 2656,
+        "totalGroundCapF": 3.3303505242000047e-13,
+        "totalCouplingCapF": 1.6390300069491982e-13,
+        "totalResistanceOhm": 30601.932948,
+        "capTolerance": 1e-20
+      }
+    },
+    {
+      "fileName": "ext_pattern.spefok",
+      "sourcePath": "src/rcx/test/ext_pattern.spefok",
+      "gitBlobSHA": "9c54b932b5e3419ec4ad5167b2c3fe6e4484aaa8",
+      "sha256": "de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab02",
+      "byteCount": 5733,
+      "designName": "blk",
+      "parseSummary": {
+        "nameMapCount": 9,
+        "portCount": 30,
+        "netCount": 9,
+        "connectionCount": 18,
+        "capacitorCount": 30,
+        "resistorCount": 9
+      },
+      "loweredSummary": {
+        "netCount": 21,
+        "elementCount": 39,
+        "capacitorElementCount": 18,
+        "couplingElementCount": 12,
+        "resistorElementCount": 9,
+        "totalGroundCapF": 8.6383066e-15,
+        "totalCouplingCapF": 3.06947895e-15,
+        "totalResistanceOhm": 3871.433308,
+        "capTolerance": 1e-22
+      }
+    },
+    {
+      "fileName": "gcd.spefok",
+      "sourcePath": "src/rcx/test/gcd.spefok",
+      "gitBlobSHA": "c2c66720f22358f431828839fb0ea4c02dc7920c",
+      "sha256": "3f42eb50caf2a8990663f4e477ced79f220d56bc69856522d04c2c107cf9ada7",
+      "byteCount": 504204,
+      "designName": "gcd",
+      "parseSummary": {
+        "nameMapCount": 8582,
+        "portCount": 54,
+        "netCount": 411,
+        "connectionCount": 1264,
+        "capacitorCount": 8106,
+        "resistorCount": 3221
+      },
+      "loweredSummary": {
+        "netCount": 411,
+        "elementCount": 11327,
+        "capacitorElementCount": 3632,
+        "couplingElementCount": 4474,
+        "resistorElementCount": 3221,
+        "totalGroundCapF": 2.009139609200001e-12,
+        "totalCouplingCapF": 7.906520036400012e-13,
+        "totalResistanceOhm": 44478.650614,
+        "capTolerance": 1e-19
+      }
+    },
+    {
+      "fileName": "net_name_consistency.spefok",
+      "sourcePath": "src/rcx/test/net_name_consistency.spefok",
+      "gitBlobSHA": "de90f1a4430b5913c18f1641e02edd751e71fa1d",
+      "sha256": "570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd",
+      "byteCount": 968,
+      "designName": "top",
+      "parseSummary": {
+        "nameMapCount": 10,
+        "portCount": 0,
+        "netCount": 3,
+        "connectionCount": 7,
+        "capacitorCount": 10,
+        "resistorCount": 5
+      },
+      "loweredSummary": {
+        "netCount": 3,
+        "elementCount": 15,
+        "capacitorElementCount": 8,
+        "couplingElementCount": 2,
+        "resistorElementCount": 5,
+        "totalGroundCapF": 3.521008e-16,
+        "totalCouplingCapF": 6.2686e-17,
+        "totalResistanceOhm": 68.30357,
+        "capTolerance": 1e-24
+      }
+    },
+    {
+      "fileName": "no_merging.spefok",
+      "sourcePath": "src/rcx/test/no_merging.spefok",
+      "gitBlobSHA": "cd2b4a0365cb7f378b37528515144b8c4f497d1c",
+      "sha256": "5d05ab216b75f0c39a7345900a51c89241abf90a28eea05677b7aa64cf67eb1d",
+      "byteCount": 569303,
+      "designName": "gcd",
+      "parseSummary": {
+        "nameMapCount": 8582,
+        "portCount": 54,
+        "netCount": 411,
+        "connectionCount": 1264,
+        "capacitorCount": 9676,
+        "resistorCount": 4791
+      },
+      "loweredSummary": {
+        "netCount": 411,
+        "elementCount": 14467,
+        "capacitorElementCount": 5202,
+        "couplingElementCount": 4474,
+        "resistorElementCount": 4791,
+        "totalGroundCapF": 2.0091395549300027e-12,
+        "totalCouplingCapF": 7.906520036400012e-13,
+        "totalResistanceOhm": 44478.6634264,
+        "capTolerance": 1e-19
+      }
+    },
+    {
+      "fileName": "short_resover.spefok",
+      "sourcePath": "src/rcx/test/short_resover.spefok",
+      "gitBlobSHA": "1a942e2420a93362bed662684d195a06da6bee1b",
+      "sha256": "e03647c62e2d7b67f08f9726bdd14354011d7f01785a34edce969436ae4eda4f",
+      "byteCount": 418572,
+      "designName": "gcd",
+      "parseSummary": {
+        "nameMapCount": 8582,
+        "portCount": 54,
+        "netCount": 411,
+        "connectionCount": 1264,
+        "capacitorCount": 6130,
+        "resistorCount": 1575
+      },
+      "loweredSummary": {
+        "netCount": 411,
+        "elementCount": 7705,
+        "capacitorElementCount": 1986,
+        "couplingElementCount": 4144,
+        "resistorElementCount": 1575,
+        "totalGroundCapF": 2.0091395428600037e-12,
+        "totalCouplingCapF": 7.906520013600012e-13,
+        "totalResistanceOhm": 41920.684354,
+        "capTolerance": 1e-19
+      }
+    }
+  ]
+}
