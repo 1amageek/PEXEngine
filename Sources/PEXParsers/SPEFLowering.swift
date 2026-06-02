@@ -13,6 +13,11 @@ public struct SPEFLowering: Sendable {
         var nets: [ParasiticNet] = []
         var allElements: [ParasiticElement] = []
         var externalNodesByNet: [NetName: Set<String>] = [:]
+        // Tracks coupling caps already emitted, keyed by their unordered
+        // resolved-node pair. IEEE 1481 SPEF lists a coupling reciprocally in
+        // both coupled nets' *CAP sections, so the same physical cap is seen
+        // twice during the per-net walk; without this it would be counted twice.
+        var seenCouplingValues: [String: Double] = [:]
 
         for netBlock in tree.nets {
             let netName = NetName(resolveNameMap(netBlock.netName, nameMap: tree.nameMap))
@@ -81,6 +86,28 @@ public struct SPEFLowering: Sendable {
                         remoteNode = localA && localB ? nil : resolvedB
                     }
                     let kind: ElementKind = remoteNode == nil ? .capacitor : .coupling
+
+                    // Count each physical coupling cap exactly once (single
+                    // attribution to the first net that lists it), matching the
+                    // canonical-IR convention of the Magic path. The key is the
+                    // unordered resolved-node pair, so it is independent of
+                    // endpoint ordering and never drops a coupling that a writer
+                    // lists only once (non-reciprocal SPEF).
+                    if kind == .coupling {
+                        let couplingKey = [resolvedA, resolvedB].sorted().joined(separator: "\u{1}")
+                        if let previousValue = seenCouplingValues[couplingKey] {
+                            let scale = Swift.max(abs(previousValue), abs(scaledValue))
+                            guard abs(previousValue - scaledValue) <= scale * 1e-9 else {
+                                throw PEXError.parseFailed(
+                                    cornerID: cornerID,
+                                    message: "SPEF coupling cap between \(resolvedA) and \(resolvedB) is listed with inconsistent values (\(previousValue) F vs \(scaledValue) F)"
+                                )
+                            }
+                            continue
+                        }
+                        seenCouplingValues[couplingKey] = scaledValue
+                    }
+
                     let remoteRef: NodeRef?
                     if let remoteNode {
                         let remoteNetName = externalNetName(

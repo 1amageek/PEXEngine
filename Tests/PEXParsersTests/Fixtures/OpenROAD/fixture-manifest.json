@@ -22,13 +22,13 @@
       },
       "loweredSummary": {
         "netCount": 316,
-        "elementCount": 11380,
+        "elementCount": 8504,
         "capacitorElementCount": 2972,
-        "couplingElementCount": 5752,
+        "couplingElementCount": 2876,
         "resistorElementCount": 2656,
-        "totalGroundCapF": 3.3303505242000047e-13,
-        "totalCouplingCapF": 1.6390300069491982e-13,
-        "totalResistanceOhm": 30601.932948,
+        "totalGroundCapF": 3.3303505241999987e-13,
+        "totalCouplingCapF": 8.195150034745995e-14,
+        "totalResistanceOhm": 30601.93294799999,
         "capTolerance": 1e-20
       }
     },
@@ -49,13 +49,13 @@
       },
       "loweredSummary": {
         "netCount": 316,
-        "elementCount": 11380,
+        "elementCount": 8504,
         "capacitorElementCount": 2972,
-        "couplingElementCount": 5752,
+        "couplingElementCount": 2876,
         "resistorElementCount": 2656,
-        "totalGroundCapF": 3.3303505242000047e-13,
-        "totalCouplingCapF": 1.6390300069491982e-13,
-        "totalResistanceOhm": 30601.932948,
+        "totalGroundCapF": 3.3303505241999987e-13,
+        "totalCouplingCapF": 8.195150034745995e-14,
+        "totalResistanceOhm": 30601.93294799999,
         "capTolerance": 1e-20
       }
     },
@@ -81,8 +81,8 @@
         "couplingElementCount": 12,
         "resistorElementCount": 9,
         "totalGroundCapF": 8.6383066e-15,
-        "totalCouplingCapF": 3.06947895e-15,
-        "totalResistanceOhm": 3871.433308,
+        "totalCouplingCapF": 3.0694789499999997e-15,
+        "totalResistanceOhm": 3871.4333079999997,
         "capTolerance": 1e-22
       }
     },
@@ -103,13 +103,13 @@
       },
       "loweredSummary": {
         "netCount": 411,
-        "elementCount": 11327,
+        "elementCount": 9090,
         "capacitorElementCount": 3632,
-        "couplingElementCount": 4474,
+        "couplingElementCount": 2237,
         "resistorElementCount": 3221,
-        "totalGroundCapF": 2.009139609200001e-12,
-        "totalCouplingCapF": 7.906520036400012e-13,
-        "totalResistanceOhm": 44478.650614,
+        "totalGroundCapF": 2.0091396091999995e-12,
+        "totalCouplingCapF": 3.9532600181999976e-13,
+        "totalResistanceOhm": 44478.650613999984,
         "capTolerance": 1e-19
       }
     },
@@ -130,12 +130,12 @@
       },
       "loweredSummary": {
         "netCount": 3,
-        "elementCount": 15,
+        "elementCount": 14,
         "capacitorElementCount": 8,
-        "couplingElementCount": 2,
+        "couplingElementCount": 1,
         "resistorElementCount": 5,
         "totalGroundCapF": 3.521008e-16,
-        "totalCouplingCapF": 6.2686e-17,
+        "totalCouplingCapF": 3.1343000000000003e-17,
         "totalResistanceOhm": 68.30357,
         "capTolerance": 1e-24
       }
@@ -157,13 +157,13 @@
       },
       "loweredSummary": {
         "netCount": 411,
-        "elementCount": 14467,
+        "elementCount": 12230,
         "capacitorElementCount": 5202,
-        "couplingElementCount": 4474,
+        "couplingElementCount": 2237,
         "resistorElementCount": 4791,
-        "totalGroundCapF": 2.0091395549300027e-12,
-        "totalCouplingCapF": 7.906520036400012e-13,
-        "totalResistanceOhm": 44478.6634264,
+        "totalGroundCapF": 2.00913955493e-12,
+        "totalCouplingCapF": 3.9532600181999976e-13,
+        "totalResistanceOhm": 44478.66342639999,
         "capTolerance": 1e-19
       }
     },
@@ -184,12 +184,12 @@
       },
       "loweredSummary": {
         "netCount": 411,
-        "elementCount": 7705,
+        "elementCount": 5633,
         "capacitorElementCount": 1986,
-        "couplingElementCount": 4144,
+        "couplingElementCount": 2072,
         "resistorElementCount": 1575,
-        "totalGroundCapF": 2.0091395428600037e-12,
-        "totalCouplingCapF": 7.906520013600012e-13,
+        "totalGroundCapF": 2.0091395428599997e-12,
+        "totalCouplingCapF": 3.9532600067999987e-13,
         "totalResistanceOhm": 41920.684354,
         "capTolerance": 1e-19
       }

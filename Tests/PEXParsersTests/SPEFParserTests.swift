@@ -366,6 +366,78 @@ struct SPEFParserTests {
         }
     }
 
+    @Test("A coupling cap listed reciprocally in both nets is counted exactly once")
+    func reciprocalCouplingCountedOnce() throws {
+        // IEEE 1481 SPEF lists a coupling cap in BOTH coupled nets' *CAP
+        // sections. The lowering must emit one element per physical cap (single
+        // attribution), matching the Magic path — not one element per listing.
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "reciprocal"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET A 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        *END
+
+        *D_NET B 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+
+        let couplings = ir.elements.filter { $0.kind == .coupling }
+        #expect(couplings.count == 1, "a reciprocally-listed coupling must produce exactly one element")
+        // Counted-once invariant: per-net coupling totals sum to the element sum,
+        // and that equals the single physical value (not double).
+        let perNetSum = ir.nets.map(\.totalCouplingCapF).reduce(0, +)
+        let elementSum = couplings.map(\.value).reduce(0, +)
+        #expect(abs(perNetSum - elementSum) <= 1e-21)
+        #expect(abs(elementSum - 0.05e-12) <= 1e-21, "the coupling must carry the physical value once, not doubled")
+    }
+
+    @Test("A coupling listed reciprocally with inconsistent values fails loudly")
+    func reciprocalCouplingValueMismatchThrows() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "mismatch"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET A 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        *END
+
+        *D_NET B 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.07
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        #expect(throws: PEXError.self) {
+            _ = try SPEFLowering().lower(tree, cornerID: "tt")
+        }
+    }
+
     @Test func openROADRCXFixturesParseAndLowerToExpectedSummaries() throws {
         let manifest = try openROADFixtureManifest()
         #expect(manifest.schemaVersion == 1)
