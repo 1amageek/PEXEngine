@@ -67,7 +67,8 @@ public enum CLIRouter {
             --min-cap-f <val>     Minimum capacitance threshold (F)
             --min-res-ohm <val>   Minimum resistance threshold (Ohm)
             --out <path>          Output workspace path
-            --strict              Enable strict validation
+            --strict              Enable strict validation (default)
+            --non-strict          Report IR validation errors as warnings
             --json                Output results as JSON
 
           parse           Parse a SPEF file

@@ -563,6 +563,123 @@ struct SPEFParserTests {
         #expect(abs(resistors[0].value - 2000.0) < 0.01)
     }
 
+    @Test func loweringAppliesRunOptionFiltersToElementsAndSummaries() throws {
+        var lexer = SPEFLexer(source: sampleSPEF)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let options = PEXRunOptions(
+            extractMode: .rc,
+            includeCouplingCaps: false,
+            minCapacitanceF: 9e-14,
+            minResistanceOhm: 6.0,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
+        )
+
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt", options: options)
+
+        #expect(ir.elements.count == 2)
+        #expect(ir.elements.filter { $0.kind == .capacitor }.count == 1)
+        #expect(ir.elements.filter { $0.kind == .coupling }.isEmpty)
+        #expect(ir.elements.filter { $0.kind == .resistor }.count == 1)
+        #expect(isClose(totalGroundCap(in: ir), 1e-13, tolerance: 1e-18))
+        #expect(totalCouplingCap(in: ir) == 0)
+        #expect(totalResistance(in: ir) == 10)
+    }
+
+    @Test func loweringIncludesSameNetCapacitorsInNetSummaries() throws {
+        var lexer = SPEFLexer(source: sampleSPEF)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+
+        let sameNetCap = try #require(ir.elements.first {
+            $0.kind == .capacitor && $0.nodeB?.netName == $0.nodeA.netName
+        })
+        #expect(isClose(sameNetCap.value, 5e-14, tolerance: 1e-20))
+        #expect(isClose(totalGroundCap(in: ir), 2.3e-13, tolerance: 1e-18))
+    }
+
+    @Test func loweringHonorsExtractMode() throws {
+        var lexer = SPEFLexer(source: sampleSPEF)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let cOnly = PEXRunOptions(
+            extractMode: .cOnly,
+            includeCouplingCaps: true,
+            minCapacitanceF: nil,
+            minResistanceOhm: nil,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
+        )
+        let rOnly = PEXRunOptions(
+            extractMode: .rOnly,
+            includeCouplingCaps: true,
+            minCapacitanceF: nil,
+            minResistanceOhm: nil,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
+        )
+
+        let cOnlyIR = try SPEFLowering().lower(tree, cornerID: "tt", options: cOnly)
+        let rOnlyIR = try SPEFLowering().lower(tree, cornerID: "tt", options: rOnly)
+
+        #expect(cOnlyIR.elements.allSatisfy { $0.kind != .resistor })
+        #expect(rOnlyIR.elements.allSatisfy { $0.kind == .resistor })
+        #expect(totalResistance(in: cOnlyIR) == 0)
+        #expect(totalGroundCap(in: rOnlyIR) == 0)
+        #expect(totalCouplingCap(in: rOnlyIR) == 0)
+    }
+
+    @Test func rOnlyStillRejectsReciprocalCouplingMismatch() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "mismatch"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET A 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        *RES
+        1 A:1 A:2 1.0
+        *END
+
+        *D_NET B 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.06
+        *RES
+        1 B:1 B:2 1.0
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let options = PEXRunOptions(
+            extractMode: .rOnly,
+            includeCouplingCaps: true,
+            minCapacitanceF: nil,
+            minResistanceOhm: nil,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
+        )
+
+        #expect(throws: PEXError.self) {
+            try SPEFLowering().lower(tree, cornerID: "tt", options: options)
+        }
+    }
+
     @Test func loweringProducesIR() throws {
         var lexer = SPEFLexer(source: sampleSPEF)
         let tokens = lexer.tokenize()

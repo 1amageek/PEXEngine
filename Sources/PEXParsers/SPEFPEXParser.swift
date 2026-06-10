@@ -45,7 +45,7 @@ public struct SPEFPEXParser: PEXParserProtocol {
         // Stage 3: Lower
         let lowering = SPEFLowering()
         do {
-            return try lowering.lower(tree, cornerID: context.cornerID)
+            return try lowering.lower(tree, cornerID: context.cornerID, options: context.options)
         } catch {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,

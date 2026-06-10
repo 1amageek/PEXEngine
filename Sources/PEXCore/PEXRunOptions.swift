@@ -16,7 +16,7 @@ public struct PEXRunOptions: Sendable, Codable, Hashable {
         maxParallelJobs: 2,
         emitRawArtifacts: true,
         emitIRJSON: true,
-        strictValidation: false
+        strictValidation: true
     )
 
     public init(

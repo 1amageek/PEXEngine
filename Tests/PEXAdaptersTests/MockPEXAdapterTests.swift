@@ -70,7 +70,7 @@ struct MockPEXAdapterTests {
 
     @Test(.timeLimit(.minutes(1)))
     func processRunnerImmediateExit() async throws {
-        // /usr/bin/true は即座に終了する — ハンドラ設定前に終了してもハングしないことを検証
+        // Verifies that a process exiting immediately after handler setup does not hang.
         let runner = ProcessRunner()
         let result = try await runner.run(
             executableURL: URL(filePath: "/usr/bin/true")
@@ -94,6 +94,102 @@ struct MockPEXAdapterTests {
         }
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerTimeoutTerminatesLongRunningProcess() async throws {
+        let runner = ProcessRunner(timeoutSeconds: 0.1, terminationGraceSeconds: 0.05)
+        do {
+            _ = try await runner.run(
+                executableURL: URL(filePath: "/bin/sh"),
+                arguments: ["-c", "printf started; sleep 5"]
+            )
+            Issue.record("Expected timeout")
+        } catch let error as PEXError {
+            #expect(error.kind == .backendExecutionFailed)
+            #expect(error.message.contains("timed out"))
+            #expect(error.underlyingDescription?.contains("started") == true)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerRejectsInvalidTimingConfiguration() async throws {
+        let runner = ProcessRunner(timeoutSeconds: 0, terminationGraceSeconds: 0.05)
+        do {
+            _ = try await runner.run(executableURL: URL(filePath: "/usr/bin/true"))
+            Issue.record("Expected invalid timing configuration")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("timeoutSeconds"))
+        } catch {
+            Issue.record("Unexpected error type: \(error)")
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerDrainsLargeStdoutAndStderr() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "PEXProcessRunnerLargeOutput-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { removeTemporaryRoot(root) }
+
+        let executable = try writeExecutable(
+            named: "mock-large-output",
+            in: root,
+            contents: """
+            #!/usr/bin/env perl
+            print "O" x 200000;
+            print STDERR "E" x 160000;
+            exit 0;
+            """
+        )
+
+        let result = try await ProcessRunner().run(executableURL: executable)
+
+        #expect(result.exitCode == 0)
+        #expect(result.stdout.count == 200_000)
+        #expect(result.stderr.count == 160_000)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func processRunnerDoesNotWaitForInheritedPipeEOFAfterParentExit() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "PEXProcessRunnerPipeInheritance-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { removeTemporaryRoot(root) }
+
+        let childFinished = root.appending(path: "child-finished")
+        let executable = try writeExecutable(
+            named: "mock-parent-exit",
+            in: root,
+            contents: """
+            #!/usr/bin/env perl
+            print "parent-exited\\n";
+            my $pid = fork();
+            if (!defined $pid) {
+                exit 2;
+            }
+            if ($pid == 0) {
+                sleep 8;
+                open my $fh, ">", "\(childFinished.path(percentEncoded: false))";
+                print $fh "done\\n";
+                close $fh;
+                exit 0;
+            }
+            exit 0;
+            """
+        )
+
+        let runner = ProcessRunner(
+            timeoutSeconds: 5.0,
+            terminationGraceSeconds: 0.05,
+            pipeDrainGraceSeconds: 0.05
+        )
+        let result = try await runner.run(executableURL: executable)
+
+        #expect(result.exitCode == 0)
+        #expect(result.stdout.contains("parent-exited"))
+        #expect(!FileManager.default.fileExists(atPath: childFinished.path(percentEncoded: false)))
+    }
+
     @Test func temperatureScalesValues() {
         let coldCorner = PEXCorner(id: PEXCornerID("cold"), name: "cold", temperature: -40)
         let hotCorner = PEXCorner(id: PEXCornerID("hot"), name: "hot", temperature: 125)
@@ -108,5 +204,26 @@ struct MockPEXAdapterTests {
         let coldTotal = coldIR.elements.reduce(0.0) { $0 + $1.value }
         let hotTotal = hotIR.elements.reduce(0.0) { $0 + $1.value }
         #expect(hotTotal > coldTotal)
+    }
+
+    private func removeTemporaryRoot(_ root: URL) {
+        guard FileManager.default.fileExists(atPath: root.path(percentEncoded: false)) else {
+            return
+        }
+        do {
+            try FileManager.default.removeItem(at: root)
+        } catch {
+            Issue.record("Failed to remove temporary root: \(error)")
+        }
+    }
+
+    private func writeExecutable(named name: String, in root: URL, contents: String) throws -> URL {
+        let url = root.appending(path: name)
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: NSNumber(value: Int16(0o755))],
+            ofItemAtPath: url.path(percentEncoded: false)
+        )
+        return url
     }
 }

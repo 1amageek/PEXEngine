@@ -164,7 +164,7 @@ struct MockParasiticGenerator: Sendable {
             )
             allElements.append(resistorElement)
 
-            let groundCapF = baseCap * 0.7
+            let groundCapF = baseCap
             let couplingCapF = includeCouplingCaps && netIndex + 1 < netNames.count ? baseCap * 0.1 : 0.0
 
             let net = ParasiticNet(

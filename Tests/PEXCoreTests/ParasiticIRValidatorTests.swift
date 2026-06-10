@@ -52,6 +52,108 @@ struct ParasiticIRValidatorTests {
         #expect(result.errors.contains(where: { if case .danglingNodeReference(_, "n_nonexistent") = $0 { return true }; return false }))
     }
 
+    @Test func sameNodeNameCanExistOnDifferentNets() {
+        let netA = ParasiticNet(
+            name: NetName("netA"),
+            nodes: [ParasiticNode(name: NodeName("1"), kind: .internal, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 10
+        )
+        let netB = ParasiticNet(
+            name: NetName("netB"),
+            nodes: [ParasiticNode(name: NodeName("1"), kind: .internal, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 20
+        )
+        let elements = [
+            ParasiticElement(
+                id: "RA",
+                kind: .resistor,
+                nodeA: NodeRef(netName: NetName("netA"), nodeName: NodeName("1")),
+                nodeB: NodeRef(netName: NetName("netA"), nodeName: NodeName("1")),
+                value: 10,
+                source: .extracted
+            ),
+            ParasiticElement(
+                id: "RB",
+                kind: .resistor,
+                nodeA: NodeRef(netName: NetName("netB"), nodeName: NodeName("1")),
+                nodeB: NodeRef(netName: NetName("netB"), nodeName: NodeName("1")),
+                value: 20,
+                source: .extracted
+            ),
+        ]
+        let ir = ParasiticIR(version: "1.0", cornerID: "tt", units: .canonical, nets: [netA, netB], elements: elements, metadata: [:])
+
+        let result = validator.validate(ir)
+
+        #expect(result.isValid)
+    }
+
+    @Test func nodeReferenceMustUseClaimedNet() {
+        let net = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [ParasiticNode(name: NodeName("n1"), kind: .pin, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 0
+        )
+        let elements = [
+            ParasiticElement(
+                id: "R1",
+                kind: .resistor,
+                nodeA: NodeRef(netName: NetName("net2"), nodeName: NodeName("n1")),
+                nodeB: NodeRef(netName: NetName("net2"), nodeName: NodeName("n1")),
+                value: 100,
+                source: .extracted
+            ),
+        ]
+        let ir = ParasiticIR(version: "1.0", cornerID: "tt", units: .canonical, nets: [net], elements: elements, metadata: [:])
+
+        let result = validator.validate(ir)
+
+        #expect(!result.isValid)
+        #expect(result.errors.contains(where: {
+            if case .inconsistentNetMembership("n1", "net2", "net1") = $0 {
+                return true
+            }
+            return false
+        }))
+    }
+
+    @Test func resistorRequiresSecondEndpoint() {
+        let net = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [ParasiticNode(name: NodeName("n1"), kind: .pin, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 0
+        )
+        let elements = [
+            ParasiticElement(
+                id: "R1",
+                kind: .resistor,
+                nodeA: NodeRef(netName: NetName("net1"), nodeName: NodeName("n1")),
+                nodeB: nil,
+                value: 100,
+                source: .extracted
+            ),
+        ]
+        let ir = ParasiticIR(version: "1.0", cornerID: "tt", units: .canonical, nets: [net], elements: elements, metadata: [:])
+
+        let result = validator.validate(ir)
+
+        #expect(!result.isValid)
+        #expect(result.errors.contains(where: {
+            if case .missingEndpoint("R1", .resistor) = $0 {
+                return true
+            }
+            return false
+        }))
+    }
+
     @Test func negativeValueDetected() {
         let net = ParasiticNet(
             name: NetName("net1"),

@@ -133,7 +133,7 @@ struct PEXRuntimeTests {
         #expect(capacitorElements.count == 20)
         #expect(couplingElements.count == 9)
         #expect(resistorElements.count == 10)
-        #expect(abs(ir.nets.map(\.totalGroundCapF).reduce(0, +) - 1.925e-12) < 1e-24)
+        #expect(abs(ir.nets.map(\.totalGroundCapF).reduce(0, +) - 2.75e-12) < 1e-24)
         #expect(abs(ir.nets.map(\.totalCouplingCapF).reduce(0, +) - 2.25e-13) < 1e-25)
         #expect(abs(ir.nets.map(\.totalResistanceOhm).reduce(0, +) - 550.0) < 1e-9)
         #expect(abs(capacitorElements.map(\.value).reduce(0, +) - 2.75e-12) < 1e-24)

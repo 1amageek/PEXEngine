@@ -58,6 +58,18 @@ struct PEXCLITests {
         ])
         #expect(cmd.directParams?.corners == ["tt_25c_1v0"])
         #expect(cmd.directParams?.backendID == "mock")
+        #expect(cmd.directParams?.strict == true)
+    }
+
+    @Test func extractCommandCanDisableStrictValidation() throws {
+        let cmd = try ExtractCommand(arguments: [
+            "--layout", "/tmp/l.gds",
+            "--netlist", "/tmp/n.sp",
+            "--top-cell", "T",
+            "--technology", "/tmp/t.json",
+            "--non-strict",
+        ])
+        #expect(cmd.directParams?.strict == false)
     }
 
     @Test func extractCommandPartialDirectParamsRejects() {
@@ -181,6 +193,34 @@ struct PEXCLITests {
 
         #expect(request.options.minCapacitanceF == nil)
         #expect(request.options.minResistanceOhm == nil)
+        #expect(request.options.strictValidation == true)
+    }
+
+    @Test func buildRequestFromConfigFileHonorsStrictCLIOverrides() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(tmpDir) }
+
+        let configURL = tmpDir.appending(path: "config.json")
+
+        try writeConfig(strictValidation: true, to: configURL)
+        let nonStrictCommand = try ExtractCommand(arguments: [
+            "--config",
+            configURL.path(percentEncoded: false),
+            "--non-strict",
+        ])
+        let nonStrictRequest = try await nonStrictCommand.buildRequestFromConfigFile(configURL)
+        #expect(nonStrictRequest.options.strictValidation == false)
+
+        try writeConfig(strictValidation: false, to: configURL)
+        let strictCommand = try ExtractCommand(arguments: [
+            "--config",
+            configURL.path(percentEncoded: false),
+            "--strict",
+        ])
+        let strictRequest = try await strictCommand.buildRequestFromConfigFile(configURL)
+        #expect(strictRequest.options.strictValidation == true)
     }
 
     // MARK: - ParseCommand Argument Parsing
@@ -539,6 +579,22 @@ private func removeTemporaryItem(_ url: URL) {
     } catch {
         Issue.record("Failed to remove temporary item at \(url.path(percentEncoded: false)): \(error)")
     }
+}
+
+private func writeConfig(strictValidation: Bool, to url: URL) throws {
+    let configJSON: [String: Any] = [
+        "topCell": "T",
+        "inputs": [
+            "layout": "a.gds",
+            "netlist": "a.sp",
+            "technology": "t.json",
+        ],
+        "options": [
+            "strictValidation": strictValidation,
+        ],
+    ]
+    let data = try JSONSerialization.data(withJSONObject: configJSON, options: .prettyPrinted)
+    try data.write(to: url)
 }
 
 private func makeCLIResult(

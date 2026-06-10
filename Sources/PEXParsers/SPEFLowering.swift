@@ -4,7 +4,11 @@ import PEXCore
 public struct SPEFLowering: Sendable {
     public init() {}
 
-    public func lower(_ tree: SPEFParseTree, cornerID: PEXCornerID) throws -> ParasiticIR {
+    public func lower(
+        _ tree: SPEFParseTree,
+        cornerID: PEXCornerID,
+        options: PEXRunOptions = .default
+    ) throws -> ParasiticIR {
         let (capScale, resScale) = unitScaleFactors(from: tree.header)
         let delimiter = tree.header.delimiter
         let explicitNodeOwners = explicitNodeOwnerMap(from: tree)
@@ -108,6 +112,14 @@ public struct SPEFLowering: Sendable {
                         seenCouplingValues[couplingKey] = scaledValue
                     }
 
+                    guard options.extractMode != .rOnly else { continue }
+                    if kind == .coupling && !options.includeCouplingCaps {
+                        continue
+                    }
+                    if let minCapacitanceF = options.minCapacitanceF, scaledValue < minCapacitanceF {
+                        continue
+                    }
+
                     let remoteRef: NodeRef?
                     if let remoteNode {
                         let remoteNetName = externalNetName(
@@ -136,8 +148,14 @@ public struct SPEFLowering: Sendable {
 
                     if kind == .coupling {
                         totalCouplingCap += scaledValue
+                    } else {
+                        totalGroundCap += scaledValue
                     }
                 } else {
+                    guard options.extractMode != .rOnly else { continue }
+                    if let minCapacitanceF = options.minCapacitanceF, scaledValue < minCapacitanceF {
+                        continue
+                    }
                     // Ground cap
                     let element = ParasiticElement(
                         id: "\(netName.value)_C\(cap.id)",
@@ -155,9 +173,13 @@ public struct SPEFLowering: Sendable {
             // Convert resistors
             var totalResistance = 0.0
             for res in netBlock.resistors {
+                guard options.extractMode != .cOnly else { continue }
                 let resolvedA = resolveNameMap(res.nodeA, nameMap: tree.nameMap)
                 let resolvedB = resolveNameMap(res.nodeB, nameMap: tree.nameMap)
                 let scaledValue = res.value * resScale
+                if let minResistanceOhm = options.minResistanceOhm, scaledValue < minResistanceOhm {
+                    continue
+                }
 
                 let element = ParasiticElement(
                     id: "\(netName.value)_R\(res.id)",

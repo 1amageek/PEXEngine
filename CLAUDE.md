@@ -31,7 +31,7 @@ swift run pexengine extract --config <path-to-config.json> --json
 swift build -c release
 ```
 
-- Swift Tools Version: **6.2** (requires Swift 6.2+, macOS 26+)
+- Swift Tools Version: **6.3** (requires Swift 6.3+, macOS 26+)
 - Test framework: **Swift Testing** (`import Testing`, `@Test`, `#expect`)  — not XCTest
 - External dependency: `apple/swift-configuration` (CLI config loading)
 - 89 tests across 10 test suites

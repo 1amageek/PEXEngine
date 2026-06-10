@@ -12,6 +12,7 @@ public struct ExtractCommand: Sendable {
     public let configURL: URL?
     public let jsonOutput: Bool
     public let directParams: DirectParams?
+    public let strictValidationOverride: Bool?
 
     public struct DirectParams: Sendable {
         public let layoutPath: String
@@ -42,7 +43,7 @@ public struct ExtractCommand: Sendable {
         var minCapF: Double?
         var minResOhm: Double?
         var outputPath: String?
-        var strict = false
+        var strictOverride: Bool?
 
         var i = 0
         while i < arguments.count {
@@ -118,7 +119,9 @@ public struct ExtractCommand: Sendable {
                 }
                 outputPath = arguments[i]
             case "--strict":
-                strict = true
+                strictOverride = true
+            case "--non-strict":
+                strictOverride = false
             default:
                 break
             }
@@ -142,7 +145,7 @@ public struct ExtractCommand: Sendable {
                 minCapF: minCapF,
                 minResOhm: minResOhm,
                 outputPath: outputPath,
-                strict: strict
+                strict: strictOverride ?? true
             )
         } else if layoutPath != nil || netlistPath != nil || topCell != nil || technologyPath != nil {
             throw PEXError.invalidInput("Direct parameter mode requires --layout, --netlist, --top-cell, and --technology")
@@ -152,6 +155,7 @@ public struct ExtractCommand: Sendable {
         }
 
         self.jsonOutput = json
+        self.strictValidationOverride = strictOverride
     }
 
     public func run() async throws {
@@ -168,7 +172,7 @@ public struct ExtractCommand: Sendable {
 
         let result = try await engine.run(request)
 
-        // 結果を出力（CI で stdout から診断情報を取得できるように先に出力）
+        // Print results first so CI can collect diagnostics from stdout.
         if jsonOutput {
             let resolver = try PEXArtifactResolver(manifestURL: result.manifestURL)
             let output = ExtractJSONOutput(
@@ -189,7 +193,7 @@ public struct ExtractCommand: Sendable {
             print(formatter.formatResult(result))
         }
 
-        // status に基づいて終了コードを制御
+        // Convert non-success statuses into process exit failures.
         switch result.status {
         case .success:
             break
@@ -226,7 +230,7 @@ public struct ExtractCommand: Sendable {
             "output.workspace": ".xcircuite/pex/runs",
             "options.includeCouplingCaps": true,
             "options.maxParallelJobs": 2,
-            "options.strictValidation": false,
+            "options.strictValidation": true,
         ])
 
         let config = ConfigReader(providers: [provider, defaults])
@@ -243,7 +247,8 @@ public struct ExtractCommand: Sendable {
 
         let includeCouplingCaps = config.bool(forKey: "options.includeCouplingCaps", default: true)
         let maxParallelJobs = config.int(forKey: "options.maxParallelJobs", default: 2)
-        let strictValidation = config.bool(forKey: "options.strictValidation", default: false)
+        let configuredStrictValidation = config.bool(forKey: "options.strictValidation", default: true)
+        let strictValidation = strictValidationOverride ?? configuredStrictValidation
         let minCapacitanceF = config.double(forKey: "options.minCapacitanceF")
         let minResistanceOhm = config.double(forKey: "options.minResistanceOhm")
 
