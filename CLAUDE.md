@@ -34,7 +34,7 @@ swift build -c release
 - Swift Tools Version: **6.3** (requires Swift 6.3+, macOS 26+)
 - Test framework: **Swift Testing** (`import Testing`, `@Test`, `#expect`)  — not XCTest
 - External dependency: `apple/swift-configuration` (CLI config loading)
-- 89 tests across 10 test suites
+- 157 tests across 15 test suites
 
 ## Architecture
 
@@ -45,8 +45,8 @@ The package is designed around a pipeline: `PEXRunRequest` → adapter execution
 | Module | Responsibility | Files |
 |---|---|---|
 | **PEXCore** | Domain models, IR, protocols, typed errors, registries, validation | ~53 files |
-| **PEXAdapters** | Backend adapters (`MockPEXAdapter`, `ProcessRunner`) | 3 files |
-| **PEXParsers** | SPEF lexer/parser/lowering pipeline | 7 files |
+| **PEXAdapters** | Backend adapters (`MagicPEXAdapter` real extraction, `MockPEXAdapter`, `MagicToolchain`, `ProcessRunner`, default backend registry) | 6 files |
+| **PEXParsers** | SPEF lexer/parser/lowering pipeline, SPEF writer, Magic SPICE parasitic parser | 13 files |
 | **PEXPersistence** | Manifest, workspace, IR serializer, artifact store, report generator | 5 files |
 | **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, default engine | 5 files |
 | **PEXEngine** | Umbrella module (`@_exported import` of all above) | 1 file |
@@ -95,7 +95,7 @@ circuit-studio's `PEXCommandService` invokes: `pexengine extract --config <path>
 - **One file, one type** — each file contains one primary type
 - **Protocol-oriented** — public interfaces defined as protocols, implementations separate
 - **Dependencies injected** via protocols for testability
-- **MockPEXAdapter is mandatory** — used for all tests, preview, and development
+- **MockPEXAdapter stays first-class** — deterministic backend for tests, previews, and development; `MagicPEXAdapter` is the real extraction backend and its tests are tool-gated (skip when Magic is absent)
 - Adapters must declare capability flags (coupling, corner sweep, RC reduction, incremental)
 
 ## Artifact Output Structure
@@ -113,5 +113,5 @@ Each run produces immutable artifacts:
 
 1. **M1** (Complete): Core domain + Mock adapter + SPEF parser + IR validator + JSON persistence + CLI + multi-corner orchestration
 2. **M2**: DSPF parser + additional output format support
-3. **M3**: Real backend adapter integration (Calibre/StarRC/Quantus)
-4. **M4**: semiconductor-layout integration adapter
+3. **M3** (Complete for Magic): real backend adapter — `MagicPEXAdapter` + `MagicSPICEParasiticParser` run Magic parasitic extraction end to end; Calibre/StarRC/Quantus adapters remain open
+4. **M4** (Complete): semiconductor-layout / circuit-studio integration (`PEXCommandService` invokes the CLI; results feed post-layout simulation)
