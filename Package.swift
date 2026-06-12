@@ -38,7 +38,7 @@ let package = Package(
         .testTarget(name: "PEXCoreTests", dependencies: ["PEXCore"]),
         .testTarget(
             name: "PEXAdaptersTests",
-            dependencies: ["PEXAdapters", "PEXCore"],
+            dependencies: ["PEXAdapters", "PEXCore", "PEXParsers"],
             resources: [
                 .copy("Fixtures/pex_plate.gds"),
                 .copy("Fixtures/inv1.gds"),
