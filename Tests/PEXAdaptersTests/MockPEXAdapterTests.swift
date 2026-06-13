@@ -111,6 +111,45 @@ struct MockPEXAdapterTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func processRunnerTimeoutTerminatesChildProcessTree() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "PEXProcessRunnerTreeTimeout-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { removeTemporaryRoot(root) }
+
+        let childSurvived = root.appending(path: "child-survived")
+        let executable = try writeExecutable(
+            named: "mock-process-tree",
+            in: root,
+            contents: """
+            #!/bin/sh
+            (
+                sleep 1
+                touch \(shellSingleQuoted(childSurvived.path(percentEncoded: false)))
+            ) &
+            printf started
+            sleep 10
+            """
+        )
+
+        let runner = ProcessRunner(
+            timeoutSeconds: 0.1,
+            terminationGraceSeconds: 0.05,
+            pipeDrainGraceSeconds: 0.05
+        )
+        do {
+            _ = try await runner.run(executableURL: executable)
+            Issue.record("Expected timeout")
+        } catch let error as PEXError {
+            #expect(error.kind == .backendExecutionFailed)
+            #expect(error.message.contains("timed out"))
+        }
+
+        try await Task.sleep(nanoseconds: 1_300_000_000)
+        #expect(!FileManager.default.fileExists(atPath: childSurvived.path(percentEncoded: false)))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func processRunnerRejectsInvalidTimingConfiguration() async throws {
         let runner = ProcessRunner(timeoutSeconds: 0, terminationGraceSeconds: 0.05)
         do {
@@ -225,5 +264,9 @@ struct MockPEXAdapterTests {
             ofItemAtPath: url.path(percentEncoded: false)
         )
         return url
+    }
+
+    private func shellSingleQuoted(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }

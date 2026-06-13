@@ -407,6 +407,45 @@ struct SPEFParserTests {
         #expect(abs(elementSum - 0.05e-12) <= 1e-21, "the coupling must carry the physical value once, not doubled")
     }
 
+    @Test("Parallel coupling caps with the same endpoints are preserved while reciprocal listings are deduped")
+    func parallelCouplingsWithSameEndpointsArePreserved() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "parallel"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET A 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        2 A:1 B:1 0.05
+        *END
+
+        *D_NET B 0.1
+        *CONN
+        *CAP
+        1 A:1 B:1 0.05
+        2 A:1 B:1 0.05
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+
+        let couplings = ir.elements.filter { $0.kind == .coupling }
+        #expect(couplings.count == 2, "two physical parallel caps must not collapse into one endpoint-pair entry")
+
+        let perNetSum = ir.nets.map(\.totalCouplingCapF).reduce(0, +)
+        let elementSum = couplings.map(\.value).reduce(0, +)
+        #expect(abs(perNetSum - elementSum) <= 1e-21)
+        #expect(abs(elementSum - 0.10e-12) <= 1e-21)
+    }
+
     @Test("A coupling listed reciprocally with inconsistent values fails loudly")
     func reciprocalCouplingValueMismatchThrows() throws {
         let spef = """

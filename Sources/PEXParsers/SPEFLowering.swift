@@ -17,11 +17,7 @@ public struct SPEFLowering: Sendable {
         var nets: [ParasiticNet] = []
         var allElements: [ParasiticElement] = []
         var externalNodesByNet: [NetName: Set<String>] = [:]
-        // Tracks coupling caps already emitted, keyed by their unordered
-        // resolved-node pair. IEEE 1481 SPEF lists a coupling reciprocally in
-        // both coupled nets' *CAP sections, so the same physical cap is seen
-        // twice during the per-net walk; without this it would be counted twice.
-        var seenCouplingValues: [String: Double] = [:]
+        var couplingDedupe = CouplingDedupe()
 
         for netBlock in tree.nets {
             let netName = NetName(resolveNameMap(netBlock.netName, nameMap: tree.nameMap))
@@ -91,25 +87,15 @@ public struct SPEFLowering: Sendable {
                     }
                     let kind: ElementKind = remoteNode == nil ? .capacitor : .coupling
 
-                    // Count each physical coupling cap exactly once (single
-                    // attribution to the first net that lists it), matching the
-                    // canonical-IR convention of the Magic path. The key is the
-                    // unordered resolved-node pair, so it is independent of
-                    // endpoint ordering and never drops a coupling that a writer
-                    // lists only once (non-reciprocal SPEF).
                     if kind == .coupling {
-                        let couplingKey = [resolvedA, resolvedB].sorted().joined(separator: "\u{1}")
-                        if let previousValue = seenCouplingValues[couplingKey] {
-                            let scale = Swift.max(abs(previousValue), abs(scaledValue))
-                            guard abs(previousValue - scaledValue) <= scale * 1e-9 else {
-                                throw PEXError.parseFailed(
-                                    cornerID: cornerID,
-                                    message: "SPEF coupling cap between \(resolvedA) and \(resolvedB) is listed with inconsistent values (\(previousValue) F vs \(scaledValue) F)"
-                                )
-                            }
+                        let endpointPair = CouplingEndpointPair(resolvedA, resolvedB)
+                        if couplingDedupe.shouldSkipReciprocalDuplicate(
+                            endpointPair: endpointPair,
+                            netName: netName,
+                            value: scaledValue
+                        ) {
                             continue
                         }
-                        seenCouplingValues[couplingKey] = scaledValue
                     }
 
                     guard options.extractMode != .rOnly else { continue }
@@ -202,6 +188,8 @@ public struct SPEFLowering: Sendable {
             )
             nets.append(net)
         }
+
+        try couplingDedupe.validateNoMismatchedReciprocals(cornerID: cornerID)
 
         let existingNetNames = Set(nets.map(\.name))
         for netName in externalNodesByNet.keys.sorted(by: { $0.value < $1.value }) where !existingNetNames.contains(netName) {
@@ -319,4 +307,68 @@ public struct SPEFLowering: Sendable {
     private func ownerNetName(of nodeName: String, delimiter: String) -> String {
         nodeName.components(separatedBy: delimiter).first ?? nodeName
     }
+}
+
+private struct CouplingDedupe: Sendable {
+    private var pendingByEndpointPair: [CouplingEndpointPair: [PendingCoupling]] = [:]
+
+    mutating func shouldSkipReciprocalDuplicate(
+        endpointPair: CouplingEndpointPair,
+        netName: NetName,
+        value: Double
+    ) -> Bool {
+        var pending = pendingByEndpointPair[endpointPair, default: []]
+        if let matchIndex = pending.firstIndex(where: { candidate in
+            candidate.netName != netName && Self.valuesMatch(candidate.value, value)
+        }) {
+            pending.remove(at: matchIndex)
+            pendingByEndpointPair[endpointPair] = pending.isEmpty ? nil : pending
+            return true
+        }
+
+        pending.append(PendingCoupling(netName: netName, value: value))
+        pendingByEndpointPair[endpointPair] = pending
+        return false
+    }
+
+    func validateNoMismatchedReciprocals(cornerID: PEXCornerID) throws {
+        for (endpointPair, pending) in pendingByEndpointPair {
+            let netNames = Set(pending.map(\.netName))
+            guard netNames.count > 1 else { continue }
+
+            let values = pending
+                .map { "\($0.netName.value)=\($0.value) F" }
+                .sorted()
+                .joined(separator: ", ")
+            throw PEXError.parseFailed(
+                cornerID: cornerID,
+                message: "SPEF coupling cap between \(endpointPair.nodeA) and \(endpointPair.nodeB) is listed with inconsistent values (\(values))"
+            )
+        }
+    }
+
+    private static func valuesMatch(_ lhs: Double, _ rhs: Double) -> Bool {
+        let scale = Swift.max(abs(lhs), abs(rhs))
+        return abs(lhs - rhs) <= scale * 1e-9
+    }
+}
+
+private struct CouplingEndpointPair: Sendable, Hashable {
+    let nodeA: String
+    let nodeB: String
+
+    init(_ first: String, _ second: String) {
+        if first <= second {
+            nodeA = first
+            nodeB = second
+        } else {
+            nodeA = second
+            nodeB = first
+        }
+    }
+}
+
+private struct PendingCoupling: Sendable {
+    let netName: NetName
+    let value: Double
 }

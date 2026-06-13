@@ -3,6 +3,8 @@ import PEXCore
 import Synchronization
 #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
 import Darwin
+#elseif os(Linux)
+import Glibc
 #endif
 
 public struct ProcessRunner: Sendable {
@@ -40,23 +42,12 @@ public struct ProcessRunner: Sendable {
     ) async throws -> ProcessResult {
         try validateConfiguration()
 
-        let process = Process()
-        process.executableURL = executableURL
-        process.arguments = arguments
-        process.currentDirectoryURL = workingDirectory
-
-        if let environment {
-            process.environment = environment
-        }
-
         let timeoutSeconds = timeoutSeconds
         let terminationGraceSeconds = terminationGraceSeconds
         let pipeDrainGraceSeconds = pipeDrainGraceSeconds
         let executablePath = executableURL.path(percentEncoded: false)
         let outputPipe = Pipe()
         let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
 
         // Drain both pipes while the process runs so a verbose tool cannot block
         // on a full pipe before exiting.
@@ -143,17 +134,16 @@ public struct ProcessRunner: Sendable {
                 }
             }
 
-            process.terminationHandler = { @Sendable proc in
-                state.withLock {
-                    $0.processTerminated = true
-                    $0.exitCode = proc.terminationStatus
-                }
-                finalizeIfReady(false)
-                scheduleForcedFinalize()
-            }
-
+            let processID: pid_t
             do {
-                try process.run()
+                processID = try Self.spawnInNewProcessGroup(
+                    executablePath: executablePath,
+                    arguments: arguments,
+                    environment: environment,
+                    workingDirectory: workingDirectory,
+                    outputPipe: outputPipe,
+                    errorPipe: errorPipe
+                )
             } catch {
                 outputPipe.fileHandleForWriting.closeFile()
                 errorPipe.fileHandleForWriting.closeFile()
@@ -180,6 +170,16 @@ public struct ProcessRunner: Sendable {
             errorPipe.fileHandleForWriting.closeFile()
 
             Task.detached {
+                let exitCode = Self.waitForProcessExit(processID: processID)
+                state.withLock {
+                    $0.processTerminated = true
+                    $0.exitCode = exitCode
+                }
+                finalizeIfReady(false)
+                scheduleForcedFinalize()
+            }
+
+            Task.detached {
                 let startedAt = Date()
                 do {
                     while true {
@@ -188,7 +188,7 @@ public struct ProcessRunner: Sendable {
                         if shouldStop { return }
                         if Date().timeIntervalSince(startedAt) >= timeoutSeconds {
                             state.withLock { $0.didTimeout = true }
-                            process.terminate()
+                            Self.sendSignalToProcessGroup(processID: processID, signal: SIGTERM)
                             break
                         }
                     }
@@ -202,12 +202,8 @@ public struct ProcessRunner: Sendable {
                     return
                 }
                 if state.withLock({ $0.didResume }) { return }
-                if process.isRunning {
-                #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
-                    kill(process.processIdentifier, SIGKILL)
-                #else
-                    process.terminate()
-                #endif
+                if !state.withLock({ $0.processTerminated }) {
+                    Self.sendSignalToProcessGroup(processID: processID, signal: SIGKILL)
                 }
                 scheduleForcedFinalize()
             }
@@ -229,6 +225,224 @@ public struct ProcessRunner: Sendable {
     private static func validatePositiveFinite(_ value: Double, name: String) throws {
         guard value.isFinite, value > 0 else {
             throw PEXError.invalidInput("\(name) must be a positive finite value")
+        }
+    }
+
+    private static func spawnInNewProcessGroup(
+        executablePath: String,
+        arguments: [String],
+        environment: [String: String]?,
+        workingDirectory: URL?,
+        outputPipe: Pipe,
+        errorPipe: Pipe
+    ) throws -> pid_t {
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Linux)
+        var actions: posix_spawn_file_actions_t? = nil
+        try requirePOSIXSuccess(
+            posix_spawn_file_actions_init(&actions),
+            operation: "posix_spawn_file_actions_init"
+        )
+        defer { posix_spawn_file_actions_destroy(&actions) }
+
+        var attributes: posix_spawnattr_t? = nil
+        try requirePOSIXSuccess(
+            posix_spawnattr_init(&attributes),
+            operation: "posix_spawnattr_init"
+        )
+        defer { posix_spawnattr_destroy(&attributes) }
+
+        let outputReadFD = outputPipe.fileHandleForReading.fileDescriptor
+        let outputWriteFD = outputPipe.fileHandleForWriting.fileDescriptor
+        let errorReadFD = errorPipe.fileHandleForReading.fileDescriptor
+        let errorWriteFD = errorPipe.fileHandleForWriting.fileDescriptor
+
+        try addCloseFileAction(&actions, fileDescriptor: outputReadFD)
+        try addCloseFileAction(&actions, fileDescriptor: errorReadFD)
+        try addDuplicateFileAction(&actions, from: outputWriteFD, to: STDOUT_FILENO)
+        try addDuplicateFileAction(&actions, from: errorWriteFD, to: STDERR_FILENO)
+        if outputWriteFD != STDOUT_FILENO {
+            try addCloseFileAction(&actions, fileDescriptor: outputWriteFD)
+        }
+        if errorWriteFD != STDERR_FILENO {
+            try addCloseFileAction(&actions, fileDescriptor: errorWriteFD)
+        }
+
+        if let workingDirectory {
+            let directoryPath = workingDirectory.path(percentEncoded: false)
+            try directoryPath.withCString { path in
+                try requirePOSIXSuccess(
+                    addChangeDirectoryFileAction(&actions, path: path),
+                    operation: "posix_spawn_file_actions_addchdir"
+                )
+            }
+        }
+
+        try requirePOSIXSuccess(
+            posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)),
+            operation: "posix_spawnattr_setflags"
+        )
+        try requirePOSIXSuccess(
+            posix_spawnattr_setpgroup(&attributes, 0),
+            operation: "posix_spawnattr_setpgroup"
+        )
+
+        let argv = try POSIXCStringArray([executablePath] + arguments)
+        let envp = try environment.map { env in
+            try POSIXCStringArray(env.keys.sorted().map { key in "\(key)=\(env[key] ?? "")" })
+        }
+
+        var processID = pid_t()
+        let spawnResult = executablePath.withCString { executablePointer in
+            argv.withUnsafeMutablePointers { argvPointer in
+                if let envp {
+                    return envp.withUnsafeMutablePointers { envPointer in
+                        posix_spawn(
+                            &processID,
+                            executablePointer,
+                            &actions,
+                            &attributes,
+                            argvPointer,
+                            envPointer
+                        )
+                    }
+                }
+                return posix_spawn(
+                    &processID,
+                    executablePointer,
+                    &actions,
+                    &attributes,
+                    argvPointer,
+                    inheritedEnvironment
+                )
+            }
+        }
+        try requirePOSIXSuccess(spawnResult, operation: "posix_spawn")
+        return processID
+    #else
+        throw ProcessLaunchError.unsupportedPlatform
+    #endif
+    }
+
+    private static func addDuplicateFileAction(
+        _ actions: inout posix_spawn_file_actions_t?,
+        from source: Int32,
+        to destination: Int32
+    ) throws {
+        try requirePOSIXSuccess(
+            posix_spawn_file_actions_adddup2(&actions, source, destination),
+            operation: "posix_spawn_file_actions_adddup2"
+        )
+    }
+
+    private static func addCloseFileAction(
+        _ actions: inout posix_spawn_file_actions_t?,
+        fileDescriptor: Int32
+    ) throws {
+        try requirePOSIXSuccess(
+            posix_spawn_file_actions_addclose(&actions, fileDescriptor),
+            operation: "posix_spawn_file_actions_addclose"
+        )
+    }
+
+    private static func addChangeDirectoryFileAction(
+        _ actions: inout posix_spawn_file_actions_t?,
+        path: UnsafePointer<CChar>
+    ) -> Int32 {
+    #if os(Linux)
+        posix_spawn_file_actions_addchdir_np(&actions, path)
+    #else
+        posix_spawn_file_actions_addchdir(&actions, path)
+    #endif
+    }
+
+    private static func requirePOSIXSuccess(_ result: Int32, operation: String) throws {
+        guard result == 0 else {
+            throw ProcessLaunchError.posixFailure(operation: operation, code: result)
+        }
+    }
+
+    private static var inheritedEnvironment: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?> {
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        Darwin.environ
+    #elseif os(Linux)
+        Glibc.environ
+    #endif
+    }
+
+    private static func waitForProcessExit(processID: pid_t) -> Int32 {
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Linux)
+        var status: Int32 = 0
+        while true {
+            let result = waitpid(processID, &status, 0)
+            if result == processID {
+                return exitCode(fromWaitStatus: status)
+            }
+            if result == -1, errno == EINTR {
+                continue
+            }
+            return -1
+        }
+    #else
+        return -1
+    #endif
+    }
+
+    private static func exitCode(fromWaitStatus status: Int32) -> Int32 {
+        let terminationSignal = status & 0x7f
+        if terminationSignal == 0 {
+            return (status >> 8) & 0xff
+        }
+        return 128 + terminationSignal
+    }
+
+    private static func sendSignalToProcessGroup(processID: pid_t, signal: Int32) {
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Linux)
+        let processGroupID = -processID
+        if kill(processGroupID, signal) == -1, errno != ESRCH {
+            kill(processID, signal)
+        }
+    #endif
+    }
+}
+
+private final class POSIXCStringArray {
+    private var pointers: [UnsafeMutablePointer<CChar>?] = []
+
+    init(_ strings: [String]) throws {
+        for string in strings {
+            guard let pointer = strdup(string) else {
+                throw ProcessLaunchError.posixFailure(operation: "strdup", code: ENOMEM)
+            }
+            pointers.append(pointer)
+        }
+        pointers.append(nil)
+    }
+
+    deinit {
+        for pointer in pointers {
+            free(pointer)
+        }
+    }
+
+    func withUnsafeMutablePointers<R>(
+        _ body: (UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) throws -> R
+    ) rethrows -> R {
+        try pointers.withUnsafeMutableBufferPointer { buffer in
+            try body(buffer.baseAddress!)
+        }
+    }
+}
+
+private enum ProcessLaunchError: Error, CustomStringConvertible {
+    case posixFailure(operation: String, code: Int32)
+    case unsupportedPlatform
+
+    var description: String {
+        switch self {
+        case .posixFailure(let operation, let code):
+            return "\(operation) failed with errno \(code): \(String(cString: strerror(code)))"
+        case .unsupportedPlatform:
+            return "Process groups are not supported on this platform"
         }
     }
 }
