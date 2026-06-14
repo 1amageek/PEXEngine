@@ -168,12 +168,53 @@ public struct ProcessRunner: Sendable {
             }
             outputPipe.fileHandleForWriting.closeFile()
             errorPipe.fileHandleForWriting.closeFile()
+            let processGroupID = Self.processGroupID(for: processID) ?? processID
 
             Task.detached {
                 let exitCode = Self.waitForProcessExit(processID: processID)
                 state.withLock {
                     $0.processTerminated = true
                     $0.exitCode = exitCode
+                }
+
+                let pipesClosedAtExit = state.withLock { $0.pipesClosed }
+                if !pipesClosedAtExit {
+                    do {
+                        try await Self.sleep(seconds: pipeDrainGraceSeconds)
+                    } catch {
+                        return
+                    }
+                }
+
+                let shouldCleanProcessGroup = state.withLock { !$0.didResume }
+                let didSignalProcessGroup: Bool
+                if shouldCleanProcessGroup {
+                    didSignalProcessGroup = Self.sendSignalToProcessGroup(
+                        processID: processID,
+                        processGroupID: processGroupID,
+                        signal: SIGTERM
+                    )
+                } else {
+                    didSignalProcessGroup = false
+                }
+
+                if didSignalProcessGroup {
+                    do {
+                        try await Self.sleep(seconds: terminationGraceSeconds)
+                    } catch {
+                        return
+                    }
+                    if state.withLock({ !$0.didResume }) {
+                        _ = Self.sendSignalToProcessGroup(
+                            processID: processID,
+                            processGroupID: processGroupID,
+                            signal: SIGKILL
+                        )
+                    }
+                }
+
+                state.withLock {
+                    $0.processGroupCleanupComplete = true
                 }
                 finalizeIfReady(false)
                 scheduleForcedFinalize()
@@ -188,7 +229,11 @@ public struct ProcessRunner: Sendable {
                         if shouldStop { return }
                         if Date().timeIntervalSince(startedAt) >= timeoutSeconds {
                             state.withLock { $0.didTimeout = true }
-                            Self.sendSignalToProcessGroup(processID: processID, signal: SIGTERM)
+                            _ = Self.sendSignalToProcessGroup(
+                                processID: processID,
+                                processGroupID: processGroupID,
+                                signal: SIGTERM
+                            )
                             break
                         }
                     }
@@ -203,7 +248,11 @@ public struct ProcessRunner: Sendable {
                 }
                 if state.withLock({ $0.didResume }) { return }
                 if !state.withLock({ $0.processTerminated }) {
-                    Self.sendSignalToProcessGroup(processID: processID, signal: SIGKILL)
+                    _ = Self.sendSignalToProcessGroup(
+                        processID: processID,
+                        processGroupID: processGroupID,
+                        signal: SIGKILL
+                    )
                 }
                 scheduleForcedFinalize()
             }
@@ -277,6 +326,12 @@ public struct ProcessRunner: Sendable {
             }
         }
 
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        try requirePOSIXSuccess(
+            posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID)),
+            operation: "posix_spawnattr_setflags"
+        )
+    #else
         try requirePOSIXSuccess(
             posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP)),
             operation: "posix_spawnattr_setflags"
@@ -285,6 +340,7 @@ public struct ProcessRunner: Sendable {
             posix_spawnattr_setpgroup(&attributes, 0),
             operation: "posix_spawnattr_setpgroup"
         )
+    #endif
 
         let argv = try POSIXCStringArray([executablePath] + arguments)
         let envp = try environment.map { env in
@@ -395,12 +451,31 @@ public struct ProcessRunner: Sendable {
         return 128 + terminationSignal
     }
 
-    private static func sendSignalToProcessGroup(processID: pid_t, signal: Int32) {
+    @discardableResult
+    private static func sendSignalToProcessGroup(
+        processID: pid_t,
+        processGroupID: pid_t,
+        signal: Int32
+    ) -> Bool {
     #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Linux)
-        let processGroupID = -processID
-        if kill(processGroupID, signal) == -1, errno != ESRCH {
-            kill(processID, signal)
+        if processGroupID != getpgrp() {
+            if kill(-processGroupID, signal) == 0 {
+                return true
+            }
+            guard errno != ESRCH else { return false }
         }
+        return kill(processID, signal) == 0
+    #else
+        return false
+    #endif
+    }
+
+    private static func processGroupID(for processID: pid_t) -> pid_t? {
+    #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS) || os(Linux)
+        let processGroupID = getpgid(processID)
+        return processGroupID >= 0 ? processGroupID : nil
+    #else
+        return nil
     #endif
     }
 }
@@ -451,13 +526,18 @@ private struct ProcessCompletionState: Sendable {
     var stdoutClosed = false
     var stderrClosed = false
     var processTerminated = false
+    var processGroupCleanupComplete = false
     var exitCode: Int32 = 0
     var didTimeout = false
     var didResume = false
     var forceFinalizeScheduled = false
 
+    var pipesClosed: Bool {
+        stdoutClosed && stderrClosed
+    }
+
     var isComplete: Bool {
-        stdoutClosed && stderrClosed && processTerminated
+        pipesClosed && processTerminated && processGroupCleanupComplete
     }
 
     var snapshot: ProcessCompletionSnapshot {

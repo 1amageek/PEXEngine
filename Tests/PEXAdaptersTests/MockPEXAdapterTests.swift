@@ -200,19 +200,12 @@ struct MockPEXAdapterTests {
             named: "mock-parent-exit",
             in: root,
             contents: """
-            #!/usr/bin/env perl
-            print "parent-exited\\n";
-            my $pid = fork();
-            if (!defined $pid) {
-                exit 2;
-            }
-            if ($pid == 0) {
-                sleep 8;
-                open my $fh, ">", "\(childFinished.path(percentEncoded: false))";
-                print $fh "done\\n";
-                close $fh;
-                exit 0;
-            }
+            #!/bin/sh
+            (
+                sleep 0.4;
+                touch \(shellSingleQuoted(childFinished.path(percentEncoded: false)))
+            ) &
+            printf "parent-exited\\n"
             exit 0;
             """
         )
@@ -226,6 +219,8 @@ struct MockPEXAdapterTests {
 
         #expect(result.exitCode == 0)
         #expect(result.stdout.contains("parent-exited"))
+
+        try await Task.sleep(nanoseconds: 800_000_000)
         #expect(!FileManager.default.fileExists(atPath: childFinished.path(percentEncoded: false)))
     }
 
