@@ -4,6 +4,7 @@ public enum ElementKind: String, Sendable, Codable, Hashable, CustomStringConver
     case resistor
     case capacitor
     case coupling
+    case inductor
 
     public var description: String { rawValue }
 }

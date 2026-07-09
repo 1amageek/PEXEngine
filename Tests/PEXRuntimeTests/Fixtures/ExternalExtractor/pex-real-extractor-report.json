@@ -1,0 +1,1057 @@
+{
+  "cases": [
+    {
+      "artifactRefs": [
+        {
+          "artifactID": "sky130-plate-magic-pex:layoutPath",
+          "byteCount": 182,
+          "format": "GDS",
+          "kind": "layout",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+          "role": "input",
+          "sha256": "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062",
+          "sourceField": "layoutPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex:sourceNetlistPath",
+          "byteCount": 19,
+          "format": "SPICE",
+          "kind": "source-netlist",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir",
+          "role": "input",
+          "sha256": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130",
+          "sourceField": "sourceNetlistPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex:technologyPath",
+          "byteCount": 182,
+          "format": "JSON",
+          "kind": "technology",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
+          "role": "input",
+          "sha256": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae",
+          "sourceField": "technologyPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex:manifestPath",
+          "byteCount": 8218,
+          "format": "JSON",
+          "kind": "pex-artifact-manifest",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json",
+          "role": "run-artifact",
+          "sha256": "5a87dafdd3cf2a732e0c07d1c17ff1e1f848e45b37fab6e7eecae5a6d94b9b3a",
+          "sourceField": "manifestPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex:irPath",
+          "byteCount": 886,
+          "format": "JSON",
+          "kind": "parasitic-ir",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/ir/tt.json",
+          "role": "normalized",
+          "sha256": "2038b42b6d2798d04cf964a199c12662aae23c0345a6039988771d3ce45b610d",
+          "sourceField": "irPath"
+        }
+      ],
+      "caseID": "sky130-plate-magic-pex",
+      "command": {
+        "command": [
+          "swift",
+          "run",
+          "pexengine",
+          "extract",
+          "--layout",
+          "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+          "--netlist",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir",
+          "--top-cell",
+          "pex_plate",
+          "--technology",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
+          "--backend",
+          "magic",
+          "--corner",
+          "tt",
+          "--out",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run",
+          "--non-strict",
+          "--json"
+        ],
+        "cwd": "/Users/1amageek/Desktop/LSI/PEXEngine",
+        "durationSeconds": 1.927020833012648,
+        "exitCode": 0,
+        "status": "passed",
+        "stderrCharacterCount": 130,
+        "stderrTail": "Building for debugging...\n[Computing dependencies]\n[Pre-planning 1\u2009/\u2009388]\n[Constructing 31\u2009/\u2009848]\n[1\u2009/\u20091]\nBuild complete! (0.73\u79d2)\n",
+        "stdoutCharacterCount": 3981,
+        "stdoutTail": "\"backendID\" : \"magic\",\n      \"corners\" : [\n        {\n          \"cornerID\" : {\n            \"value\" : \"tt\"\n          },\n          \"name\" : \"tt\",\n          \"parameters\" : {\n\n          }\n        }\n      ],\n      \"layoutFormat\" : \"gds\",\n      \"options\" : {\n        \"emitIRJSON\" : true,\n        \"emitRawArtifacts\" : true,\n        \"extractMode\" : \"rc\",\n        \"includeCouplingCaps\" : true,\n        \"maxParallelJobs\" : 2,\n        \"strictValidation\" : false\n      },\n      \"processProfile\" : {\n        \"metadata\" : {\n          \"deckRole\" : \"extraction\",\n          \"tool\" : \"magic\"\n        },\n        \"pdkID\" : \"sky130A\",\n        \"pdkRoot\" : \"\\/Users\\/1amageek\\/.volare\\/\",\n        \"primaryDeckPath\" : \"\\/Users\\/1amageek\\/.volare\\/sky130A\\/libs.tech\\/magic\\/sky130A.magicrc\",\n        \"profileID\" : \"sky130.open-pdk.signoff\",\n        \"requirementID\" : \"magic\",\n        \"source\" : \"SignoffPDKProfile\"\n      },\n      \"requestedArtifactKinds\" : [\n        \"rawOutput\",\n        \"parasiticIR\",\n        \"spefRoundTrip\",\n        \"report\"\n      ],\n      \"requestedOutputFormats\" : [\n        \"spice\"\n      ],\n      \"sourceNetlistFormat\" : \"spice\",\n      \"technology\" : {\n        \"path\" : \"\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-plate-magic-pex\\/technology.json\",\n        \"sourceKind\" : \"jsonFile\"\n      },\n      \"topCell\" : \"pex_plate\"\n    },\n    \"status\" : \"success\"\n  },\n  \"manifestURL\" : \"file:\\/\\/\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-plate-magic-pex\\/run\\/4ABD7676-D69D-40DD-9138-31074A1340FF\\/manifest.json\",\n  \"metrics\" : {\n    \"cornerCount\" : 1,\n    \"failureCount\" : 0,\n    \"successCount\" : 1,\n    \"totalDurationSeconds\" : 0.4681830406188965\n  },\n  \"runID\" : \"4ABD7676-D69D-40DD-9138-31074A1340FF\",\n  \"status\" : \"success\",\n  \"warnings\" : [\n    {\n      \"cornerID\" : {\n        \"value\" : \"tt\"\n      },\n      \"message\" : \"Failed to write SPEF round-trip artifact: invalidIdentifier(\\\"m1_0_0#\\\")\",\n      \"stage\" : \"persistence\"\n    }\n  ]\n}\n"
+      },
+      "corner": "tt",
+      "coverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.total-capacitance",
+        "pex.physical-value"
+      ],
+      "elementCount": 1,
+      "expectedGroundCapF": 4.2008e-15,
+      "expectedTotalCapacitanceF": 4.2008e-15,
+      "extractOutput": {
+        "completeness": {
+          "issues": [],
+          "status": "complete"
+        },
+        "extractorRun": {
+          "artifactIDs": [
+            "input-layoutInput",
+            "input-netlistInput",
+            "input-request",
+            "input-technologyInput",
+            "ir-tt",
+            "log-tt-extraction",
+            "rawOutput-tt-tt",
+            "report-summary",
+            "spef-roundtrip-tt"
+          ],
+          "cornerResults": [
+            {
+              "cornerID": {
+                "value": "tt"
+              },
+              "elementCount": 1,
+              "netCount": 1,
+              "parasiticIRArtifactID": "ir-tt",
+              "rawOutputArtifactIDs": [
+                "rawOutput-tt-tt"
+              ],
+              "rawOutputCount": 1,
+              "status": "success",
+              "totalCapacitanceF": 4.200800000000001e-15,
+              "totalCouplingCapF": 0,
+              "totalGroundCapF": 4.200800000000001e-15,
+              "totalResistanceOhm": 0,
+              "unitSystem": "canonical",
+              "warningCount": 1
+            }
+          ],
+          "diagnostics": [],
+          "readiness": {
+            "backendID": "magic",
+            "capabilities": {
+              "nativeOutputFormats": [
+                "spice"
+              ],
+              "supportsCornerSweep": false,
+              "supportsCouplingCaps": true,
+              "supportsIncremental": false,
+              "supportsRCReduction": false
+            },
+            "diagnostics": [],
+            "executablePath": "/Users/1amageek/.local/magic/bin/magic",
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "reason": "Magic executable and profile-declared PDK rcfile are available.",
+            "status": "ready",
+            "suggestedActions": []
+          },
+          "request": {
+            "backendID": "magic",
+            "corners": [
+              {
+                "cornerID": {
+                  "value": "tt"
+                },
+                "name": "tt",
+                "parameters": {}
+              }
+            ],
+            "layoutFormat": "gds",
+            "options": {
+              "emitIRJSON": true,
+              "emitRawArtifacts": true,
+              "extractMode": "rc",
+              "includeCouplingCaps": true,
+              "maxParallelJobs": 2,
+              "strictValidation": false
+            },
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "requestedArtifactKinds": [
+              "rawOutput",
+              "parasiticIR",
+              "spefRoundTrip",
+              "report"
+            ],
+            "requestedOutputFormats": [
+              "spice"
+            ],
+            "sourceNetlistFormat": "spice",
+            "technology": {
+              "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
+              "sourceKind": "jsonFile"
+            },
+            "topCell": "pex_plate"
+          },
+          "status": "success"
+        },
+        "manifestURL": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json",
+        "metrics": {
+          "cornerCount": 1,
+          "failureCount": 0,
+          "successCount": 1,
+          "totalDurationSeconds": 0.4681830406188965
+        },
+        "runID": "4ABD7676-D69D-40DD-9138-31074A1340FF",
+        "status": "success",
+        "warnings": [
+          {
+            "cornerID": {
+              "value": "tt"
+            },
+            "message": "Failed to write SPEF round-trip artifact: invalidIdentifier(\"m1_0_0#\")",
+            "stage": "persistence"
+          }
+        ]
+      },
+      "failures": [],
+      "groundCapErrorF": 7.888609052210118e-31,
+      "groundCapToleranceF": 2e-16,
+      "irPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/ir/tt.json",
+      "layoutPath": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+      "manifestPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json",
+      "netCount": 1,
+      "outputDirectory": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run",
+      "sourceNetlistPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir",
+      "status": "passed",
+      "technologyPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
+      "topCell": "pex_plate",
+      "totalCapacitanceErrorF": 7.888609052210118e-31,
+      "totalCapacitanceF": 4.200800000000001e-15,
+      "totalCapacitanceToleranceF": 2e-16,
+      "totalCouplingCapF": 0.0,
+      "totalGroundCapF": 4.200800000000001e-15,
+      "totalResistanceOhm": 0.0
+    },
+    {
+      "artifactRefs": [
+        {
+          "artifactID": "sky130-plate-magic-pex-ss:layoutPath",
+          "byteCount": 182,
+          "format": "GDS",
+          "kind": "layout",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+          "role": "input",
+          "sha256": "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062",
+          "sourceField": "layoutPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex-ss:sourceNetlistPath",
+          "byteCount": 19,
+          "format": "SPICE",
+          "kind": "source-netlist",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir",
+          "role": "input",
+          "sha256": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130",
+          "sourceField": "sourceNetlistPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex-ss:technologyPath",
+          "byteCount": 182,
+          "format": "JSON",
+          "kind": "technology",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
+          "role": "input",
+          "sha256": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae",
+          "sourceField": "technologyPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex-ss:manifestPath",
+          "byteCount": 8227,
+          "format": "JSON",
+          "kind": "pex-artifact-manifest",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json",
+          "role": "run-artifact",
+          "sha256": "d566fe689a64a05f66a3a4031cc6cb18188ddaa8cf3fbdccc10e62b48a0f988c",
+          "sourceField": "manifestPath"
+        },
+        {
+          "artifactID": "sky130-plate-magic-pex-ss:irPath",
+          "byteCount": 886,
+          "format": "JSON",
+          "kind": "parasitic-ir",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/ir/ss.json",
+          "role": "normalized",
+          "sha256": "5fd8e74518d859c9382feec382825b76f77019aafe59b8e75fa66943bf05eeaa",
+          "sourceField": "irPath"
+        }
+      ],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "command": {
+        "command": [
+          "swift",
+          "run",
+          "pexengine",
+          "extract",
+          "--layout",
+          "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+          "--netlist",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir",
+          "--top-cell",
+          "pex_plate",
+          "--technology",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
+          "--backend",
+          "magic",
+          "--corner",
+          "ss",
+          "--out",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run",
+          "--non-strict",
+          "--json"
+        ],
+        "cwd": "/Users/1amageek/Desktop/LSI/PEXEngine",
+        "durationSeconds": 1.944740082952194,
+        "exitCode": 0,
+        "status": "passed",
+        "stderrCharacterCount": 131,
+        "stderrTail": "Building for debugging...\n[Computing dependencies]\n[Pre-planning 1\u2009/\u2009388]\n[Constructing 447\u2009/\u2009848]\n[1\u2009/\u20091]\nBuild complete! (0.72\u79d2)\n",
+        "stdoutCharacterCount": 3988,
+        "stdoutTail": "dID\" : \"magic\",\n      \"corners\" : [\n        {\n          \"cornerID\" : {\n            \"value\" : \"ss\"\n          },\n          \"name\" : \"ss\",\n          \"parameters\" : {\n\n          }\n        }\n      ],\n      \"layoutFormat\" : \"gds\",\n      \"options\" : {\n        \"emitIRJSON\" : true,\n        \"emitRawArtifacts\" : true,\n        \"extractMode\" : \"rc\",\n        \"includeCouplingCaps\" : true,\n        \"maxParallelJobs\" : 2,\n        \"strictValidation\" : false\n      },\n      \"processProfile\" : {\n        \"metadata\" : {\n          \"deckRole\" : \"extraction\",\n          \"tool\" : \"magic\"\n        },\n        \"pdkID\" : \"sky130A\",\n        \"pdkRoot\" : \"\\/Users\\/1amageek\\/.volare\\/\",\n        \"primaryDeckPath\" : \"\\/Users\\/1amageek\\/.volare\\/sky130A\\/libs.tech\\/magic\\/sky130A.magicrc\",\n        \"profileID\" : \"sky130.open-pdk.signoff\",\n        \"requirementID\" : \"magic\",\n        \"source\" : \"SignoffPDKProfile\"\n      },\n      \"requestedArtifactKinds\" : [\n        \"rawOutput\",\n        \"parasiticIR\",\n        \"spefRoundTrip\",\n        \"report\"\n      ],\n      \"requestedOutputFormats\" : [\n        \"spice\"\n      ],\n      \"sourceNetlistFormat\" : \"spice\",\n      \"technology\" : {\n        \"path\" : \"\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-plate-magic-pex-ss\\/technology.json\",\n        \"sourceKind\" : \"jsonFile\"\n      },\n      \"topCell\" : \"pex_plate\"\n    },\n    \"status\" : \"success\"\n  },\n  \"manifestURL\" : \"file:\\/\\/\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-plate-magic-pex-ss\\/run\\/0D95084D-57C0-4869-8E2C-C8AD535960B8\\/manifest.json\",\n  \"metrics\" : {\n    \"cornerCount\" : 1,\n    \"failureCount\" : 0,\n    \"successCount\" : 1,\n    \"totalDurationSeconds\" : 0.48173999786376953\n  },\n  \"runID\" : \"0D95084D-57C0-4869-8E2C-C8AD535960B8\",\n  \"status\" : \"success\",\n  \"warnings\" : [\n    {\n      \"cornerID\" : {\n        \"value\" : \"ss\"\n      },\n      \"message\" : \"Failed to write SPEF round-trip artifact: invalidIdentifier(\\\"m1_0_0#\\\")\",\n      \"stage\" : \"persistence\"\n    }\n  ]\n}\n"
+      },
+      "corner": "ss",
+      "coverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.total-capacitance",
+        "pex.physical-value",
+        "pex.multi-corner"
+      ],
+      "elementCount": 1,
+      "expectedGroundCapF": 4.2008e-15,
+      "expectedTotalCapacitanceF": 4.2008e-15,
+      "extractOutput": {
+        "completeness": {
+          "issues": [],
+          "status": "complete"
+        },
+        "extractorRun": {
+          "artifactIDs": [
+            "input-layoutInput",
+            "input-netlistInput",
+            "input-request",
+            "input-technologyInput",
+            "ir-ss",
+            "log-ss-extraction",
+            "rawOutput-ss-ss",
+            "report-summary",
+            "spef-roundtrip-ss"
+          ],
+          "cornerResults": [
+            {
+              "cornerID": {
+                "value": "ss"
+              },
+              "elementCount": 1,
+              "netCount": 1,
+              "parasiticIRArtifactID": "ir-ss",
+              "rawOutputArtifactIDs": [
+                "rawOutput-ss-ss"
+              ],
+              "rawOutputCount": 1,
+              "status": "success",
+              "totalCapacitanceF": 4.200800000000001e-15,
+              "totalCouplingCapF": 0,
+              "totalGroundCapF": 4.200800000000001e-15,
+              "totalResistanceOhm": 0,
+              "unitSystem": "canonical",
+              "warningCount": 1
+            }
+          ],
+          "diagnostics": [],
+          "readiness": {
+            "backendID": "magic",
+            "capabilities": {
+              "nativeOutputFormats": [
+                "spice"
+              ],
+              "supportsCornerSweep": false,
+              "supportsCouplingCaps": true,
+              "supportsIncremental": false,
+              "supportsRCReduction": false
+            },
+            "diagnostics": [],
+            "executablePath": "/Users/1amageek/.local/magic/bin/magic",
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "reason": "Magic executable and profile-declared PDK rcfile are available.",
+            "status": "ready",
+            "suggestedActions": []
+          },
+          "request": {
+            "backendID": "magic",
+            "corners": [
+              {
+                "cornerID": {
+                  "value": "ss"
+                },
+                "name": "ss",
+                "parameters": {}
+              }
+            ],
+            "layoutFormat": "gds",
+            "options": {
+              "emitIRJSON": true,
+              "emitRawArtifacts": true,
+              "extractMode": "rc",
+              "includeCouplingCaps": true,
+              "maxParallelJobs": 2,
+              "strictValidation": false
+            },
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "requestedArtifactKinds": [
+              "rawOutput",
+              "parasiticIR",
+              "spefRoundTrip",
+              "report"
+            ],
+            "requestedOutputFormats": [
+              "spice"
+            ],
+            "sourceNetlistFormat": "spice",
+            "technology": {
+              "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
+              "sourceKind": "jsonFile"
+            },
+            "topCell": "pex_plate"
+          },
+          "status": "success"
+        },
+        "manifestURL": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json",
+        "metrics": {
+          "cornerCount": 1,
+          "failureCount": 0,
+          "successCount": 1,
+          "totalDurationSeconds": 0.48173999786376953
+        },
+        "runID": "0D95084D-57C0-4869-8E2C-C8AD535960B8",
+        "status": "success",
+        "warnings": [
+          {
+            "cornerID": {
+              "value": "ss"
+            },
+            "message": "Failed to write SPEF round-trip artifact: invalidIdentifier(\"m1_0_0#\")",
+            "stage": "persistence"
+          }
+        ]
+      },
+      "failures": [],
+      "groundCapErrorF": 7.888609052210118e-31,
+      "groundCapToleranceF": 2e-16,
+      "irPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/ir/ss.json",
+      "layoutPath": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+      "manifestPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json",
+      "netCount": 1,
+      "outputDirectory": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run",
+      "sourceNetlistPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir",
+      "status": "passed",
+      "technologyPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
+      "topCell": "pex_plate",
+      "totalCapacitanceErrorF": 7.888609052210118e-31,
+      "totalCapacitanceF": 4.200800000000001e-15,
+      "totalCapacitanceToleranceF": 2e-16,
+      "totalCouplingCapF": 0.0,
+      "totalGroundCapF": 4.200800000000001e-15,
+      "totalResistanceOhm": 0.0
+    },
+    {
+      "artifactRefs": [
+        {
+          "artifactID": "sky130-inverter-magic-pex:layoutPath",
+          "byteCount": 3632,
+          "format": "GDS",
+          "kind": "layout",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+          "role": "input",
+          "sha256": "a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c11",
+          "sourceField": "layoutPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex:sourceNetlistPath",
+          "byteCount": 19,
+          "format": "SPICE",
+          "kind": "source-netlist",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir",
+          "role": "input",
+          "sha256": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130",
+          "sourceField": "sourceNetlistPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex:technologyPath",
+          "byteCount": 182,
+          "format": "JSON",
+          "kind": "technology",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
+          "role": "input",
+          "sha256": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae",
+          "sourceField": "technologyPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex:manifestPath",
+          "byteCount": 8185,
+          "format": "JSON",
+          "kind": "pex-artifact-manifest",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json",
+          "role": "run-artifact",
+          "sha256": "2056d0ef9b5fbbecda4b36684915594b11b0578682c14630fcc4c2f1f507c677",
+          "sourceField": "manifestPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex:irPath",
+          "byteCount": 17645,
+          "format": "JSON",
+          "kind": "parasitic-ir",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/ir/tt.json",
+          "role": "normalized",
+          "sha256": "6bd9ffda7de61e6dfc6a4d6ad41bf5ea93623bce5262f24d25e655b6d35a11dd",
+          "sourceField": "irPath"
+        }
+      ],
+      "caseID": "sky130-inverter-magic-pex",
+      "command": {
+        "command": [
+          "swift",
+          "run",
+          "pexengine",
+          "extract",
+          "--layout",
+          "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+          "--netlist",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir",
+          "--top-cell",
+          "sky130_fd_sc_hd__inv_1",
+          "--technology",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
+          "--backend",
+          "magic",
+          "--corner",
+          "tt",
+          "--out",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run",
+          "--non-strict",
+          "--json"
+        ],
+        "cwd": "/Users/1amageek/Desktop/LSI/PEXEngine",
+        "durationSeconds": 1.6985982499900274,
+        "exitCode": 0,
+        "status": "passed",
+        "stderrCharacterCount": 131,
+        "stderrTail": "Building for debugging...\n[Computing dependencies]\n[Pre-planning 1\u2009/\u2009388]\n[Constructing 509\u2009/\u2009848]\n[1\u2009/\u20091]\nBuild complete! (0.73\u79d2)\n",
+        "stdoutCharacterCount": 3860,
+        "stdoutTail": "on\" : \"Magic executable and profile-declared PDK rcfile are available.\",\n      \"status\" : \"ready\",\n      \"suggestedActions\" : [\n\n      ]\n    },\n    \"request\" : {\n      \"backendID\" : \"magic\",\n      \"corners\" : [\n        {\n          \"cornerID\" : {\n            \"value\" : \"tt\"\n          },\n          \"name\" : \"tt\",\n          \"parameters\" : {\n\n          }\n        }\n      ],\n      \"layoutFormat\" : \"gds\",\n      \"options\" : {\n        \"emitIRJSON\" : true,\n        \"emitRawArtifacts\" : true,\n        \"extractMode\" : \"rc\",\n        \"includeCouplingCaps\" : true,\n        \"maxParallelJobs\" : 2,\n        \"strictValidation\" : false\n      },\n      \"processProfile\" : {\n        \"metadata\" : {\n          \"deckRole\" : \"extraction\",\n          \"tool\" : \"magic\"\n        },\n        \"pdkID\" : \"sky130A\",\n        \"pdkRoot\" : \"\\/Users\\/1amageek\\/.volare\\/\",\n        \"primaryDeckPath\" : \"\\/Users\\/1amageek\\/.volare\\/sky130A\\/libs.tech\\/magic\\/sky130A.magicrc\",\n        \"profileID\" : \"sky130.open-pdk.signoff\",\n        \"requirementID\" : \"magic\",\n        \"source\" : \"SignoffPDKProfile\"\n      },\n      \"requestedArtifactKinds\" : [\n        \"rawOutput\",\n        \"parasiticIR\",\n        \"spefRoundTrip\",\n        \"report\"\n      ],\n      \"requestedOutputFormats\" : [\n        \"spice\"\n      ],\n      \"sourceNetlistFormat\" : \"spice\",\n      \"technology\" : {\n        \"path\" : \"\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-inverter-magic-pex\\/technology.json\",\n        \"sourceKind\" : \"jsonFile\"\n      },\n      \"topCell\" : \"sky130_fd_sc_hd__inv_1\"\n    },\n    \"status\" : \"success\"\n  },\n  \"manifestURL\" : \"file:\\/\\/\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-inverter-magic-pex\\/run\\/2C8D3F66-A74F-41A1-A98C-B09627ACB63A\\/manifest.json\",\n  \"metrics\" : {\n    \"cornerCount\" : 1,\n    \"failureCount\" : 0,\n    \"successCount\" : 1,\n    \"totalDurationSeconds\" : 0.21552503108978271\n  },\n  \"runID\" : \"2C8D3F66-A74F-41A1-A98C-B09627ACB63A\",\n  \"status\" : \"success\",\n  \"warnings\" : [\n\n  ]\n}\n"
+      },
+      "corner": "tt",
+      "couplingCapErrorF": 0.0,
+      "couplingCapToleranceF": 2e-16,
+      "coverageTags": [
+        "pex.magic",
+        "pex.coupling-cap",
+        "pex.total-capacitance",
+        "pex.resistance",
+        "pex.physical-value",
+        "pex.standard-cell",
+        "pex.rc-network"
+      ],
+      "elementCount": 35,
+      "expectedCouplingCapF": 2.65293e-15,
+      "expectedResistanceOhm": 3334.95361,
+      "expectedTotalCapacitanceF": 2.65293e-15,
+      "extractOutput": {
+        "completeness": {
+          "issues": [],
+          "status": "complete"
+        },
+        "extractorRun": {
+          "artifactIDs": [
+            "input-layoutInput",
+            "input-netlistInput",
+            "input-request",
+            "input-technologyInput",
+            "ir-tt",
+            "log-tt-extraction",
+            "rawOutput-tt-tt",
+            "report-summary",
+            "spef-roundtrip-tt"
+          ],
+          "cornerResults": [
+            {
+              "cornerID": {
+                "value": "tt"
+              },
+              "elementCount": 35,
+              "netCount": 6,
+              "parasiticIRArtifactID": "ir-tt",
+              "rawOutputArtifactIDs": [
+                "rawOutput-tt-tt"
+              ],
+              "rawOutputCount": 1,
+              "spefRoundTripArtifactID": "spef-roundtrip-tt",
+              "status": "success",
+              "totalCapacitanceF": 2.65293e-15,
+              "totalCouplingCapF": 2.65293e-15,
+              "totalGroundCapF": 0,
+              "totalResistanceOhm": 3334.95361,
+              "unitSystem": "canonical",
+              "warningCount": 0
+            }
+          ],
+          "diagnostics": [],
+          "readiness": {
+            "backendID": "magic",
+            "capabilities": {
+              "nativeOutputFormats": [
+                "spice"
+              ],
+              "supportsCornerSweep": false,
+              "supportsCouplingCaps": true,
+              "supportsIncremental": false,
+              "supportsRCReduction": false
+            },
+            "diagnostics": [],
+            "executablePath": "/Users/1amageek/.local/magic/bin/magic",
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "reason": "Magic executable and profile-declared PDK rcfile are available.",
+            "status": "ready",
+            "suggestedActions": []
+          },
+          "request": {
+            "backendID": "magic",
+            "corners": [
+              {
+                "cornerID": {
+                  "value": "tt"
+                },
+                "name": "tt",
+                "parameters": {}
+              }
+            ],
+            "layoutFormat": "gds",
+            "options": {
+              "emitIRJSON": true,
+              "emitRawArtifacts": true,
+              "extractMode": "rc",
+              "includeCouplingCaps": true,
+              "maxParallelJobs": 2,
+              "strictValidation": false
+            },
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "requestedArtifactKinds": [
+              "rawOutput",
+              "parasiticIR",
+              "spefRoundTrip",
+              "report"
+            ],
+            "requestedOutputFormats": [
+              "spice"
+            ],
+            "sourceNetlistFormat": "spice",
+            "technology": {
+              "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
+              "sourceKind": "jsonFile"
+            },
+            "topCell": "sky130_fd_sc_hd__inv_1"
+          },
+          "status": "success"
+        },
+        "manifestURL": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json",
+        "metrics": {
+          "cornerCount": 1,
+          "failureCount": 0,
+          "successCount": 1,
+          "totalDurationSeconds": 0.21552503108978271
+        },
+        "runID": "2C8D3F66-A74F-41A1-A98C-B09627ACB63A",
+        "status": "success",
+        "warnings": []
+      },
+      "failures": [],
+      "irPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/ir/tt.json",
+      "layoutPath": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+      "manifestPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json",
+      "netCount": 6,
+      "outputDirectory": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run",
+      "resistanceErrorOhm": 0.0,
+      "resistanceToleranceOhm": 50.0,
+      "sourceNetlistPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir",
+      "status": "passed",
+      "technologyPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
+      "topCell": "sky130_fd_sc_hd__inv_1",
+      "totalCapacitanceErrorF": 0.0,
+      "totalCapacitanceF": 2.65293e-15,
+      "totalCapacitanceToleranceF": 2e-16,
+      "totalCouplingCapF": 2.65293e-15,
+      "totalGroundCapF": 0.0,
+      "totalResistanceOhm": 3334.95361
+    },
+    {
+      "artifactRefs": [
+        {
+          "artifactID": "sky130-inverter-magic-pex-ss:layoutPath",
+          "byteCount": 3632,
+          "format": "GDS",
+          "kind": "layout",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+          "role": "input",
+          "sha256": "a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c11",
+          "sourceField": "layoutPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex-ss:sourceNetlistPath",
+          "byteCount": 19,
+          "format": "SPICE",
+          "kind": "source-netlist",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir",
+          "role": "input",
+          "sha256": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130",
+          "sourceField": "sourceNetlistPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex-ss:technologyPath",
+          "byteCount": 182,
+          "format": "JSON",
+          "kind": "technology",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
+          "role": "input",
+          "sha256": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae",
+          "sourceField": "technologyPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex-ss:manifestPath",
+          "byteCount": 8194,
+          "format": "JSON",
+          "kind": "pex-artifact-manifest",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json",
+          "role": "run-artifact",
+          "sha256": "cc9e9c79e0847cdebb567e608614a7ab0ec95697e62cb9cbb89564d99e518594",
+          "sourceField": "manifestPath"
+        },
+        {
+          "artifactID": "sky130-inverter-magic-pex-ss:irPath",
+          "byteCount": 17645,
+          "format": "JSON",
+          "kind": "parasitic-ir",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/ir/ss.json",
+          "role": "normalized",
+          "sha256": "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c",
+          "sourceField": "irPath"
+        }
+      ],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "command": {
+        "command": [
+          "swift",
+          "run",
+          "pexengine",
+          "extract",
+          "--layout",
+          "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+          "--netlist",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir",
+          "--top-cell",
+          "sky130_fd_sc_hd__inv_1",
+          "--technology",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
+          "--backend",
+          "magic",
+          "--corner",
+          "ss",
+          "--out",
+          "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run",
+          "--non-strict",
+          "--json"
+        ],
+        "cwd": "/Users/1amageek/Desktop/LSI/PEXEngine",
+        "durationSeconds": 1.5238516660174355,
+        "exitCode": 0,
+        "status": "passed",
+        "stderrCharacterCount": 123,
+        "stderrTail": "Building for debugging...\n[Computing dependencies]\n[Pre-planning 1\u2009/\u2009388]\n[Constructing 321\u2009/\u2009848]\nBuild complete! (0.59\u79d2)\n",
+        "stdoutCharacterCount": 3866,
+        "stdoutTail": "\"Magic executable and profile-declared PDK rcfile are available.\",\n      \"status\" : \"ready\",\n      \"suggestedActions\" : [\n\n      ]\n    },\n    \"request\" : {\n      \"backendID\" : \"magic\",\n      \"corners\" : [\n        {\n          \"cornerID\" : {\n            \"value\" : \"ss\"\n          },\n          \"name\" : \"ss\",\n          \"parameters\" : {\n\n          }\n        }\n      ],\n      \"layoutFormat\" : \"gds\",\n      \"options\" : {\n        \"emitIRJSON\" : true,\n        \"emitRawArtifacts\" : true,\n        \"extractMode\" : \"rc\",\n        \"includeCouplingCaps\" : true,\n        \"maxParallelJobs\" : 2,\n        \"strictValidation\" : false\n      },\n      \"processProfile\" : {\n        \"metadata\" : {\n          \"deckRole\" : \"extraction\",\n          \"tool\" : \"magic\"\n        },\n        \"pdkID\" : \"sky130A\",\n        \"pdkRoot\" : \"\\/Users\\/1amageek\\/.volare\\/\",\n        \"primaryDeckPath\" : \"\\/Users\\/1amageek\\/.volare\\/sky130A\\/libs.tech\\/magic\\/sky130A.magicrc\",\n        \"profileID\" : \"sky130.open-pdk.signoff\",\n        \"requirementID\" : \"magic\",\n        \"source\" : \"SignoffPDKProfile\"\n      },\n      \"requestedArtifactKinds\" : [\n        \"rawOutput\",\n        \"parasiticIR\",\n        \"spefRoundTrip\",\n        \"report\"\n      ],\n      \"requestedOutputFormats\" : [\n        \"spice\"\n      ],\n      \"sourceNetlistFormat\" : \"spice\",\n      \"technology\" : {\n        \"path\" : \"\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-inverter-magic-pex-ss\\/technology.json\",\n        \"sourceKind\" : \"jsonFile\"\n      },\n      \"topCell\" : \"sky130_fd_sc_hd__inv_1\"\n    },\n    \"status\" : \"success\"\n  },\n  \"manifestURL\" : \"file:\\/\\/\\/private\\/tmp\\/lsi-pex-corpus-expanded\\/external-oracle-corpus\\/pex\\/sky130-inverter-magic-pex-ss\\/run\\/38509DBC-29C2-4168-AB41-45DDA4AAB13B\\/manifest.json\",\n  \"metrics\" : {\n    \"cornerCount\" : 1,\n    \"failureCount\" : 0,\n    \"successCount\" : 1,\n    \"totalDurationSeconds\" : 0.20803296566009521\n  },\n  \"runID\" : \"38509DBC-29C2-4168-AB41-45DDA4AAB13B\",\n  \"status\" : \"success\",\n  \"warnings\" : [\n\n  ]\n}\n"
+      },
+      "corner": "ss",
+      "couplingCapErrorF": 0.0,
+      "couplingCapToleranceF": 2e-16,
+      "coverageTags": [
+        "pex.magic",
+        "pex.coupling-cap",
+        "pex.total-capacitance",
+        "pex.resistance",
+        "pex.physical-value",
+        "pex.standard-cell",
+        "pex.multi-corner",
+        "pex.rc-network"
+      ],
+      "elementCount": 35,
+      "expectedCouplingCapF": 2.65293e-15,
+      "expectedResistanceOhm": 3334.95361,
+      "expectedTotalCapacitanceF": 2.65293e-15,
+      "extractOutput": {
+        "completeness": {
+          "issues": [],
+          "status": "complete"
+        },
+        "extractorRun": {
+          "artifactIDs": [
+            "input-layoutInput",
+            "input-netlistInput",
+            "input-request",
+            "input-technologyInput",
+            "ir-ss",
+            "log-ss-extraction",
+            "rawOutput-ss-ss",
+            "report-summary",
+            "spef-roundtrip-ss"
+          ],
+          "cornerResults": [
+            {
+              "cornerID": {
+                "value": "ss"
+              },
+              "elementCount": 35,
+              "netCount": 6,
+              "parasiticIRArtifactID": "ir-ss",
+              "rawOutputArtifactIDs": [
+                "rawOutput-ss-ss"
+              ],
+              "rawOutputCount": 1,
+              "spefRoundTripArtifactID": "spef-roundtrip-ss",
+              "status": "success",
+              "totalCapacitanceF": 2.65293e-15,
+              "totalCouplingCapF": 2.65293e-15,
+              "totalGroundCapF": 0,
+              "totalResistanceOhm": 3334.95361,
+              "unitSystem": "canonical",
+              "warningCount": 0
+            }
+          ],
+          "diagnostics": [],
+          "readiness": {
+            "backendID": "magic",
+            "capabilities": {
+              "nativeOutputFormats": [
+                "spice"
+              ],
+              "supportsCornerSweep": false,
+              "supportsCouplingCaps": true,
+              "supportsIncremental": false,
+              "supportsRCReduction": false
+            },
+            "diagnostics": [],
+            "executablePath": "/Users/1amageek/.local/magic/bin/magic",
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "reason": "Magic executable and profile-declared PDK rcfile are available.",
+            "status": "ready",
+            "suggestedActions": []
+          },
+          "request": {
+            "backendID": "magic",
+            "corners": [
+              {
+                "cornerID": {
+                  "value": "ss"
+                },
+                "name": "ss",
+                "parameters": {}
+              }
+            ],
+            "layoutFormat": "gds",
+            "options": {
+              "emitIRJSON": true,
+              "emitRawArtifacts": true,
+              "extractMode": "rc",
+              "includeCouplingCaps": true,
+              "maxParallelJobs": 2,
+              "strictValidation": false
+            },
+            "processProfile": {
+              "metadata": {
+                "deckRole": "extraction",
+                "tool": "magic"
+              },
+              "pdkID": "sky130A",
+              "pdkRoot": "/Users/1amageek/.volare/",
+              "primaryDeckPath": "/Users/1amageek/.volare/sky130A/libs.tech/magic/sky130A.magicrc",
+              "profileID": "sky130.open-pdk.signoff",
+              "requirementID": "magic",
+              "source": "SignoffPDKProfile"
+            },
+            "requestedArtifactKinds": [
+              "rawOutput",
+              "parasiticIR",
+              "spefRoundTrip",
+              "report"
+            ],
+            "requestedOutputFormats": [
+              "spice"
+            ],
+            "sourceNetlistFormat": "spice",
+            "technology": {
+              "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
+              "sourceKind": "jsonFile"
+            },
+            "topCell": "sky130_fd_sc_hd__inv_1"
+          },
+          "status": "success"
+        },
+        "manifestURL": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json",
+        "metrics": {
+          "cornerCount": 1,
+          "failureCount": 0,
+          "successCount": 1,
+          "totalDurationSeconds": 0.20803296566009521
+        },
+        "runID": "38509DBC-29C2-4168-AB41-45DDA4AAB13B",
+        "status": "success",
+        "warnings": []
+      },
+      "failures": [],
+      "irPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/ir/ss.json",
+      "layoutPath": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+      "manifestPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json",
+      "netCount": 6,
+      "outputDirectory": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run",
+      "resistanceErrorOhm": 0.0,
+      "resistanceToleranceOhm": 50.0,
+      "sourceNetlistPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir",
+      "status": "passed",
+      "technologyPath": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
+      "topCell": "sky130_fd_sc_hd__inv_1",
+      "totalCapacitanceErrorF": 0.0,
+      "totalCapacitanceF": 2.65293e-15,
+      "totalCapacitanceToleranceF": 2e-16,
+      "totalCouplingCapF": 2.65293e-15,
+      "totalGroundCapF": 0.0,
+      "totalResistanceOhm": 3334.95361
+    }
+  ],
+  "corpusSpec": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json",
+  "oracleBackendID": "magic",
+  "qualification": {
+    "failures": [],
+    "policy": {
+      "minimumPassRate": 1,
+      "requiredCoverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.physical-value",
+        "pex.total-capacitance",
+        "pex.coupling-cap",
+        "pex.resistance",
+        "pex.standard-cell",
+        "pex.multi-corner",
+        "pex.rc-network"
+      ]
+    },
+    "qualified": true
+  },
+  "schemaVersion": 1,
+  "status": "passed",
+  "summary": {
+    "caseCount": 4,
+    "coverageTagCounts": {
+      "pex.coupling-cap": 2,
+      "pex.ground-cap": 2,
+      "pex.magic": 4,
+      "pex.multi-corner": 2,
+      "pex.physical-value": 4,
+      "pex.rc-network": 2,
+      "pex.resistance": 2,
+      "pex.standard-cell": 2,
+      "pex.total-capacitance": 4
+    },
+    "failedCaseCount": 0,
+    "passRate": 1.0,
+    "passedCaseCount": 4,
+    "totalCapacitanceF": 1.3707460000000002e-14,
+    "totalCouplingCapF": 5.30586e-15,
+    "totalElementCount": 72,
+    "totalGroundCapF": 8.401600000000001e-15,
+    "totalNetCount": 14,
+    "totalResistanceOhm": 6669.90722
+  }
+}

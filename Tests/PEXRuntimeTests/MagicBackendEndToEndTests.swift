@@ -20,20 +20,46 @@ struct MagicBackendEndToEndTests {
         .timeLimit(.minutes(2))
     )
     func magicBackendSelectedByIDProducesRealParasitics() async throws {
+        let workDir = try makeMagicBackendWorkspace()
+        defer { removeTemporaryItem(workDir) }
+
+        let engine = DefaultPEXEngine.withDefaults()
+        let request = try makeMagicBackendRequest(workingDirectory: workDir)
+        let result = try await engine.run(request)
+
+        try assertMagicBackendPhysicalResult(result)
+    }
+
+    private func makeMagicBackendWorkspace() throws -> URL {
+        let workDir = FileManager.default.temporaryDirectory
+            .appending(path: "MagicBackendE2E-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+        return workDir
+    }
+
+    private func makeMagicBackendRequest(workingDirectory: URL) throws -> PEXRunRequest {
         let gds = try #require(
             Bundle.module.url(forResource: "pex_plate", withExtension: "gds"),
             "missing fixture pex_plate.gds"
         )
-        let workDir = FileManager.default.temporaryDirectory
-            .appending(path: "MagicBackendE2E-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
-        defer { removeTemporaryItem(workDir) }
-
-        // The magic adapter ignores the source netlist, but the request requires one.
-        let netlist = workDir.appending(path: "top.cir")
+        let netlist = workingDirectory.appending(path: "top.cir")
         try Data("* placeholder\n.end\n".utf8).write(to: netlist)
+        return PEXRunRequest(
+            layoutURL: gds,
+            layoutFormat: .gds,
+            sourceNetlistURL: netlist,
+            sourceNetlistFormat: .spice,
+            topCell: "pex_plate",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(minimalSky130Technology()),
+            backendSelection: PEXBackendSelection(backendID: "magic"),
+            options: magicBackendE2EOptions(),
+            workingDirectory: workingDirectory
+        )
+    }
 
-        let tech = TechnologyIR(
+    private func minimalSky130Technology() -> TechnologyIR {
+        TechnologyIR(
             processName: "sky130A",
             stack: [],
             logicalToPhysicalLayerMap: [:],
@@ -41,32 +67,22 @@ struct MagicBackendEndToEndTests {
             defaultExtractionRules: .default,
             backendHints: [:]
         )
+    }
 
-        let request = PEXRunRequest(
-            layoutURL: gds,
-            layoutFormat: .gds,
-            sourceNetlistURL: netlist,
-            sourceNetlistFormat: .spice,
-            topCell: "pex_plate",
-            corners: [PEXCorner(id: "tt")],
-            technology: .inline(tech),
-            backendSelection: PEXBackendSelection(backendID: "magic"),
-            options: PEXRunOptions(
-                extractMode: .cOnly,
-                includeCouplingCaps: true,
-                minCapacitanceF: nil,
-                minResistanceOhm: nil,
-                maxParallelJobs: 1,
-                emitRawArtifacts: true,
-                emitIRJSON: true,
-                strictValidation: false
-            ),
-            workingDirectory: workDir
+    private func magicBackendE2EOptions() -> PEXRunOptions {
+        PEXRunOptions(
+            extractMode: .cOnly,
+            includeCouplingCaps: true,
+            minCapacitanceF: nil,
+            minResistanceOhm: nil,
+            maxParallelJobs: 1,
+            emitRawArtifacts: true,
+            emitIRJSON: true,
+            strictValidation: false
         )
+    }
 
-        let engine = DefaultPEXEngine.withDefaults()
-        let result = try await engine.run(request)
-
+    private func assertMagicBackendPhysicalResult(_ result: PEXRunResult) throws {
         #expect(result.status == .success)
         let corner = try #require(result.cornerResults.first)
         let ir = try #require(corner.ir, "magic backend must produce an IR")

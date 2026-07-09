@@ -24,6 +24,7 @@ struct ParasiticIRTests {
         #expect(ElementKind.resistor.rawValue == "resistor")
         #expect(ElementKind.capacitor.rawValue == "capacitor")
         #expect(ElementKind.coupling.rawValue == "coupling")
+        #expect(ElementKind.inductor.rawValue == "inductor")
     }
 
     private func makeTestIR() -> ParasiticIR {

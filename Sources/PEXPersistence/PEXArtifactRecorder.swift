@@ -27,17 +27,17 @@ public struct PEXArtifactRecorder: Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(technology)
         let destination = workspace.inputsDirectory.appending(path: "technology.json")
-        do {
-            try data.write(to: destination)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to capture inline technology", underlying: error)
-        }
+        let capturedURL = try writeImmutableArtifactData(
+            data,
+            requestedURL: destination,
+            failureMessage: "Failed to capture inline technology"
+        )
         return try availableRecord(
             id: "input-technologyInput",
             kind: .technologyInput,
             stage: .technologyResolution,
             cornerID: nil,
-            url: destination,
+            url: capturedURL,
             provenance: PEXArtifactProvenance(note: "inline technology")
         )
     }
@@ -48,6 +48,8 @@ public struct PEXArtifactRecorder: Sendable {
             layoutFormat: request.layoutFormat,
             sourceNetlistFormat: request.sourceNetlistFormat,
             corners: request.corners,
+            processProfile: request.processProfile,
+            extractorRunRequest: PEXExtractorRunRequest(runRequest: request),
             backendSelection: request.backendSelection,
             options: request.options,
             inputArtifactIDs: inputArtifacts.map(\.id)
@@ -55,17 +57,17 @@ public struct PEXArtifactRecorder: Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(captured)
-        do {
-            try data.write(to: workspace.requestURL)
-        } catch {
-            throw PEXError.persistenceFailed("Failed to capture request", underlying: error)
-        }
+        let capturedURL = try writeImmutableArtifactData(
+            data,
+            requestedURL: workspace.requestURL,
+            failureMessage: "Failed to capture request"
+        )
         return try availableRecord(
             id: "input-request",
             kind: .request,
             stage: .inputValidation,
             cornerID: nil,
-            url: workspace.requestURL,
+            url: capturedURL,
             provenance: nil
         )
     }
@@ -78,7 +80,7 @@ public struct PEXArtifactRecorder: Sendable {
         id: String? = nil,
         note: String
     ) throws -> PEXArtifactRecord {
-        try placeholderRecord(
+        try unavailableRecord(
             id: id ?? artifactID(kind: kind, cornerID: cornerID, url: expectedURL),
             kind: kind,
             stage: stage,
@@ -110,7 +112,7 @@ public struct PEXArtifactRecorder: Sendable {
                 provenance: generated.provenance
             )
         }
-        return try placeholderRecord(
+        return try unavailableRecord(
             id: id ?? artifactID(kind: generated.kind, cornerID: generated.cornerID, url: destination),
             kind: generated.kind,
             stage: generated.stage,
@@ -147,7 +149,7 @@ public struct PEXArtifactRecorder: Sendable {
         id: String? = nil,
         note: String
     ) throws -> PEXArtifactRecord {
-        try placeholderRecord(
+        try unavailableRecord(
             id: id ?? artifactID(kind: kind, cornerID: cornerID, url: expectedURL),
             kind: kind,
             stage: stage,
@@ -185,7 +187,7 @@ public struct PEXArtifactRecorder: Sendable {
         )
     }
 
-    private func placeholderRecord(
+    private func unavailableRecord(
         id: String,
         kind: PEXArtifactKind,
         stage: PEXStage,
@@ -219,6 +221,9 @@ public struct PEXArtifactRecorder: Sendable {
         case .parasiticIR:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
             return workspace.runDirectory.appending(path: "ir").appending(path: name.isEmpty ? "\(cornerID.value).json" : name)
+        case .spefRoundTrip:
+            let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
+            return workspace.spefDirectory.appending(path: name.isEmpty ? "\(cornerID.value).spef" : name)
         case .report:
             return workspace.runDirectory.appending(path: "reports").appending(path: name)
         }
@@ -246,7 +251,7 @@ public struct PEXArtifactRecorder: Sendable {
                 if fileManager.fileExists(atPath: destination.path(percentEncoded: false)) {
                     return destination
                 }
-                try fileManager.copyItem(at: sourceURL, to: destination)
+                try sourceData.write(to: destination, options: .atomic)
                 return destination
             }
             return destinationURL
@@ -262,6 +267,7 @@ public struct PEXArtifactRecorder: Sendable {
         guard fileManager.fileExists(atPath: requestedURL.path(percentEncoded: false)) else {
             return requestedURL
         }
+        try ensureExistingFileTargetIsInsideRunDirectory(requestedURL)
         let requestedData = try Data(contentsOf: requestedURL)
         if Self.sha256(data: requestedData) == Self.sha256(data: sourceData) {
             return requestedURL
@@ -277,6 +283,7 @@ public struct PEXArtifactRecorder: Sendable {
         }
         var suffix = 2
         while fileManager.fileExists(atPath: candidate.path(percentEncoded: false)) {
+            try ensureExistingFileTargetIsInsideRunDirectory(candidate)
             let candidateData = try Data(contentsOf: candidate)
             if Self.sha256(data: candidateData) == Self.sha256(data: sourceData) {
                 return candidate
@@ -291,14 +298,50 @@ public struct PEXArtifactRecorder: Sendable {
         return candidate
     }
 
+    private func writeImmutableArtifactData(
+        _ data: Data,
+        requestedURL: URL,
+        failureMessage: String
+    ) throws -> URL {
+        do {
+            try FileManager.default.createDirectory(
+                at: requestedURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let destination = try immutableDestinationURL(requestedURL: requestedURL, sourceData: data)
+            if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+                return destination
+            }
+            try data.write(to: destination, options: .atomic)
+            return destination
+        } catch let error as PEXError {
+            throw error
+        } catch {
+            throw PEXError.persistenceFailed(failureMessage, underlying: error)
+        }
+    }
+
     private func relativePath(for url: URL) throws -> PEXArtifactPath {
         let rawRunPath = workspace.runDirectory.path(percentEncoded: false)
         let rawArtifactPath = url.path(percentEncoded: false)
-        if rawArtifactPath == rawRunPath || rawArtifactPath.hasPrefix(rawRunPath + "/") {
+        if FileManager.default.fileExists(atPath: rawArtifactPath) {
+            if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath),
+               !pathContainsSymlinkComponent(rawArtifactPath: rawArtifactPath, rawRunPath: rawRunPath)
+            {
+                let relative = rawArtifactPath == rawRunPath ? "." : String(rawArtifactPath.dropFirst(rawRunPath.count + 1))
+                return try PEXArtifactPath(relative)
+            }
+            return try resolvedRelativePath(for: url, rawArtifactPath: rawArtifactPath)
+        }
+        if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath) {
             let relative = rawArtifactPath == rawRunPath ? "." : String(rawArtifactPath.dropFirst(rawRunPath.count + 1))
             return try PEXArtifactPath(relative)
         }
 
+        return try resolvedRelativePath(for: url, rawArtifactPath: rawArtifactPath)
+    }
+
+    private func resolvedRelativePath(for url: URL, rawArtifactPath: String) throws -> PEXArtifactPath {
         let runPath = normalizedPath(workspace.runDirectory)
         let artifactPath = normalizedPath(url)
         guard artifactPath == runPath || artifactPath.hasPrefix(runPath + "/") else {
@@ -311,12 +354,65 @@ public struct PEXArtifactRecorder: Sendable {
     private func isInsideRunDirectory(_ url: URL) -> Bool {
         let rawRunPath = workspace.runDirectory.path(percentEncoded: false)
         let rawArtifactPath = url.path(percentEncoded: false)
-        if rawArtifactPath == rawRunPath || rawArtifactPath.hasPrefix(rawRunPath + "/") {
+        if FileManager.default.fileExists(atPath: rawArtifactPath) {
+            if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath),
+               !pathContainsSymlinkComponent(rawArtifactPath: rawArtifactPath, rawRunPath: rawRunPath)
+            {
+                return true
+            }
+            let runPath = normalizedPath(workspace.runDirectory)
+            let artifactPath = normalizedPath(url)
+            return artifactPath == runPath || artifactPath.hasPrefix(runPath + "/")
+        }
+        if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath) {
             return true
         }
         let runPath = normalizedPath(workspace.runDirectory)
         let artifactPath = normalizedPath(url)
         return artifactPath == runPath || artifactPath.hasPrefix(runPath + "/")
+    }
+
+    private func ensureExistingFileTargetIsInsideRunDirectory(_ url: URL) throws {
+        let rawRunPath = workspace.runDirectory.path(percentEncoded: false)
+        let rawArtifactPath = url.path(percentEncoded: false)
+        if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath),
+           !pathContainsSymlinkComponent(rawArtifactPath: rawArtifactPath, rawRunPath: rawRunPath)
+        {
+            return
+        }
+        let runPath = normalizedPath(workspace.runDirectory)
+        let artifactPath = normalizedPath(url)
+        guard artifactPath == runPath || artifactPath.hasPrefix(runPath + "/") else {
+            throw PEXError.persistenceFailed(
+                "Artifact destination target escapes the run directory: \(url.path(percentEncoded: false))"
+            )
+        }
+    }
+
+    private func isRawPathInsideRunDirectory(_ rawArtifactPath: String, rawRunPath: String) -> Bool {
+        rawArtifactPath == rawRunPath || rawArtifactPath.hasPrefix(rawRunPath + "/")
+    }
+
+    private func pathContainsSymlinkComponent(rawArtifactPath: String, rawRunPath: String) -> Bool {
+        guard isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath), rawArtifactPath != rawRunPath else {
+            return false
+        }
+        let relative = String(rawArtifactPath.dropFirst(rawRunPath.count + 1))
+        var currentURL = workspace.runDirectory
+        for component in relative.split(separator: "/", omittingEmptySubsequences: true) {
+            currentURL = currentURL.appending(path: String(component))
+            do {
+                let attributes = try FileManager.default.attributesOfItem(
+                    atPath: currentURL.path(percentEncoded: false)
+                )
+                if attributes[.type] as? FileAttributeType == .typeSymbolicLink {
+                    return true
+                }
+            } catch {
+                continue
+            }
+        }
+        return false
     }
 
     private func normalizedPath(_ url: URL) -> String {
@@ -351,6 +447,8 @@ private struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
     let layoutFormat: LayoutFormat
     let sourceNetlistFormat: NetlistFormat
     let corners: [PEXCorner]
+    let processProfile: PEXProcessProfileReference?
+    let extractorRunRequest: PEXExtractorRunRequest
     let backendSelection: PEXBackendSelection
     let options: PEXRunOptions
     let inputArtifactIDs: [String]

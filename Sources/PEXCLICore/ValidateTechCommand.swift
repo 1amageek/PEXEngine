@@ -24,7 +24,7 @@ public struct ValidateTechCommand: Sendable {
             case "--json":
                 json = true
             default:
-                break
+                throw PEXError.invalidInput("Unknown validate-tech argument '\(arguments[i])'")
             }
             i += 1
         }

@@ -32,6 +32,7 @@ public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case rawOutput
     case log
     case parasiticIR
+    case spefRoundTrip
     case report
 }
 
@@ -132,6 +133,7 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
     public let corners: [PEXArtifactCorner]
     public let artifacts: [PEXArtifactRecord]
     public let warnings: [PEXWarning]
+    public let extractorRun: PEXExtractorRunResult?
 
     public init(
         version: Int = PEXArtifactManifest.currentVersion,
@@ -143,7 +145,8 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         finishedAt: Date,
         corners: [PEXArtifactCorner],
         artifacts: [PEXArtifactRecord],
-        warnings: [PEXWarning]
+        warnings: [PEXWarning],
+        extractorRun: PEXExtractorRunResult? = nil
     ) {
         self.version = version
         self.runID = runID
@@ -155,6 +158,7 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         self.corners = corners
         self.artifacts = artifacts
         self.warnings = warnings
+        self.extractorRun = extractorRun
     }
 
     public func artifact(id: String) -> PEXArtifactRecord? {
@@ -179,6 +183,7 @@ public enum PEXArtifactCompletenessIssueKind: String, Sendable, Codable, Hashabl
     case missingArtifact
     case invalidHash
     case missingHash
+    case missingByteCount
     case missingIR
     case missingCornerArtifactReference
     case missingFailure

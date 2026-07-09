@@ -142,7 +142,8 @@ public struct PEXArtifactStore: Sendable {
                 cornerCount: manifest.corners.count,
                 successCount: successCount,
                 failureCount: failureCount
-            )
+            ),
+            extractorRun: manifest.extractorRun
         )
     }
 }

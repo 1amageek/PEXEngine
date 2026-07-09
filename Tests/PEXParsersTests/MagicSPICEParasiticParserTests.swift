@@ -8,12 +8,17 @@ import Foundation
 @Suite("MagicSPICEParasiticParser")
 struct MagicSPICEParasiticParserTests {
 
-    private func options(includeCoupling: Bool = true) -> PEXRunOptions {
+    private func options(
+        extractMode: PEXExtractMode = .rc,
+        includeCoupling: Bool = true,
+        minCapacitanceF: Double? = nil,
+        minResistanceOhm: Double? = nil
+    ) -> PEXRunOptions {
         PEXRunOptions(
-            extractMode: .rc,
+            extractMode: extractMode,
             includeCouplingCaps: includeCoupling,
-            minCapacitanceF: nil,
-            minResistanceOhm: nil,
+            minCapacitanceF: minCapacitanceF,
+            minResistanceOhm: minResistanceOhm,
             maxParallelJobs: 1,
             emitRawArtifacts: false,
             emitIRJSON: false,
@@ -21,7 +26,13 @@ struct MagicSPICEParasiticParserTests {
         )
     }
 
-    private func parse(_ spice: String, includeCoupling: Bool = true) throws -> ParasiticIR {
+    private func parse(
+        _ spice: String,
+        extractMode: PEXExtractMode = .rc,
+        includeCoupling: Bool = true,
+        minCapacitanceF: Double? = nil,
+        minResistanceOhm: Double? = nil
+    ) throws -> ParasiticIR {
         let dir = FileManager.default.temporaryDirectory
             .appending(path: "magicpex-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -31,7 +42,12 @@ struct MagicSPICEParasiticParserTests {
         let raw = PEXRawOutput(format: .spice, fileURLs: [file])
         let context = PEXParseContext(
             cornerID: PEXCornerID("tt"), runID: PEXRunID(), technology: nil,
-            options: options(includeCoupling: includeCoupling)
+            options: options(
+                extractMode: extractMode,
+                includeCoupling: includeCoupling,
+                minCapacitanceF: minCapacitanceF,
+                minResistanceOhm: minResistanceOhm
+            )
         )
         return try MagicSPICEParasiticParser().parse(raw, context: context)
     }
@@ -61,8 +77,10 @@ struct MagicSPICEParasiticParserTests {
         #expect(ir.elements.count == 2)
         #expect(ir.elements.allSatisfy { $0.kind == .coupling })
         let values = ir.elements.map(\.value).sorted()
-        #expect(abs(values[0] - 0.04571e-15) < 1e-20)
-        #expect(abs(values[1] - 0.0476e-15) < 1e-20)
+        let firstValue = try #require(values.first)
+        let secondValue = try #require(values.dropFirst().first)
+        #expect(abs(firstValue - 0.04571e-15) < 1e-20)
+        #expect(abs(secondValue - 0.0476e-15) < 1e-20)
         #expect(ParasiticIRValidator().validate(ir).isValid)
     }
 
@@ -127,6 +145,47 @@ struct MagicSPICEParasiticParserTests {
         #expect(ParasiticIRValidator().validate(ir).isValid)
     }
 
+    @Test("Magic SPICE parser applies extractMode and minimum thresholds")
+    func extractionOptionsFilterElementsAndModes() throws {
+        let spice = """
+        C0 A VSUBS 5f
+        C1 A VSUBS 0.2f
+        C2 A B 6f
+        R0 A A_1 10
+        R1 A_1 A_2 0.1
+        L0 A_2 A_3 2n
+        """
+
+        let filtered = try parse(
+            spice,
+            minCapacitanceF: 1e-15,
+            minResistanceOhm: 1.0
+        )
+        #expect(filtered.elements.filter { $0.kind == .capacitor }.count == 1)
+        #expect(filtered.elements.filter { $0.kind == .coupling }.count == 1)
+        #expect(filtered.elements.filter { $0.kind == .resistor }.count == 1)
+        #expect(filtered.elements.filter { $0.kind == .inductor }.count == 1)
+        #expect(abs(filtered.nets.map(\.totalGroundCapF).reduce(0, +) - 5e-15) < 1e-21)
+        #expect(abs(filtered.nets.map(\.totalCouplingCapF).reduce(0, +) - 6e-15) < 1e-21)
+        #expect(abs(filtered.nets.map(\.totalResistanceOhm).reduce(0, +) - 10.0) < 1e-9)
+        #expect(ParasiticIRValidator().validate(filtered).isValid)
+
+        let capacitanceOnly = try parse(spice, extractMode: .cOnly)
+        #expect(!capacitanceOnly.elements.contains { $0.kind == .resistor })
+        #expect(!capacitanceOnly.elements.contains { $0.kind == .inductor })
+        #expect(capacitanceOnly.elements.contains { $0.kind == .capacitor })
+        #expect(capacitanceOnly.elements.contains { $0.kind == .coupling })
+        #expect(abs(capacitanceOnly.nets.map(\.totalResistanceOhm).reduce(0, +)) < 1e-12)
+        #expect(ParasiticIRValidator().validate(capacitanceOnly).isValid)
+
+        let resistanceOnly = try parse(spice, extractMode: .rOnly)
+        #expect(resistanceOnly.elements.allSatisfy { $0.kind == .resistor })
+        #expect(!resistanceOnly.elements.contains { $0.kind == .inductor })
+        #expect(abs(resistanceOnly.nets.map(\.totalGroundCapF).reduce(0, +)) < 1e-24)
+        #expect(abs(resistanceOnly.nets.map(\.totalCouplingCapF).reduce(0, +)) < 1e-24)
+        #expect(ParasiticIRValidator().validate(resistanceOnly).isValid)
+    }
+
     @Test("Ground-node classification is case-insensitive")
     func groundCaseInsensitive() throws {
         let ir = try parse("C0 net1 vsubs 1f")  // lowercase substrate node
@@ -142,6 +201,47 @@ struct MagicSPICEParasiticParserTests {
         let res = ir.elements.filter { $0.kind == .resistor }
         #expect(res.count == 1)
         #expect(abs((res.first?.value ?? 0) - 12.5) < 1e-9)
+    }
+
+    @Test("An inductor line is lowered to an inductor element")
+    func inductor() throws {
+        let ir = try parse("""
+        L0 Y Y_1 3n
+        """)
+        let inductors = ir.elements.filter { $0.kind == .inductor }
+        #expect(inductors.count == 1)
+        #expect(inductors.first?.nodeA.netName.value == "Y")
+        #expect(inductors.first?.nodeB?.netName.value == "Y")
+        #expect(abs((inductors.first?.value ?? 0) - 3e-9) < 1e-18)
+        #expect(ParasiticIRValidator().validate(ir).isValid)
+    }
+
+    @Test("Magic SPICE parser rejects non-SPICE raw output format")
+    func parserRejectsWrongRawOutputFormat() throws {
+        let context = PEXParseContext(
+            cornerID: PEXCornerID("tt"),
+            runID: PEXRunID(),
+            technology: nil,
+            options: options()
+        )
+        let raw = PEXRawOutput(format: .spef, fileURLs: [])
+
+        do {
+            _ = try MagicSPICEParasiticParser().parse(raw, context: context)
+            Issue.record("Expected Magic SPICE parser to reject non-SPICE raw output format")
+        } catch let error as PEXError {
+            #expect(error.kind == .parseFailed)
+            #expect(error.message.contains("raw output format 'spef'"))
+        } catch {
+            Issue.record("Expected PEXError.parseFailed, got \(error)")
+        }
+    }
+
+    @Test("Magic SPICE parser rejects truncated parasitic element lines")
+    func parserRejectsTruncatedParasiticLine() throws {
+        #expect(throws: PEXError.self) {
+            _ = try parse("C0 net_a net_b")
+        }
     }
 
     @Test("SPICE engineering suffixes scale to canonical SI values")

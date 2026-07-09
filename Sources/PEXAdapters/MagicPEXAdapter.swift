@@ -1,13 +1,13 @@
 import Foundation
 import PEXCore
 
-/// Real parasitic-extraction adapter driven by Magic against a Sky130-class PDK.
+/// Real parasitic-extraction adapter driven by Magic against a profile-declared PDK.
 ///
 /// Extracts parasitic capacitance from `context.layoutURL` for `context.topCell`
 /// and writes a SPICE netlist (parsed downstream by `MagicSPICEParasiticParser`).
 /// Unlike `MockPEXAdapter`, it produces real parasitics from the layout; if the
 /// Magic toolchain is unavailable it fails loudly rather than fabricating output.
-public struct MagicPEXAdapter: PEXAdapter {
+public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
 
     public let backendID = "magic"
     // supportsCornerSweep is false on purpose: Magic's base `ext2spice` extracts
@@ -33,6 +33,49 @@ public struct MagicPEXAdapter: PEXAdapter {
         self.runner = runner
     }
 
+    public func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
+        guard let toolchain else {
+            return PEXExtractorToolReadiness(
+                backendID: backendID,
+                status: .blocked,
+                reason: "Magic executable, PDK root, or profile-declared Magic rcfile was not found.",
+                processProfile: processProfile,
+                capabilities: capabilities,
+                diagnostics: [
+                    PEXExtractorDiagnostic(
+                        diagnosticID: "magic-toolchain:missing",
+                        code: "extractor_toolchain_missing",
+                        severity: .blocked,
+                        message: "Magic toolchain is unavailable; set MAGIC_BIN and PDK_ROOT or install a configured signoff PDK profile.",
+                        suggestedActions: [
+                            "set_MAGIC_BIN",
+                            "set_PDK_ROOT",
+                            "install_profile_declared_pdk",
+                            "run_pex_doctor",
+                        ]
+                    )
+                ],
+                suggestedActions: [
+                    "set_MAGIC_BIN",
+                    "set_PDK_ROOT",
+                    "run_pex_doctor",
+                ]
+            )
+        }
+
+        let profile = processProfile ?? toolchain.processProfileReference
+        return PEXExtractorToolReadiness(
+            backendID: backendID,
+            status: .ready,
+            reason: "Magic executable and profile-declared PDK rcfile are available.",
+            executablePath: toolchain.magicExecutableURL.path(percentEncoded: false),
+            processProfile: profile,
+            capabilities: capabilities,
+            diagnostics: [],
+            suggestedActions: []
+        )
+    }
+
     public func prepare(_ context: PEXExecutionContext) async throws {
         let fm = FileManager.default
         for dir in [context.rawOutputDirectory, context.workingDirectory] {
@@ -54,20 +97,66 @@ public struct MagicPEXAdapter: PEXAdapter {
     }
 
     public func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        let plan = try makeExecutionPlan(for: context)
+        let result = try await runMagic(plan, context: context)
+        let combinedOutput = result.stdout + "\n" + result.stderr
+        let logURL = try writeProcessLog(combinedOutput, context: context)
+        try validateMagicResult(result, combinedOutput: combinedOutput, plan: plan, logURL: logURL, context: context)
+        return executionResult(plan: plan, logURL: logURL, context: context)
+    }
+
+    private func makeExecutionPlan(for context: PEXExecutionContext) throws -> MagicPEXExecutionPlan {
+        let toolchain = try executionToolchain(for: context)
+        let outputURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spice")
+        let settings = MagicPEXExtractionSettings(context: context)
+        return MagicPEXExecutionPlan(
+            toolchain: toolchain,
+            driverURL: try writeExtractionDriver(context),
+            outputURL: outputURL,
+            settings: settings,
+            environment: magicEnvironment(toolchain: toolchain, context: context, outputURL: outputURL, settings: settings)
+        )
+    }
+
+    private func executionToolchain(for context: PEXExecutionContext) throws -> MagicToolchain {
         guard let toolchain else {
             throw PEXError(
                 kind: .adapterUnavailable,
                 stage: .backendExecution,
                 cornerID: context.corner.id,
                 backendID: backendID,
-                message: "Magic toolchain not found (set MAGIC_BIN / PDK_ROOT, or install Magic + Sky130)",
+                message: "Magic toolchain not found (set MAGIC_BIN / PDK_ROOT, or install Magic plus a configured signoff PDK profile)",
                 underlyingDescription: nil
             )
         }
+        guard let executablePath = trimmedOverride(context.backendSelection.executablePath) else {
+            return toolchain
+        }
+        guard FileManager.default.isExecutableFile(atPath: executablePath) else {
+            throw PEXError(
+                kind: .adapterUnavailable,
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                backendID: backendID,
+                message: "Selected Magic executable is not executable: \(executablePath)",
+                underlyingDescription: nil
+            )
+        }
+        return MagicToolchain(
+            magicExecutableURL: URL(filePath: executablePath),
+            rcFileURL: toolchain.rcFileURL,
+            pdkRoot: context.backendSelection.environmentOverrides["PDK_ROOT"] ?? toolchain.pdkRoot,
+            profileID: toolchain.profileID,
+            pdkID: toolchain.pdkID,
+            requirementID: toolchain.requirementID
+        )
+    }
 
+    private func writeExtractionDriver(_ context: PEXExecutionContext) throws -> URL {
         let driverURL = context.workingDirectory.appending(path: "pex_extract.tcl")
         do {
             try Data(MagicToolchain.extractionDriver.utf8).write(to: driverURL)
+            return driverURL
         } catch {
             throw PEXError(
                 kind: .backendExecutionFailed,
@@ -78,36 +167,49 @@ public struct MagicPEXAdapter: PEXAdapter {
                 underlyingDescription: String(describing: error)
             )
         }
+    }
 
-        let outputURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spice")
-        // Always extract every capacitor (cthresh 0). The includeCouplingCaps
-        // option is honored when lowering to IR (MagicSPICEParasiticParser drops
-        // coupling elements), because Magic's `cthresh infinite` would discard the
-        // grounded caps too — yielding zero parasitics instead of "ground only".
-        let cthresh = "0"
-        // Extract resistance for RC / R-only modes; capacitance-only otherwise.
-        let extractResistance = context.options.extractMode == .rc
-            || context.options.extractMode == .rOnly
+    private func magicEnvironment(
+        toolchain: MagicToolchain,
+        context: PEXExecutionContext,
+        outputURL: URL,
+        settings: MagicPEXExtractionSettings
+    ) -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
-        environment["PDK_ROOT"] = toolchain.pdkRoot
+        environment.merge(context.backendSelection.environmentOverrides) { _, selected in selected }
+        environment["PDK_ROOT"] = context.backendSelection.environmentOverrides["PDK_ROOT"] ?? toolchain.pdkRoot
         environment["PEX_GDS"] = context.layoutURL.path(percentEncoded: false)
         environment["PEX_CELL"] = context.topCell
         environment["PEX_OUT"] = outputURL.path(percentEncoded: false)
-        environment["PEX_CTHRESH"] = cthresh
-        environment["PEX_EXTRESIST"] = extractResistance ? "on" : "off"
+        environment["PEX_CTHRESH"] = settings.cthresh
+        environment["PEX_EXTRESIST"] = settings.extresist
+        return environment
+    }
 
-        let result: ProcessRunner.ProcessResult
+    private func trimmedOverride(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func runMagic(
+        _ plan: MagicPEXExecutionPlan,
+        context: PEXExecutionContext
+    ) async throws -> ProcessRunner.ProcessResult {
         do {
-            result = try await runner.run(
-                executableURL: toolchain.magicExecutableURL,
+            return try await runner.run(
+                executableURL: plan.toolchain.magicExecutableURL,
                 arguments: [
                     "-dnull", "-noconsole",
-                    "-rcfile", toolchain.rcFileURL.path(percentEncoded: false),
-                    driverURL.path(percentEncoded: false),
+                    "-rcfile", plan.toolchain.rcFileURL.path(percentEncoded: false),
+                    plan.driverURL.path(percentEncoded: false),
                 ],
-                environment: environment,
-                workingDirectory: context.workingDirectory
+                environment: plan.environment,
+                workingDirectory: context.workingDirectory,
+                cancellationCheck: context.cancellationCheck
             )
+        } catch let error as PEXError where error.kind == .cancelled {
+            throw error
         } catch {
             throw PEXError(
                 kind: .backendExecutionFailed,
@@ -118,48 +220,108 @@ public struct MagicPEXAdapter: PEXAdapter {
                 underlyingDescription: String(describing: error)
             )
         }
+    }
 
-        let combinedOutput = result.stdout + "\n" + result.stderr
-        let fm = FileManager.default
-        guard result.exitCode == 0,
-              !combinedOutput.contains("PEX_ERROR"),
-              fm.fileExists(atPath: outputURL.path(percentEncoded: false)) else {
-            throw PEXError(
-                kind: .backendExecutionFailed,
-                stage: .backendExecution,
+    private func writeProcessLog(_ combinedOutput: String, context: PEXExecutionContext) throws -> URL {
+        let logURL = context.rawOutputDirectory.appending(path: "extraction.log")
+        do {
+            try Data(combinedOutput.utf8).write(to: logURL)
+            return logURL
+        } catch {
+            throw PEXAdapterExecutionFailure(
+                message: "Failed to write Magic extraction log",
+                stage: .persistence,
                 cornerID: context.corner.id,
-                backendID: backendID,
-                message: "Magic extraction failed (exit \(result.exitCode))",
-                underlyingDescription: combinedOutput
+                underlying: error
             )
         }
+    }
 
+    private func validateMagicResult(
+        _ result: ProcessRunner.ProcessResult,
+        combinedOutput: String,
+        plan: MagicPEXExecutionPlan,
+        logURL: URL,
+        context: PEXExecutionContext
+    ) throws {
+        guard result.exitCode == 0,
+              !combinedOutput.contains("PEX_ERROR"),
+              FileManager.default.fileExists(atPath: plan.outputURL.path(percentEncoded: false)) else {
+            throw PEXAdapterExecutionFailure(
+                message: "Magic extraction failed (exit \(result.exitCode))",
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                generatedArtifacts: [logArtifact(logURL, context: context)]
+            )
+        }
+    }
+
+    private func executionResult(
+        plan: MagicPEXExecutionPlan,
+        logURL: URL,
+        context: PEXExecutionContext
+    ) -> PEXAdapterExecutionResult {
         let rawOutput = PEXRawOutput(
             format: .spice,
-            fileURLs: [outputURL],
-            logURL: nil,
+            fileURLs: [plan.outputURL],
+            logURL: logURL,
             metadata: [
                 "generator": "magic",
-                "cthresh": cthresh,
-                "extresist": extractResistance ? "on" : "off",
+                "cthresh": plan.settings.cthresh,
+                "extresist": plan.settings.extresist,
             ]
         )
         return PEXAdapterExecutionResult(
             rawOutput: rawOutput,
             generatedArtifacts: [
-                PEXGeneratedArtifact(
-                    kind: .rawOutput,
-                    stage: .backendExecution,
-                    cornerID: context.corner.id,
-                    url: outputURL,
-                    provenance: PEXArtifactProvenance(note: "magic ext2spice parasitics")
-                )
+                rawOutputArtifact(plan.outputURL, context: context),
+                logArtifact(logURL, context: context),
             ]
+        )
+    }
+
+    private func rawOutputArtifact(_ outputURL: URL, context: PEXExecutionContext) -> PEXGeneratedArtifact {
+        PEXGeneratedArtifact(
+            kind: .rawOutput,
+            stage: .backendExecution,
+            cornerID: context.corner.id,
+            url: outputURL,
+            provenance: PEXArtifactProvenance(note: "magic ext2spice parasitics")
+        )
+    }
+
+    private func logArtifact(_ logURL: URL, context: PEXExecutionContext) -> PEXGeneratedArtifact {
+        PEXGeneratedArtifact(
+            kind: .log,
+            stage: .backendExecution,
+            cornerID: context.corner.id,
+            url: logURL,
+            provenance: PEXArtifactProvenance(note: "magic process log")
         )
     }
 
     public func cleanup(_ context: PEXExecutionContext) async {
         // Magic writes intermediate .ext files into the working directory; leave
         // them for inspection (the working directory is run-scoped).
+    }
+}
+
+private struct MagicPEXExecutionPlan {
+    let toolchain: MagicToolchain
+    let driverURL: URL
+    let outputURL: URL
+    let settings: MagicPEXExtractionSettings
+    let environment: [String: String]
+}
+
+private struct MagicPEXExtractionSettings {
+    let cthresh: String
+    let extresist: String
+
+    init(context: PEXExecutionContext) {
+        cthresh = "0"
+        let extractResistance = context.options.extractMode == .rc
+            || context.options.extractMode == .rOnly
+        extresist = extractResistance ? "on" : "off"
     }
 }

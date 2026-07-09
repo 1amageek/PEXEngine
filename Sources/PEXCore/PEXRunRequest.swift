@@ -8,6 +8,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
     public let topCell: String
     public let corners: [PEXCorner]
     public let technology: TechnologyInput
+    public let processProfile: PEXProcessProfileReference?
     public let backendSelection: PEXBackendSelection
     public let options: PEXRunOptions
     public let workingDirectory: URL?
@@ -20,6 +21,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         topCell: String,
         corners: [PEXCorner],
         technology: TechnologyInput,
+        processProfile: PEXProcessProfileReference? = nil,
         backendSelection: PEXBackendSelection,
         options: PEXRunOptions,
         workingDirectory: URL? = nil
@@ -31,6 +33,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         self.topCell = topCell
         self.corners = corners
         self.technology = technology
+        self.processProfile = processProfile
         self.backendSelection = backendSelection
         self.options = options
         self.workingDirectory = workingDirectory

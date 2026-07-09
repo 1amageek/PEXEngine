@@ -9,10 +9,14 @@ public struct SPEFLowering: Sendable {
         cornerID: PEXCornerID,
         options: PEXRunOptions = .default
     ) throws -> ParasiticIR {
-        let (capScale, resScale) = unitScaleFactors(from: tree.header)
+        let (capScale, resScale, inductScale) = unitScaleFactors(from: tree.header)
         let delimiter = tree.header.delimiter
         let explicitNodeOwners = explicitNodeOwnerMap(from: tree)
         let portNames = Set(tree.ports.map { resolveNameMap($0.name, nameMap: tree.nameMap) })
+        let portCoordinates = Dictionary(uniqueKeysWithValues: tree.ports.compactMap { port -> (String, Point2D)? in
+            guard let coordinate = port.coordinate else { return nil }
+            return (resolveNameMap(port.name, nameMap: tree.nameMap), coordinate)
+        })
 
         var nets: [ParasiticNet] = []
         var allElements: [ParasiticElement] = []
@@ -22,11 +26,19 @@ public struct SPEFLowering: Sendable {
         for netBlock in tree.nets {
             let netName = NetName(resolveNameMap(netBlock.netName, nameMap: tree.nameMap))
             let localNodeSet = localNodes(in: netBlock, nameMap: tree.nameMap)
+            let connectionCoordinates = connectionCoordinateMap(
+                in: netBlock,
+                nameMap: tree.nameMap,
+                portCoordinates: portCoordinates
+            )
 
             // Collect nodes from connections and element endpoints
             var nodeSet: Set<String> = []
             for conn in netBlock.connections {
                 nodeSet.insert(resolveNameMap(conn.name, nameMap: tree.nameMap))
+            }
+            for nodeCoordinate in netBlock.nodeCoordinates {
+                nodeSet.insert(resolveNameMap(nodeCoordinate.name, nameMap: tree.nameMap))
             }
             for cap in netBlock.capacitors {
                 let resolvedA = resolveNameMap(cap.nodeA, nameMap: tree.nameMap)
@@ -48,6 +60,10 @@ public struct SPEFLowering: Sendable {
                 nodeSet.insert(resolveNameMap(res.nodeA, nameMap: tree.nameMap))
                 nodeSet.insert(resolveNameMap(res.nodeB, nameMap: tree.nameMap))
             }
+            for inductor in netBlock.inductors {
+                nodeSet.insert(resolveNameMap(inductor.nodeA, nameMap: tree.nameMap))
+                nodeSet.insert(resolveNameMap(inductor.nodeB, nameMap: tree.nameMap))
+            }
 
             // Build node list
             let nodes = nodeSet.sorted().map { nodeName -> ParasiticNode in
@@ -58,7 +74,7 @@ public struct SPEFLowering: Sendable {
                     name: NodeName(nodeName),
                     kind: kind,
                     instancePath: nil,
-                    coordinate: nil
+                    coordinate: connectionCoordinates[nodeName]
                 )
             }
 
@@ -179,6 +195,24 @@ public struct SPEFLowering: Sendable {
                 totalResistance += scaledValue
             }
 
+            // Convert inductors.
+            for inductor in netBlock.inductors {
+                guard options.extractMode == .rc else { continue }
+                let resolvedA = resolveNameMap(inductor.nodeA, nameMap: tree.nameMap)
+                let resolvedB = resolveNameMap(inductor.nodeB, nameMap: tree.nameMap)
+                let scaledValue = inductor.value * inductScale
+
+                let element = ParasiticElement(
+                    id: "\(netName.value)_L\(inductor.id)",
+                    kind: .inductor,
+                    nodeA: NodeRef(netName: netName, nodeName: NodeName(resolvedA)),
+                    nodeB: NodeRef(netName: netName, nodeName: NodeName(resolvedB)),
+                    value: scaledValue,
+                    source: .extracted
+                )
+                allElements.append(element)
+            }
+
             let net = ParasiticNet(
                 name: netName,
                 nodes: nodes,
@@ -198,7 +232,7 @@ public struct SPEFLowering: Sendable {
                     name: NodeName(nodeName),
                     kind: portNames.contains(nodeName) ? .pin : .internal,
                     instancePath: nil,
-                    coordinate: nil
+                    coordinate: portCoordinates[nodeName]
                 )
             }
             nets.append(ParasiticNet(
@@ -224,9 +258,8 @@ public struct SPEFLowering: Sendable {
         )
     }
 
-    /// Returns scale factors to convert header units to canonical (Farad, Ohm).
-    /// Incorporates both the unit base (PF→1e-12) and the SPEF header scale factor (*C_UNIT 10 PF → 10).
-    private func unitScaleFactors(from header: SPEFHeader) -> (cap: Double, res: Double) {
+    /// Returns scale factors to convert header units to canonical (Farad, Ohm, Henry).
+    private func unitScaleFactors(from header: SPEFHeader) -> (cap: Double, res: Double, induct: Double) {
         let capBase: Double
         switch header.capUnit.uppercased() {
         case "PF": capBase = 1e-12
@@ -244,7 +277,21 @@ public struct SPEFLowering: Sendable {
         default: resBase = 1.0
         }
 
-        return (capBase * header.capScaleFactor, resBase * header.resScaleFactor)
+        let inductBase: Double
+        switch (header.inductUnit ?? "HENRY").uppercased() {
+        case "H", "HENRY": inductBase = 1.0
+        case "MH": inductBase = 1e-3
+        case "UH": inductBase = 1e-6
+        case "NH": inductBase = 1e-9
+        case "PH": inductBase = 1e-12
+        default: inductBase = 1.0
+        }
+
+        return (
+            capBase * header.capScaleFactor,
+            resBase * header.resScaleFactor,
+            inductBase * (header.inductScaleFactor ?? 1.0)
+        )
     }
 
     /// Resolves mapped name references (*123 -> actual name).
@@ -274,6 +321,9 @@ public struct SPEFLowering: Sendable {
         for connection in netBlock.connections {
             nodes.insert(resolveNameMap(connection.name, nameMap: nameMap))
         }
+        for nodeCoordinate in netBlock.nodeCoordinates {
+            nodes.insert(resolveNameMap(nodeCoordinate.name, nameMap: nameMap))
+        }
         for capacitor in netBlock.capacitors where capacitor.nodeB == nil {
             nodes.insert(resolveNameMap(capacitor.nodeA, nameMap: nameMap))
         }
@@ -281,7 +331,27 @@ public struct SPEFLowering: Sendable {
             nodes.insert(resolveNameMap(resistor.nodeA, nameMap: nameMap))
             nodes.insert(resolveNameMap(resistor.nodeB, nameMap: nameMap))
         }
+        for inductor in netBlock.inductors {
+            nodes.insert(resolveNameMap(inductor.nodeA, nameMap: nameMap))
+            nodes.insert(resolveNameMap(inductor.nodeB, nameMap: nameMap))
+        }
         return nodes
+    }
+
+    private func connectionCoordinateMap(
+        in netBlock: SPEFNetBlock,
+        nameMap: [Int: String],
+        portCoordinates: [String: Point2D]
+    ) -> [String: Point2D] {
+        var coordinates = portCoordinates
+        for connection in netBlock.connections {
+            guard let coordinate = connection.coordinate else { continue }
+            coordinates[resolveNameMap(connection.name, nameMap: nameMap)] = coordinate
+        }
+        for nodeCoordinate in netBlock.nodeCoordinates {
+            coordinates[resolveNameMap(nodeCoordinate.name, nameMap: nameMap)] = nodeCoordinate.coordinate
+        }
+        return coordinates
     }
 
     private func isLocalNode(

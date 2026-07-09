@@ -15,12 +15,15 @@ struct SPEFWriterTests {
         #expect(spef.contains("*SPEF"))
         #expect(spef.contains("*DESIGN \"top\""))
         #expect(spef.contains("*D_NET VDD"))
+        #expect(spef.contains("*N"))
         #expect(spef.contains("*CAP"))
         #expect(spef.contains("*RES"))
+        #expect(spef.contains("*INDUC"))
 
         let lowered = try parseAndLower(spef)
         #expect(lowered.nets.count == 2)
         #expect(lowered.elements.contains { $0.kind == .coupling })
+        #expect(lowered.elements.contains { $0.kind == .inductor })
     }
 
     @Test func roundTripsCanonicalValues() throws {
@@ -32,10 +35,72 @@ struct SPEFWriterTests {
         let groundCap = try #require(lowered.elements.first { $0.id == "VDD_C1" })
         let couplingCap = try #require(lowered.elements.first { $0.kind == .coupling })
         let resistor = try #require(lowered.elements.first { $0.kind == .resistor && $0.nodeA.netName == NetName("VDD") })
+        let inductor = try #require(lowered.elements.first { $0.kind == .inductor && $0.nodeA.netName == NetName("VDD") })
 
         #expect(abs(groundCap.value - 0.2e-12) < 1e-18)
         #expect(abs(couplingCap.value - 0.05e-12) < 1e-18)
         #expect(abs(resistor.value - 10.0) < 1e-9)
+        #expect(abs(inductor.value - 2.5e-9) < 1e-18)
+        let vdd = try #require(lowered.nets.first { $0.name == NetName("VDD") })
+        #expect(vdd.nodes.first { $0.name == NodeName("VDD:1") }?.coordinate == Point2D(x: 10, y: 20))
+        #expect(vdd.nodes.first { $0.name == NodeName("VDD:2") }?.coordinate == Point2D(x: 11, y: 20))
+    }
+
+    @Test func writesNameMapForMagicPhysicalNodeNames() throws {
+        let net = NetName("OUT")
+        let firstNode = NodeName("m1_0_0#")
+        let secondNode = NodeName("m1_1_0#")
+        let ir = ParasiticIR(
+            version: ParasiticIR.currentVersion,
+            cornerID: "tt",
+            units: .canonical,
+            nets: [
+                ParasiticNet(
+                    name: net,
+                    nodes: [
+                        ParasiticNode(name: firstNode, kind: .internal, instancePath: nil, coordinate: nil),
+                        ParasiticNode(name: secondNode, kind: .internal, instancePath: nil, coordinate: nil),
+                    ],
+                    totalGroundCapF: 1e-15,
+                    totalCouplingCapF: 0,
+                    totalResistanceOhm: 5
+                ),
+            ],
+            elements: [
+                ParasiticElement(
+                    id: "Cphys",
+                    kind: .capacitor,
+                    nodeA: NodeRef(netName: net, nodeName: firstNode),
+                    nodeB: nil,
+                    value: 1e-15,
+                    source: .extracted
+                ),
+                ParasiticElement(
+                    id: "Rphys",
+                    kind: .resistor,
+                    nodeA: NodeRef(netName: net, nodeName: firstNode),
+                    nodeB: NodeRef(netName: net, nodeName: secondNode),
+                    value: 5,
+                    source: .extracted
+                ),
+            ],
+            metadata: ["designName": "phys"]
+        )
+
+        let spef = try SPEFWriter(options: SPEFWriterOptions(designName: "phys")).write(ir)
+
+        #expect(spef.contains("*NAME_MAP"))
+        #expect(spef.contains("m1_0_0#"))
+        #expect(spef.contains("m1_1_0#"))
+        #expect(spef.contains("*CAP"))
+        #expect(spef.contains("*RES"))
+
+        let lowered = try parseAndLower(spef)
+        #expect(ParasiticIRValidator().validate(lowered).isValid)
+        let loweredNet = try #require(lowered.nets.first { $0.name == net })
+        #expect(Set(loweredNet.nodes.map(\.name)) == [firstNode, secondNode])
+        #expect(lowered.elements.contains { $0.kind == .capacitor && $0.nodeA.nodeName == firstNode })
+        #expect(lowered.elements.contains { $0.kind == .resistor && $0.nodeB?.nodeName == secondNode })
     }
 
     @Test func writesToFile() throws {
@@ -90,8 +155,8 @@ struct SPEFWriterTests {
             ParasiticNet(
                 name: vdd,
                 nodes: [
-                    ParasiticNode(name: vdd1, kind: .pin, instancePath: nil, coordinate: nil),
-                    ParasiticNode(name: vdd2, kind: .internal, instancePath: nil, coordinate: nil),
+                    ParasiticNode(name: vdd1, kind: .pin, instancePath: nil, coordinate: Point2D(x: 10, y: 20)),
+                    ParasiticNode(name: vdd2, kind: .internal, instancePath: nil, coordinate: Point2D(x: 11, y: 20)),
                 ],
                 totalGroundCapF: 0.2e-12,
                 totalCouplingCapF: 0.05e-12,
@@ -100,7 +165,7 @@ struct SPEFWriterTests {
             ParasiticNet(
                 name: vss,
                 nodes: [
-                    ParasiticNode(name: vss1, kind: .pin, instancePath: nil, coordinate: nil),
+                    ParasiticNode(name: vss1, kind: .pin, instancePath: nil, coordinate: Point2D(x: 0, y: 0)),
                 ],
                 totalGroundCapF: 0.1e-12,
                 totalCouplingCapF: 0,
@@ -131,6 +196,14 @@ struct SPEFWriterTests {
                 nodeA: NodeRef(netName: vdd, nodeName: vdd1),
                 nodeB: NodeRef(netName: vdd, nodeName: vdd2),
                 value: 10,
+                source: .extracted
+            ),
+            ParasiticElement(
+                id: "L1",
+                kind: .inductor,
+                nodeA: NodeRef(netName: vdd, nodeName: vdd1),
+                nodeB: NodeRef(netName: vdd, nodeName: vdd2),
+                value: 2.5e-9,
                 source: .extracted
             ),
         ]

@@ -1,20 +1,51 @@
 import Foundation
+import PEXCore
+import SignoffToolSupport
 
-/// Locates an installed Magic + Sky130 PDK toolchain for parasitic extraction.
+/// Locates an installed Magic plus profile-declared PDK toolchain for parasitic extraction.
 ///
 /// Returning `nil` from `locate()` — rather than substituting the mock — leaves
 /// the decision to the caller; `MagicPEXAdapter` fails loudly when the toolchain
 /// is unavailable instead of silently producing fabricated parasitics.
 public struct MagicToolchain: Sendable {
+    public static let magicRequirementID = "magic"
 
     public let magicExecutableURL: URL
     public let rcFileURL: URL
     public let pdkRoot: String
+    public let profileID: String?
+    public let pdkID: String?
+    public let requirementID: String
 
-    public init(magicExecutableURL: URL, rcFileURL: URL, pdkRoot: String) {
+    public init(
+        magicExecutableURL: URL,
+        rcFileURL: URL,
+        pdkRoot: String,
+        profileID: String? = nil,
+        pdkID: String? = nil,
+        requirementID: String = MagicToolchain.magicRequirementID
+    ) {
         self.magicExecutableURL = magicExecutableURL
         self.rcFileURL = rcFileURL
         self.pdkRoot = pdkRoot
+        self.profileID = profileID
+        self.pdkID = pdkID
+        self.requirementID = requirementID
+    }
+
+    public var processProfileReference: PEXProcessProfileReference {
+        PEXProcessProfileReference(
+            profileID: profileID,
+            pdkID: pdkID,
+            source: "SignoffPDKProfile",
+            requirementID: requirementID,
+            pdkRoot: pdkRoot,
+            primaryDeckPath: rcFileURL.path(percentEncoded: false),
+            metadata: [
+                "tool": "magic",
+                "deckRole": "extraction",
+            ]
+        )
     }
 
     /// The Tcl driver that extracts parasitics and writes a SPICE netlist.
@@ -65,6 +96,8 @@ public struct MagicToolchain: Sendable {
     """
 
     public static func locate(
+        profile: SignoffPDKProfile,
+        requirementID: String = magicRequirementID,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         fileManager: FileManager = .default
     ) -> MagicToolchain? {
@@ -72,36 +105,44 @@ public struct MagicToolchain: Sendable {
             ?? NSString(string: "~/.local/magic/bin/magic").expandingTildeInPath
         guard fileManager.isExecutableFile(atPath: magicPath) else { return nil }
 
-        guard let pdkRoot = resolvePDKRoot(environment: environment, fileManager: fileManager) else {
+        guard let pdkRoot = SignoffPDKLocator.root(
+            requirementID: requirementID,
+            profile: profile,
+            environment: environment,
+            fileManager: fileManager
+        ) else { return nil }
+        let rcFile: URL
+        do {
+            rcFile = try SignoffPDKLocator.requiredFileURL(
+                in: pdkRoot,
+                profile: profile,
+                requirementID: requirementID
+            )
+        } catch {
             return nil
         }
-        let rcFile = URL(filePath: pdkRoot)
-            .appending(path: "sky130A/libs.tech/magic/sky130A.magicrc")
         guard fileManager.fileExists(atPath: rcFile.path(percentEncoded: false)) else { return nil }
 
         return MagicToolchain(
             magicExecutableURL: URL(filePath: magicPath),
             rcFileURL: rcFile,
-            pdkRoot: pdkRoot
+            pdkRoot: pdkRoot,
+            profileID: profile.profileID,
+            pdkID: profile.pdkID,
+            requirementID: requirementID
         )
     }
 
-    private static func resolvePDKRoot(
-        environment: [String: String],
-        fileManager: FileManager
-    ) -> String? {
-        if let root = environment["PDK_ROOT"], fileManager.fileExists(atPath: root) {
-            return root
-        }
-        let versions = NSString(string: "~/.volare/volare/sky130/versions").expandingTildeInPath
-        let entries: [String]
+    public static func locate(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) -> MagicToolchain? {
+        let profile: SignoffPDKProfile
         do {
-            entries = try fileManager.contentsOfDirectory(atPath: versions)
+            profile = try SignoffPDKProfile.bundledDefaultProfile()
         } catch {
             return nil
         }
-        let builds = entries.filter { !$0.hasPrefix(".") }
-        guard builds.count == 1 else { return nil }
-        return versions + "/" + builds[0]
+        return locate(profile: profile, environment: environment, fileManager: fileManager)
     }
 }

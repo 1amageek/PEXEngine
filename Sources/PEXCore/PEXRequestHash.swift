@@ -37,6 +37,7 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
             layoutFormat: request.layoutFormat,
             sourceNetlistFormat: request.sourceNetlistFormat,
             corners: request.corners,
+            processProfile: request.processProfile,
             backendSelection: PEXCanonicalBackendSelection(request.backendSelection),
             options: request.options,
             inputArtifacts: canonicalArtifacts
@@ -52,6 +53,7 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
     let layoutFormat: LayoutFormat
     let sourceNetlistFormat: NetlistFormat
     let corners: [PEXCorner]
+    let processProfile: PEXProcessProfileReference?
     let backendSelection: PEXCanonicalBackendSelection
     let options: PEXRunOptions
     let inputArtifacts: [PEXCanonicalInputArtifact]

@@ -11,6 +11,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
     public let artifacts: PEXArtifactManifest
     public let manifestURL: URL
     public let metrics: PEXRunMetrics
+    public let extractorRun: PEXExtractorRunResult?
 
     public init(
         runID: PEXRunID,
@@ -22,7 +23,8 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
         warnings: [PEXWarning],
         artifacts: PEXArtifactManifest,
         manifestURL: URL,
-        metrics: PEXRunMetrics
+        metrics: PEXRunMetrics,
+        extractorRun: PEXExtractorRunResult? = nil
     ) {
         self.runID = runID
         self.requestHash = requestHash
@@ -34,5 +36,6 @@ public struct PEXRunResult: Sendable, Codable, Hashable {
         self.artifacts = artifacts
         self.manifestURL = manifestURL
         self.metrics = metrics
+        self.extractorRun = extractorRun
     }
 }

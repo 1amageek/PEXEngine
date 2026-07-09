@@ -5,68 +5,94 @@ public struct ParseCommand: Sendable {
     public let inputPath: String
     public let format: PEXOutputFormat
     public let cornerID: String
+    public let topSubckt: String?
     public let jsonOutput: Bool
+    public let reportOutput: Bool
 
     public init(arguments: [String]) throws {
-        var path: String?
-        var fmt: String = "spef"
-        var corner: String = "default"
-        var json = false
-
-        var i = 0
-        while i < arguments.count {
-            switch arguments[i] {
-            case "--input":
-                i += 1
-                guard i < arguments.count else {
-                    throw PEXError.invalidInput("--input requires a path argument")
-                }
-                path = arguments[i]
-            case "--format":
-                i += 1
-                guard i < arguments.count else {
-                    throw PEXError.invalidInput("--format requires a value")
-                }
-                fmt = arguments[i]
-            case "--corner":
-                i += 1
-                guard i < arguments.count else {
-                    throw PEXError.invalidInput("--corner requires a value")
-                }
-                corner = arguments[i]
-            case "--json":
-                json = true
-            default:
-                if path == nil {
-                    path = arguments[i]
-                }
-            }
-            i += 1
-        }
-
-        guard let inputPath = path else {
-            throw PEXError.invalidInput("Input file path is required")
-        }
-        self.inputPath = inputPath
-        guard let format = PEXOutputFormat(rawValue: fmt), format == .spef else {
-            throw PEXError.invalidInput("Unsupported format '\(fmt)'. Supported: spef")
-        }
-        self.format = format
-        self.cornerID = corner
-        self.jsonOutput = json
+        let parsed = try ParseCommandArguments(arguments: arguments)
+        self.inputPath = parsed.inputPath
+        self.format = parsed.format
+        self.cornerID = parsed.cornerID
+        self.topSubckt = parsed.topSubckt
+        self.jsonOutput = parsed.jsonOutput
+        self.reportOutput = parsed.reportOutput
     }
 
     public func run() async throws {
+        let parsed = try parse()
+        if reportOutput {
+            let report = PEXParseReport(
+                inputPath: inputPath,
+                format: format,
+                cornerID: cornerID,
+                topSubckt: topSubckt,
+                ir: parsed.ir,
+                validationResult: parsed.validationResult
+            )
+            if jsonOutput {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                let data = try encoder.encode(report)
+                print(String(data: data, encoding: .utf8) ?? "{}")
+            } else {
+                print("Parse report: \(report.status)")
+                print("Format: \(format.rawValue)")
+                print("Corner: \(cornerID)")
+                print("Nets: \(report.summary.netCount), elements: \(report.summary.elementCount)")
+                print("Validation: \(report.validation.status) (\(report.validation.errorCount) errors, \(report.validation.warningCount) warnings)")
+            }
+            return
+        }
+
+        if jsonOutput {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(parsed.ir)
+            print(String(data: data, encoding: .utf8) ?? "{}")
+        } else {
+            print("Parsed \(format.rawValue.uppercased()): \(parsed.ir.nets.count) nets, \(parsed.ir.elements.count) elements")
+            print("Corner: \(parsed.ir.cornerID)")
+            print("Validation: \(parsed.validationResult.isValid ? "PASS" : "FAIL") (\(parsed.validationResult.errors.count) errors, \(parsed.validationResult.warnings.count) warnings)")
+            if !parsed.validationResult.errors.isEmpty {
+                for err in parsed.validationResult.errors {
+                    print("  ERROR: \(err)")
+                }
+            }
+        }
+    }
+
+    public func buildReport() throws -> PEXParseReport {
+        let parsed = try parse()
+        return PEXParseReport(
+            inputPath: inputPath,
+            format: format,
+            cornerID: cornerID,
+            topSubckt: topSubckt,
+            ir: parsed.ir,
+            validationResult: parsed.validationResult
+        )
+    }
+
+    private struct ParsedOutput {
+        let ir: ParasiticIR
+        let validationResult: ParasiticIRValidationResult
+    }
+
+    private func parse() throws -> ParsedOutput {
         let fileURL = URL(filePath: inputPath)
+        var metadata: [String: String] = [:]
+        if let topSubckt {
+            metadata["topSubckt"] = topSubckt
+        }
         let raw = PEXRawOutput(
             format: format,
             fileURLs: [fileURL],
             logURL: nil,
-            metadata: [:]
+            metadata: metadata
         )
 
-        let parserRegistry = PEXParserRegistry()
-        parserRegistry.register(SPEFPEXParser())
+        let parserRegistry = PEXDefaultParsers.makeRegistry()
 
         guard let parser = parserRegistry.parser(for: format) else {
             throw PEXError(
@@ -87,21 +113,6 @@ public struct ParseCommand: Sendable {
 
         let validator = ParasiticIRValidator()
         let validationResult = validator.validate(ir)
-
-        if jsonOutput {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(ir)
-            print(String(data: data, encoding: .utf8) ?? "{}")
-        } else {
-            print("Parsed SPEF: \(ir.nets.count) nets, \(ir.elements.count) elements")
-            print("Corner: \(ir.cornerID)")
-            print("Validation: \(validationResult.isValid ? "PASS" : "FAIL") (\(validationResult.errors.count) errors, \(validationResult.warnings.count) warnings)")
-            if !validationResult.errors.isEmpty {
-                for err in validationResult.errors {
-                    print("  ERROR: \(err)")
-                }
-            }
-        }
+        return ParsedOutput(ir: ir, validationResult: validationResult)
     }
 }

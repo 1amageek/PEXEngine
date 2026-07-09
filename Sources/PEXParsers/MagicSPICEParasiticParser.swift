@@ -6,6 +6,9 @@ import PEXCore
 ///
 /// Magic emits parasitic capacitors as `C<id> <nodeA> <nodeB> <value>` and, when
 /// resistance extraction is enabled, resistors as `R<id> <nodeA> <nodeB> <value>`.
+/// Some extracted SPICE/DSPF producers also emit inductors as
+/// `L<id> <nodeA> <nodeB> <value>`, which are retained in the canonical IR when
+/// full RC extraction is requested.
 /// A capacitor whose second node is the substrate/global-ground node becomes a
 /// grounded `capacitor` (nodeB == nil); a capacitor between two signal nets
 /// becomes a `coupling` element. Device lines (`X`/`M`/...) and directives are
@@ -31,15 +34,35 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
     }
 
     public func parse(_ raw: PEXRawOutput, context: PEXParseContext) throws -> ParasiticIR {
+        try validateFormat(raw.format, context: context)
+        let fileURL = try selectedFile(from: raw, context: context)
+        let source = try readSource(from: fileURL, context: context)
+        let records = try parseRecords(source: source, context: context)
+        return buildIR(records: records, sourceFileName: fileURL.lastPathComponent, context: context)
+    }
+
+    private func validateFormat(_ rawFormat: PEXOutputFormat, context: PEXParseContext) throws {
+        guard rawFormat == format else {
+            throw PEXError.parseFailed(
+                cornerID: context.cornerID,
+                message: "Magic SPICE parser received raw output format '\(rawFormat.rawValue)'"
+            )
+        }
+    }
+
+    private func selectedFile(from raw: PEXRawOutput, context: PEXParseContext) throws -> URL {
         guard let fileURL = raw.fileURLs.first else {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,
                 message: "No SPICE file found in raw output"
             )
         }
-        let source: String
+        return fileURL
+    }
+
+    private func readSource(from fileURL: URL, context: PEXParseContext) throws -> String {
         do {
-            source = try String(contentsOf: fileURL, encoding: .utf8)
+            return try String(contentsOf: fileURL, encoding: .utf8)
         } catch {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,
@@ -47,107 +70,113 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
                 underlying: error
             )
         }
+    }
 
-        // Coupling caps are dropped when the run does not request them, matching
-        // MockParasiticGenerator (Magic's own `cthresh infinite` cannot do this —
-        // it discards grounded caps too — so the filtering happens here).
-        let includeCoupling = context.options.includeCouplingCaps
-
-        // Coupling caps are dropped when the run does not request them, matching
-        // MockParasiticGenerator.
-        struct GroundCapRecord { let signal: String; let value: Double }
-        struct PairRecord { let a: String; let b: String; let value: Double }
-        var grounds: [GroundCapRecord] = []
-        var couplings: [PairRecord] = []
-        var resistors: [PairRecord] = []
-
-        // First-seen node order, and a union-find over resistor endpoints so that
-        // resistor-connected sub-nodes (Magic splits a net at resistors) collapse
-        // into one net — matching SPEFLowering, where a net's resistors are
-        // intra-net. Capacitors never merge nets (coupling is cross-net).
-        var nodeOrder: [String] = []
-        var seenNodes: Set<String> = []
-        var parent: [String: String] = [:]
-        func see(_ n: String) {
-            if parent[n] == nil { parent[n] = n }
-            if seenNodes.insert(n).inserted { nodeOrder.append(n) }
-        }
-        func find(_ x: String) -> String {
-            var root = x
-            while parent[root]! != root { root = parent[root]! }
-            var cursor = x
-            while parent[cursor]! != root { let next = parent[cursor]!; parent[cursor] = root; cursor = next }
-            return root
-        }
-        func union(_ a: String, _ b: String) {
-            let ra = find(a), rb = find(b)
-            if ra != rb { parent[rb] = ra }
-        }
-
+    private func parseRecords(source: String, context: PEXParseContext) throws -> MagicSPICERecords {
+        let options = context.options
+        var records = MagicSPICERecords()
         for rawLine in source.split(whereSeparator: \.isNewline) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard let first = line.first else { continue }
-            // Skip comments, directives, and continuation lines.
-            if first == "*" || first == "." || first == "+" { continue }
-            let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
-            guard tokens.count >= 4 else { continue }
-
-            let kind = first.lowercased()
-            guard kind == "c" || kind == "r" else { continue } // ignore devices
-
-            let nodeA = tokens[1]
-            let nodeB = tokens[2]
-            guard let value = Self.parseSPICEValue(tokens[3]) else {
-                throw PEXError.parseFailed(
-                    cornerID: context.cornerID,
-                    message: "Unparseable value '\(tokens[3])' in line: \(line)"
-                )
-            }
-
-            if kind == "c" {
-                let aGround = isGround(nodeA)
-                let bGround = isGround(nodeB)
-                if aGround && bGround { continue }
-                if aGround || bGround {
-                    let signal = aGround ? nodeB : nodeA
-                    see(signal)
-                    grounds.append(GroundCapRecord(signal: signal, value: value))
-                } else {
-                    guard includeCoupling else { continue }
-                    see(nodeA); see(nodeB)
-                    couplings.append(PairRecord(a: nodeA, b: nodeB, value: value))
-                }
-            } else { // resistor
-                see(nodeA); see(nodeB)
-                union(nodeA, nodeB)
-                resistors.append(PairRecord(a: nodeA, b: nodeB, value: value))
+            if let line = try parseElementLine(String(rawLine), context: context) {
+                append(line, to: &records, options: options)
             }
         }
+        return records
+    }
 
-        // Net name per node = the lexicographically smallest node in its
-        // resistor-connected component (the clean base name, e.g. "Y" over
-        // "Y_ext_1#"). Nodes with no resistors are their own singleton net, so the
-        // capacitance-only case is unchanged (one net per node).
-        var componentNodes: [String: [String]] = [:]
-        for n in nodeOrder { componentNodes[find(n), default: []].append(n) }
-        var netNameOf: [String: String] = [:]
-        for (_, nodes) in componentNodes {
-            let netName = nodes.min() ?? nodes[0]
-            for n in nodes { netNameOf[n] = netName }
+    private func parseElementLine(_ rawLine: String, context: PEXParseContext) throws -> MagicSPICEElementLine? {
+        let line = rawLine.trimmingCharacters(in: .whitespaces)
+        guard let first = line.first else { return nil }
+        if first == "*" || first == "." || first == "+" { return nil }
+        let tokens = line.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let kind = MagicSPICEElementKind(rawPrefix: first) else { return nil }
+        guard let elementTokens = MagicSPICEElementTokens(tokens: tokens) else {
+            throw PEXError.parseFailed(
+                cornerID: context.cornerID,
+                message: "Truncated \(kind.rawName) element line requires name, two nodes, and value: \(line)"
+            )
         }
+        guard let value = Self.parseSPICEValue(elementTokens.valueToken) else {
+            throw PEXError.parseFailed(
+                cornerID: context.cornerID,
+                message: "Unparseable value '\(elementTokens.valueToken)' in line: \(line)"
+            )
+        }
+
+        return MagicSPICEElementLine(
+            kind: kind,
+            nodeA: elementTokens.nodeA,
+            nodeB: elementTokens.nodeB,
+            value: value
+        )
+    }
+
+    private func append(
+        _ line: MagicSPICEElementLine,
+        to records: inout MagicSPICERecords,
+        options: PEXRunOptions
+    ) {
+        switch line.kind {
+        case .capacitor:
+            appendCapacitor(line, to: &records, options: options)
+        case .resistor:
+            records.connectivity.see(line.nodeA)
+            records.connectivity.see(line.nodeB)
+            records.connectivity.union(line.nodeA, line.nodeB)
+            guard shouldIncludeResistance(line.value, options: options) else { return }
+            records.resistors.append(MagicPairRecord(a: line.nodeA, b: line.nodeB, value: line.value))
+        case .inductor:
+            records.connectivity.see(line.nodeA)
+            records.connectivity.see(line.nodeB)
+            records.connectivity.union(line.nodeA, line.nodeB)
+            guard shouldIncludeInductance(options: options) else { return }
+            records.inductors.append(MagicPairRecord(a: line.nodeA, b: line.nodeB, value: line.value))
+        }
+    }
+
+    private func appendCapacitor(
+        _ line: MagicSPICEElementLine,
+        to records: inout MagicSPICERecords,
+        options: PEXRunOptions
+    ) {
+        let aGround = isGround(line.nodeA)
+        let bGround = isGround(line.nodeB)
+        if aGround && bGround { return }
+        if aGround || bGround {
+            let signal = aGround ? line.nodeB : line.nodeA
+            records.connectivity.see(signal)
+            guard shouldIncludeCapacitance(line.value, options: options) else { return }
+            records.grounds.append(MagicGroundCapRecord(signal: signal, value: line.value))
+        } else {
+            records.connectivity.see(line.nodeA)
+            records.connectivity.see(line.nodeB)
+            guard options.includeCouplingCaps else { return }
+            guard shouldIncludeCapacitance(line.value, options: options) else { return }
+            records.couplings.append(MagicPairRecord(a: line.nodeA, b: line.nodeB, value: line.value))
+        }
+    }
+
+    private func buildIR(
+        records: MagicSPICERecords,
+        sourceFileName: String,
+        context: PEXParseContext
+    ) -> ParasiticIR {
+        let netNameOf = records.connectivity.netNameMap()
+        let nodeOrder = records.connectivity.nodeOrder
+
+        var elements: [ParasiticElement] = []
+        var capIndex = 0
+        var resIndex = 0
+        var indIndex = 0
+        var groundCap: [String: Double] = [:]
+        var couplingCap: [String: Double] = [:]
+        var resistance: [String: Double] = [:]
+
         func netName(_ n: String) -> String { netNameOf[n] ?? n }
         func nodeRef(_ n: String) -> NodeRef {
             NodeRef(netName: NetName(netName(n)), nodeName: NodeName(n))
         }
 
-        var elements: [ParasiticElement] = []
-        var capIndex = 0
-        var resIndex = 0
-        var groundCap: [String: Double] = [:]
-        var couplingCap: [String: Double] = [:]
-        var resistance: [String: Double] = [:]
-
-        for g in grounds {
+        for g in records.grounds {
             elements.append(ParasiticElement(
                 id: "C\(capIndex)", kind: .capacitor,
                 nodeA: nodeRef(g.signal), nodeB: nil, value: g.value, source: .extracted
@@ -155,7 +184,7 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             capIndex += 1
             groundCap[netName(g.signal), default: 0] += g.value
         }
-        for c in couplings {
+        for c in records.couplings {
             elements.append(ParasiticElement(
                 id: "C\(capIndex)", kind: .coupling,
                 nodeA: nodeRef(c.a), nodeB: nodeRef(c.b), value: c.value, source: .extracted
@@ -164,7 +193,7 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             // Attribute coupling to one net only (a's net), matching SPEFLowering.
             couplingCap[netName(c.a), default: 0] += c.value
         }
-        for r in resistors {
+        for r in records.resistors {
             elements.append(ParasiticElement(
                 id: "R\(resIndex)", kind: .resistor,
                 nodeA: nodeRef(r.a), nodeB: nodeRef(r.b), value: r.value, source: .extracted
@@ -172,6 +201,13 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             resIndex += 1
             // Count the resistor once (on a's net), matching SPEFLowering.
             resistance[netName(r.a), default: 0] += r.value
+        }
+        for l in records.inductors {
+            elements.append(ParasiticElement(
+                id: "L\(indIndex)", kind: .inductor,
+                nodeA: nodeRef(l.a), nodeB: nodeRef(l.b), value: l.value, source: .extracted
+            ))
+            indIndex += 1
         }
 
         // Nets in first-seen order of their net name; each carries all its nodes.
@@ -200,9 +236,29 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             elements: elements,
             metadata: [
                 "sourceFormat": "magic-spice",
-                "sourceFile": fileURL.lastPathComponent,
+                "sourceFile": sourceFileName,
             ]
         )
+    }
+
+    private func shouldIncludeCapacitance(_ value: Double, options: PEXRunOptions) -> Bool {
+        guard options.extractMode != .rOnly else { return false }
+        if let minCapacitanceF = options.minCapacitanceF, value < minCapacitanceF {
+            return false
+        }
+        return true
+    }
+
+    private func shouldIncludeResistance(_ value: Double, options: PEXRunOptions) -> Bool {
+        guard options.extractMode != .cOnly else { return false }
+        if let minResistanceOhm = options.minResistanceOhm, value < minResistanceOhm {
+            return false
+        }
+        return true
+    }
+
+    private func shouldIncludeInductance(options: PEXRunOptions) -> Bool {
+        options.extractMode == .rc
     }
 
     /// Parses a SPICE-style number with an optional engineering suffix into a
@@ -250,5 +306,140 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
         else if suffix.hasPrefix("t") { multiplier = 1e12 }
         else { return nil }
         return mantissa * multiplier
+    }
+}
+
+private enum MagicSPICEElementKind {
+    case capacitor
+    case resistor
+    case inductor
+
+    var rawName: String {
+        switch self {
+        case .capacitor:
+            return "capacitor"
+        case .resistor:
+            return "resistor"
+        case .inductor:
+            return "inductor"
+        }
+    }
+
+    init?(rawPrefix: Character) {
+        switch rawPrefix.lowercased() {
+        case "c":
+            self = .capacitor
+        case "r":
+            self = .resistor
+        case "l":
+            self = .inductor
+        default:
+            return nil
+        }
+    }
+}
+
+private struct MagicSPICEElementLine {
+    var kind: MagicSPICEElementKind
+    var nodeA: String
+    var nodeB: String
+    var value: Double
+}
+
+private struct MagicSPICEElementTokens {
+    var nodeA: String
+    var nodeB: String
+    var valueToken: String
+
+    init?(tokens: [String]) {
+        var iterator = tokens.makeIterator()
+        guard iterator.next() != nil,
+              let nodeA = iterator.next(),
+              let nodeB = iterator.next(),
+              let valueToken = iterator.next() else {
+            return nil
+        }
+        self.nodeA = nodeA
+        self.nodeB = nodeB
+        self.valueToken = valueToken
+    }
+}
+
+private struct MagicSPICERecords {
+    var grounds: [MagicGroundCapRecord] = []
+    var couplings: [MagicPairRecord] = []
+    var resistors: [MagicPairRecord] = []
+    var inductors: [MagicPairRecord] = []
+    var connectivity = MagicNodeConnectivity()
+}
+
+private struct MagicGroundCapRecord {
+    var signal: String
+    var value: Double
+}
+
+private struct MagicPairRecord {
+    var a: String
+    var b: String
+    var value: Double
+}
+
+private struct MagicNodeConnectivity {
+    private(set) var nodeOrder: [String] = []
+    private var seenNodes: Set<String> = []
+    private var parent: [String: String] = [:]
+
+    mutating func see(_ node: String) {
+        if parent[node] == nil {
+            parent[node] = node
+        }
+        if seenNodes.insert(node).inserted {
+            nodeOrder.append(node)
+        }
+    }
+
+    mutating func union(_ lhs: String, _ rhs: String) {
+        let lhsRoot = find(lhs)
+        let rhsRoot = find(rhs)
+        if lhsRoot != rhsRoot {
+            parent[rhsRoot] = lhsRoot
+        }
+    }
+
+    func netNameMap() -> [String: String] {
+        var copy = self
+        return copy.makeNetNameMap()
+    }
+
+    private mutating func makeNetNameMap() -> [String: String] {
+        var componentNodes: [String: [String]] = [:]
+        for node in nodeOrder {
+            componentNodes[find(node), default: []].append(node)
+        }
+
+        var netNameOf: [String: String] = [:]
+        for (_, nodes) in componentNodes {
+            guard let netName = nodes.min() else { continue }
+            for node in nodes {
+                netNameOf[node] = netName
+            }
+        }
+        return netNameOf
+    }
+
+    private mutating func find(_ node: String) -> String {
+        if parent[node] == nil {
+            parent[node] = node
+        }
+        var root = node
+        while let next = parent[root], next != root {
+            root = next
+        }
+        var cursor = node
+        while let next = parent[cursor], next != root {
+            parent[cursor] = root
+            cursor = next
+        }
+        return root
     }
 }

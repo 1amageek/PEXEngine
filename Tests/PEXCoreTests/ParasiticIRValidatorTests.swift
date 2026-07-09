@@ -154,6 +154,37 @@ struct ParasiticIRValidatorTests {
         }))
     }
 
+    @Test func inductorRequiresSecondEndpoint() {
+        let net = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [ParasiticNode(name: NodeName("n1"), kind: .pin, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 0
+        )
+        let elements = [
+            ParasiticElement(
+                id: "L1",
+                kind: .inductor,
+                nodeA: NodeRef(netName: NetName("net1"), nodeName: NodeName("n1")),
+                nodeB: nil,
+                value: 2e-9,
+                source: .extracted
+            ),
+        ]
+        let ir = ParasiticIR(version: "1.0", cornerID: "tt", units: .canonical, nets: [net], elements: elements, metadata: [:])
+
+        let result = validator.validate(ir)
+
+        #expect(!result.isValid)
+        #expect(result.errors.contains(where: {
+            if case .missingEndpoint("L1", .inductor) = $0 {
+                return true
+            }
+            return false
+        }))
+    }
+
     @Test func negativeValueDetected() {
         let net = ParasiticNet(
             name: NetName("net1"),

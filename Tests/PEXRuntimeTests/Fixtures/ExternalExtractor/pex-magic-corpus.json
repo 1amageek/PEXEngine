@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "qualificationPolicy": {
+    "requiredCoverageTags": [
+      "pex.magic",
+      "pex.ground-cap",
+      "pex.physical-value",
+      "pex.total-capacitance",
+      "pex.coupling-cap",
+      "pex.resistance",
+      "pex.standard-cell",
+      "pex.multi-corner",
+      "pex.rc-network"
+    ]
+  },
+  "cases": [
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "layoutPath": "../pex_plate.gds",
+      "topCell": "pex_plate",
+      "corner": "tt",
+      "expectedGroundCapF": 4.2008e-15,
+      "expectedTotalCapacitanceF": 4.2008e-15,
+      "toleranceF": 2e-16,
+      "coverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.total-capacitance",
+        "pex.physical-value"
+      ]
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "layoutPath": "../pex_plate.gds",
+      "topCell": "pex_plate",
+      "corner": "ss",
+      "expectedGroundCapF": 4.2008e-15,
+      "expectedTotalCapacitanceF": 4.2008e-15,
+      "toleranceF": 2e-16,
+      "coverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.total-capacitance",
+        "pex.physical-value",
+        "pex.multi-corner"
+      ]
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "layoutPath": "../../../PEXAdaptersTests/Fixtures/inv1.gds",
+      "topCell": "sky130_fd_sc_hd__inv_1",
+      "corner": "tt",
+      "expectedCouplingCapF": 2.65293e-15,
+      "expectedTotalCapacitanceF": 2.65293e-15,
+      "couplingCapToleranceF": 2e-16,
+      "totalCapacitanceToleranceF": 2e-16,
+      "expectedResistanceOhm": 3334.95361,
+      "resistanceToleranceOhm": 50,
+      "coverageTags": [
+        "pex.magic",
+        "pex.coupling-cap",
+        "pex.total-capacitance",
+        "pex.resistance",
+        "pex.physical-value",
+        "pex.standard-cell",
+        "pex.rc-network"
+      ]
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "layoutPath": "../../../PEXAdaptersTests/Fixtures/inv1.gds",
+      "topCell": "sky130_fd_sc_hd__inv_1",
+      "corner": "ss",
+      "expectedCouplingCapF": 2.65293e-15,
+      "expectedTotalCapacitanceF": 2.65293e-15,
+      "couplingCapToleranceF": 2e-16,
+      "totalCapacitanceToleranceF": 2e-16,
+      "expectedResistanceOhm": 3334.95361,
+      "resistanceToleranceOhm": 50,
+      "coverageTags": [
+        "pex.magic",
+        "pex.coupling-cap",
+        "pex.total-capacitance",
+        "pex.resistance",
+        "pex.physical-value",
+        "pex.standard-cell",
+        "pex.multi-corner",
+        "pex.rc-network"
+      ]
+    }
+  ]
+}

@@ -28,6 +28,8 @@ public struct PEXConfigMapper: Sendable {
             strictValidation: config.options.strictValidation
         )
 
+        let backendID = try Self.requiredBackendID(config.backendID)
+
         return PEXRunRequest(
             layoutURL: layoutURL,
             layoutFormat: Self.detectLayoutFormat(config.inputs.layout),
@@ -36,8 +38,9 @@ public struct PEXConfigMapper: Sendable {
             topCell: config.topCell,
             corners: corners,
             technology: .jsonFile(technologyURL),
+            processProfile: config.processProfile,
             backendSelection: PEXBackendSelection(
-                backendID: config.backendID,
+                backendID: backendID,
                 executablePath: config.executablePath
             ),
             options: options,
@@ -58,5 +61,13 @@ public struct PEXConfigMapper: Sendable {
             return .oas
         }
         return .gds
+    }
+
+    private static func requiredBackendID(_ value: String) throws -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw PEXError.invalidInput("backendID is required in PEXProjectConfig")
+        }
+        return trimmed
     }
 }

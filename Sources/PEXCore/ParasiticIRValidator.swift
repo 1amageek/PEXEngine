@@ -38,7 +38,7 @@ public struct ParasiticIRValidator: Sendable {
             }
 
             // Endpoint consistency by element kind.
-            if element.kind == .resistor && element.nodeB == nil {
+            if (element.kind == .resistor || element.kind == .inductor) && element.nodeB == nil {
                 errors.append(.missingEndpoint(elementID: element.id, kind: element.kind))
             }
             if element.kind == .coupling && element.nodeB == nil {

@@ -16,11 +16,18 @@ let package = Package(
         .executable(name: "pexengine", targets: ["PEXCLI"]),
     ],
     dependencies: [
+        .package(path: "../SignoffToolSupport"),
         .package(url: "https://github.com/apple/swift-configuration", .upToNextMinor(from: "0.1.0")),
     ],
     targets: [
         .target(name: "PEXCore"),
-        .target(name: "PEXAdapters", dependencies: ["PEXCore"]),
+        .target(
+            name: "PEXAdapters",
+            dependencies: [
+                "PEXCore",
+                .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
+            ]
+        ),
         .target(name: "PEXParsers", dependencies: ["PEXCore"]),
         .target(name: "PEXPersistence", dependencies: ["PEXCore"]),
         .target(name: "PEXRuntime", dependencies: [
@@ -38,7 +45,12 @@ let package = Package(
         .testTarget(name: "PEXCoreTests", dependencies: ["PEXCore"]),
         .testTarget(
             name: "PEXAdaptersTests",
-            dependencies: ["PEXAdapters", "PEXCore", "PEXParsers"],
+            dependencies: [
+                "PEXAdapters",
+                "PEXCore",
+                "PEXParsers",
+                .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
+            ],
             resources: [
                 .copy("Fixtures/pex_plate.gds"),
                 .copy("Fixtures/inv1.gds"),
@@ -55,7 +67,10 @@ let package = Package(
             dependencies: [
                 "PEXRuntime", "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
             ],
-            resources: [.copy("Fixtures/pex_plate.gds")]
+            resources: [
+                .copy("Fixtures/ExternalExtractor"),
+                .copy("Fixtures/pex_plate.gds"),
+            ]
         ),
         .testTarget(name: "PEXCLITests", dependencies: [
             "PEXCLICore", "PEXEngine", "PEXCore",

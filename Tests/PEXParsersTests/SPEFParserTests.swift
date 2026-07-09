@@ -77,6 +77,40 @@ struct SPEFParserTests {
         #expect(tree.nets[0].netName == "VDD")
         #expect(tree.nets[0].capacitors.count == 2)
         #expect(tree.nets[0].resistors.count == 1)
+        #expect(tree.nets[0].inductors.isEmpty)
+    }
+
+    @Test func parserLowersInductorsToCanonicalIR() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+        *L_UNIT 1 NH
+
+        *D_NET net1 0.0
+        *CONN
+        *I net1:a I
+        *INDUC
+        1 net1:a net1:b 2.0
+        *END
+        """
+        var lexer = SPEFLexer(source: spef)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+
+        #expect(tree.nets[0].inductors.count == 1)
+
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+        let inductor = try #require(ir.elements.first { $0.kind == .inductor })
+        #expect(inductor.id == "net1_L1")
+        #expect(inductor.nodeA.nodeName == NodeName("net1:a"))
+        #expect(inductor.nodeB?.nodeName == NodeName("net1:b"))
+        #expect(abs(inductor.value - 2.0e-9) < 1e-18)
+        #expect(ParasiticIRValidator().validate(ir).isValid)
     }
 
     @Test func parserRejectsUnsupportedTopLevelKeyword() throws {
@@ -117,7 +151,7 @@ struct SPEFParserTests {
         *CONN
         *CAP
         1 net1:a 0.5
-        *INDUC
+        *DELAY
         1 net1:a net1:b 2.0
         *END
         """
@@ -186,6 +220,28 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func parserRejectsDuplicateHeaderKeyword() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *C_UNIT 1 FF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *END
+        """
+
+        try expectParserDiagnostic(
+            spef,
+            contains: "Duplicate SPEF header keyword *C_UNIT"
+        )
+    }
+
     @Test func parserRejectsUnterminatedNetBlock() throws {
         let spef = """
         *SPEF "IEEE 1481-1998"
@@ -207,6 +263,28 @@ struct SPEFParserTests {
         #expect(throws: SPEFParserDiagnostic.self) {
             try SPEFParser().parse(tokens: tokens)
         }
+    }
+
+    @Test func parserRejectsUnexpectedNetBlockToken() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        orphan_token
+        *END
+        """
+
+        try expectParserDiagnostic(
+            spef,
+            contains: "Unexpected SPEF token inside *D_NET net1"
+        )
     }
 
     @Test func parserRejectsMalformedConnection() throws {
@@ -281,6 +359,29 @@ struct SPEFParserTests {
         }
     }
 
+    @Test func parserRejectsFractionalElementIdentifier() throws {
+        let spef = """
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "top"
+        *DIVIDER /
+        *DELIMITER :
+        *BUS_DELIMITER [ ]
+        *T_UNIT 1 NS
+        *C_UNIT 1 PF
+        *R_UNIT 1 OHM
+
+        *D_NET net1 0.5
+        *CAP
+        1.5 net1:a 0.5
+        *END
+        """
+
+        try expectParserDiagnostic(
+            spef,
+            contains: "Expected integer value for *CAP"
+        )
+    }
+
     @Test func pexParserRejectsMalformedCorpusAtRawEntrypoint() throws {
         let context = PEXParseContext(
             cornerID: "tt",
@@ -343,7 +444,7 @@ struct SPEFParserTests {
                 *R_UNIT 1 OHM
 
                 *D_NET net1 0.5
-                *INDUC
+                *DELAY
                 1 net1:a net1:b 2.0
                 *END
                 """
@@ -511,6 +612,158 @@ struct SPEFParserTests {
             #expect(isClose(totalCouplingCap(in: ir), fixture.loweredSummary.totalCouplingCapF, tolerance: fixture.loweredSummary.capTolerance))
             #expect(isClose(totalResistance(in: ir), fixture.loweredSummary.totalResistanceOhm, tolerance: 1e-9))
         }
+    }
+
+    @Test func openROADRCXFixtureCorpusQualifiesThroughPublicRunner() throws {
+        let manifestURL = try openROADFixtureManifestURL()
+        let report = try SPEFCorpusRunner().run(manifestURL: manifestURL)
+
+        #expect(report.status == "passed")
+        #expect(report.summary.caseCount == 7)
+        #expect(report.summary.failedCaseCount == 0)
+        #expect(report.qualification.qualified)
+        #expect(report.qualification.failures.isEmpty)
+        #expect(report.summary.coverageTagCounts["pex.spef.openroad"] == 7)
+        #expect(report.summary.coverageTagCounts["pex.extract.openrcx"] == 7)
+        #expect(report.summary.coverageTagCounts["pex.physical-value"] == 7)
+        #expect(report.summary.coverageTagCounts["pex.spef.coordinates"] == 1)
+        #expect(report.summary.coverageTagCounts["pex.spef.net-name-consistency"] == 1)
+        #expect(report.summary.coverageTagCounts["pex.spef.no-merging"] == 1)
+        #expect(report.summary.coverageTagCounts["pex.spef.short-resover"] == 1)
+        #expect(report.toolEvidence.qualification.observedCounts["caseCount"] == 7)
+        #expect(report.toolEvidence.qualification.observedCounts["requiredCoverageTagCount"] == 14)
+        #expect(report.toolEvidence.qualification.observedCounts["coveredRequiredCoverageTagCount"] == 14)
+    }
+
+    @Test func spefCorpusReportClassifiesParseAndPhysicalBoundFailures() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "spef-negative-corpus-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(directory) }
+
+        let physicalData = Data(sampleSPEF.utf8)
+        let physicalURL = directory.appending(path: "physical-bound.spef")
+        try physicalData.write(to: physicalURL)
+
+        let malformedData = Data("""
+        *SPEF "IEEE 1481-1998"
+        *DESIGN "bad"
+        """.utf8)
+        let malformedURL = directory.appending(path: "malformed.spef")
+        try malformedData.write(to: malformedURL)
+
+        let manifest = SPEFCorpus.Manifest(
+            schemaVersion: 1,
+            sourceRepository: "local-negative-corpus",
+            pinnedCommit: "local",
+            sourceDirectory: directory.path(percentEncoded: false),
+            license: "test-fixture",
+            qualificationPolicy: SPEFCorpus.QualificationPolicy(
+                requiredCoverageTags: [
+                    "pex.negative.parse-failure",
+                    "pex.negative.physical-bound",
+                ]
+            ),
+            fixtures: [
+                SPEFCorpus.Fixture(
+                    fileName: "malformed.spef",
+                    sourcePath: "local/malformed.spef",
+                    gitBlobSHA: "local",
+                    sha256: sha256Hex(malformedData),
+                    byteCount: malformedData.count,
+                    designName: "bad",
+                    coverageTags: ["pex.negative.parse-failure"],
+                    parseSummary: SPEFCorpus.ParseSummary(
+                        nameMapCount: 0,
+                        portCount: 0,
+                        netCount: 0,
+                        connectionCount: 0,
+                        capacitorCount: 0,
+                        resistorCount: 0
+                    ),
+                    loweredSummary: SPEFCorpus.LoweredSummary(
+                        netCount: 0,
+                        elementCount: 0,
+                        capacitorElementCount: 0,
+                        couplingElementCount: 0,
+                        resistorElementCount: 0,
+                        totalGroundCapF: 0,
+                        totalCouplingCapF: 0,
+                        totalResistanceOhm: 0,
+                        capTolerance: 1e-24
+                    )
+                ),
+                SPEFCorpus.Fixture(
+                    fileName: "physical-bound.spef",
+                    sourcePath: "local/physical-bound.spef",
+                    gitBlobSHA: "local",
+                    sha256: sha256Hex(physicalData),
+                    byteCount: physicalData.count,
+                    designName: "top",
+                    coverageTags: ["pex.negative.physical-bound"],
+                    parseSummary: SPEFCorpus.ParseSummary(
+                        nameMapCount: 2,
+                        portCount: 2,
+                        netCount: 2,
+                        connectionCount: 2,
+                        capacitorCount: 3,
+                        resistorCount: 2
+                    ),
+                    loweredSummary: SPEFCorpus.LoweredSummary(
+                        netCount: 2,
+                        elementCount: 5,
+                        capacitorElementCount: 3,
+                        couplingElementCount: 0,
+                        resistorElementCount: 2,
+                        totalGroundCapF: 9e-12,
+                        totalCouplingCapF: 0,
+                        totalResistanceOhm: 15,
+                        capTolerance: 1e-20
+                    )
+                ),
+            ]
+        )
+        let manifestURL = directory.appending(path: "fixture-manifest.json")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(manifest).write(to: manifestURL)
+
+        let report = try SPEFCorpusRunner().run(manifestURL: manifestURL)
+
+        #expect(report.status == "failed")
+        #expect(report.summary.caseCount == 2)
+        #expect(report.summary.failedCaseCount == 2)
+        #expect(report.summary.failureCategoryCounts["parse_failure"] == 1)
+        #expect(report.summary.failureCategoryCounts["physical_bound_mismatch"] == 1)
+        #expect(report.summary.failureCodeCounts["parse_failed"] == 1)
+        #expect(report.summary.failureCodeCounts["total_ground_cap_mismatch"] == 1)
+        #expect(report.toolEvidence.qualification.observedCounts["failureOccurrenceCount"] == 2)
+        #expect(report.toolEvidence.qualification.observedCounts["failureCategoryCount"] == 2)
+        #expect(report.toolEvidence.qualification.observedCounts["failureCategoryKindCount"] == 2)
+        #expect(report.toolEvidence.qualification.observedCounts["failureCodeCount"] == 2)
+        #expect(report.toolEvidence.qualification.observedCounts["failureCodeKindCount"] == 2)
+
+        let parseResult = try #require(report.caseResults.first { $0.fileName == "malformed.spef" })
+        let parseFailure = try #require(parseResult.failures.first { $0.code == "parse_failed" })
+        #expect(parseFailure.category == "parse_failure")
+        #expect(parseFailure.suggestedActions.contains("inspect_spef_syntax"))
+
+        let physicalResult = try #require(report.caseResults.first { $0.fileName == "physical-bound.spef" })
+        let physicalFailure = try #require(physicalResult.failures.first { $0.code == "total_ground_cap_mismatch" })
+        #expect(physicalFailure.category == "physical_bound_mismatch")
+        #expect(physicalFailure.observedDouble != nil)
+        #expect(physicalFailure.expectedDouble == 9e-12)
+        #expect(physicalFailure.tolerance == 1e-20)
+        #expect(physicalFailure.suggestedActions.contains("check_extractor_units"))
+
+        let packet = SPEFCorpusEvidencePacketBuilder().build(report: report, packetID: "negative-packet")
+        #expect(packet.packetID == "negative-packet")
+        #expect(packet.confidence.level == .medium)
+        #expect(packet.inputs.contains { $0.kind == "spef-fixture" && $0.sha256 != nil })
+        #expect(packet.diagnostics.contains { $0.category == "parse_failure" && $0.caseID == "malformed.spef" })
+        #expect(packet.diagnostics.contains { $0.category == "physical_bound_mismatch" && $0.expectedValue == 9e-12 })
+        #expect(packet.decisionHints.contains { $0.action == "inspect_spef_syntax" })
+        #expect(packet.decisionHints.contains { $0.action == "check_extractor_units" })
     }
 
     @Test func connectionsParsedCorrectly() throws {
@@ -792,6 +1045,18 @@ struct SPEFParserTests {
     }
 }
 
+private func expectParserDiagnostic(_ spef: String, contains messageFragment: String) throws {
+    var lexer = SPEFLexer(source: spef)
+    let tokens = lexer.tokenize()
+
+    do {
+        _ = try SPEFParser().parse(tokens: tokens)
+        Issue.record("Expected SPEFParserDiagnostic containing '\(messageFragment)'")
+    } catch let diagnostic as SPEFParserDiagnostic {
+        #expect(diagnostic.message.contains(messageFragment))
+    }
+}
+
 private func removeTemporaryItem(_ url: URL) {
     do {
         try FileManager.default.removeItem(at: url)
@@ -846,11 +1111,16 @@ private enum OpenROADFixtureError: Error {
 }
 
 private func openROADFixtureManifest() throws -> OpenROADFixtureManifest {
+    let url = try openROADFixtureManifestURL()
+    let data = try Data(contentsOf: url)
+    return try JSONDecoder().decode(OpenROADFixtureManifest.self, from: data)
+}
+
+private func openROADFixtureManifestURL() throws -> URL {
     guard let url = Bundle.module.url(forResource: "fixture-manifest", withExtension: "json", subdirectory: "OpenROAD") else {
         throw OpenROADFixtureError.missingFixture("fixture-manifest.json")
     }
-    let data = try Data(contentsOf: url)
-    return try JSONDecoder().decode(OpenROADFixtureManifest.self, from: data)
+    return url
 }
 
 private func openROADFixtureURL(fileName: String) throws -> URL {

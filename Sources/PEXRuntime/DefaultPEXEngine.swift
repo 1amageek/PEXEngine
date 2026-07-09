@@ -1,6 +1,5 @@
 import PEXCore
 import PEXAdapters
-import PEXParsers
 
 public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
     private let orchestrator: PEXOrchestrator
@@ -17,11 +16,9 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
 
     public static func withDefaults() -> DefaultPEXEngine {
         // Canonical backend set (mock + real Magic), shared with the CLI's
-        // list/doctor commands via PEXDefaultBackends so they never drift.
+        // list/doctor commands via default factories so they never drift.
         let adapters = PEXAdapterRegistry(adapters: PEXDefaultBackends.makeAll())
-        let parsers = PEXParserRegistry()
-        parsers.register(SPEFPEXParser())
-        parsers.register(MagicSPICEParasiticParser())
+        let parsers = PEXDefaultParsers.makeRegistry()
         return DefaultPEXEngine(
             adapterRegistry: adapters,
             parserRegistry: parsers
@@ -30,5 +27,12 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
 
     public func run(_ request: PEXRunRequest) async throws -> PEXRunResult {
         try await orchestrator.run(request)
+    }
+
+    public func run(
+        _ request: PEXRunRequest,
+        cancellationCheck: PEXExecutionContext.CancellationCheck?
+    ) async throws -> PEXRunResult {
+        try await orchestrator.run(request, cancellationCheck: cancellationCheck)
     }
 }

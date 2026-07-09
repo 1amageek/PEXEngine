@@ -45,8 +45,10 @@ public struct SPEFNetBlock: Sendable {
     public let netName: String
     public let totalCap: Double
     public let connections: [SPEFConnection]
+    public let nodeCoordinates: [SPEFNodeCoordinate]
     public let capacitors: [SPEFCapacitor]
     public let resistors: [SPEFResistor]
+    public let inductors: [SPEFInductor]
 }
 
 public struct SPEFConnection: Sendable {
@@ -61,6 +63,11 @@ public enum SPEFConnType: String, Sendable {
     case instancePin = "I"
 }
 
+public struct SPEFNodeCoordinate: Sendable {
+    public let name: String
+    public let coordinate: Point2D
+}
+
 public struct SPEFCapacitor: Sendable {
     public let id: Int
     public let nodeA: String
@@ -69,6 +76,13 @@ public struct SPEFCapacitor: Sendable {
 }
 
 public struct SPEFResistor: Sendable {
+    public let id: Int
+    public let nodeA: String
+    public let nodeB: String
+    public let value: Double
+}
+
+public struct SPEFInductor: Sendable {
     public let id: Int
     public let nodeA: String
     public let nodeB: String
@@ -123,11 +137,171 @@ public struct SPEFParser: Sendable {
     // MARK: - Header parsing
 
     private func parseHeader(_ cursor: inout TokenCursor) throws -> SPEFHeader {
+        var fields = SPEFHeaderFields()
+        cursor.skipNewlines()
+        while !cursor.isAtEnd {
+            guard let kw = cursor.currentKeyword else { break }
+            if isHeaderTerminator(kw) { break }
+
+            try parseHeaderKeyword(kw, cursor: &cursor, fields: &fields)
+            cursor.skipNewlines()
+        }
+
+        return try fields.build(location: cursor.currentLocation)
+    }
+
+    private func isHeaderTerminator(_ keyword: String) -> Bool {
+        keyword == "NAME_MAP" || keyword == "PORTS" || keyword == "D_NET"
+    }
+
+    private func parseHeaderKeyword(
+        _ keyword: String,
+        cursor: inout TokenCursor,
+        fields: inout SPEFHeaderFields
+    ) throws {
+        let location = cursor.currentLocation
+        switch keyword {
+        case "SPEF":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*SPEF")
+            try assignUnique(value, to: &fields.spefVersion, keyword: "*SPEF", location: location)
+        case "DESIGN":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*DESIGN")
+            try assignUnique(value, to: &fields.designName, keyword: "*DESIGN", location: location)
+        case "DATE":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*DATE")
+            try assignUnique(value, to: &fields.date, keyword: "*DATE", location: location)
+        case "VENDOR":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*VENDOR")
+            try assignUnique(value, to: &fields.vendor, keyword: "*VENDOR", location: location)
+        case "PROGRAM":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*PROGRAM")
+            try assignUnique(value, to: &fields.program, keyword: "*PROGRAM", location: location)
+        case "DESIGN_FLOW":
+            cursor.advance()
+            cursor.skipUntilLineEnd()
+        case "DIVIDER":
+            cursor.advance()
+            let value = try requireIdentifierOrPunctuation(&cursor, field: "*DIVIDER")
+            try assignUnique(value, to: &fields.divider, keyword: "*DIVIDER", location: location)
+        case "DELIMITER":
+            cursor.advance()
+            let value = try requireIdentifierOrPunctuation(&cursor, field: "*DELIMITER")
+            try assignUnique(value, to: &fields.delimiter, keyword: "*DELIMITER", location: location)
+        case "BUS_DELIMITER":
+            cursor.advance()
+            let open = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
+            let close = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
+            try assignUniquePair(
+                open,
+                close,
+                toFirst: &fields.busOpen,
+                toSecond: &fields.busClose,
+                keyword: "*BUS_DELIMITER",
+                location: location
+            )
+        case "T_UNIT":
+            cursor.advance()
+            let scale = try requireNumber(&cursor, field: "*T_UNIT")
+            let unit = try requireIdentifier(&cursor, field: "*T_UNIT")
+            try assignUniquePair(
+                scale,
+                unit,
+                toFirst: &fields.timeScale,
+                toSecond: &fields.timeUnit,
+                keyword: "*T_UNIT",
+                location: location
+            )
+        case "C_UNIT":
+            cursor.advance()
+            let scale = try requireNumber(&cursor, field: "*C_UNIT")
+            let unit = try requireIdentifier(&cursor, field: "*C_UNIT")
+            try assignUniquePair(
+                scale,
+                unit,
+                toFirst: &fields.capScale,
+                toSecond: &fields.capUnit,
+                keyword: "*C_UNIT",
+                location: location
+            )
+        case "R_UNIT":
+            cursor.advance()
+            let scale = try requireNumber(&cursor, field: "*R_UNIT")
+            let unit = try requireIdentifier(&cursor, field: "*R_UNIT")
+            try assignUniquePair(
+                scale,
+                unit,
+                toFirst: &fields.resScale,
+                toSecond: &fields.resUnit,
+                keyword: "*R_UNIT",
+                location: location
+            )
+        case "L_UNIT":
+            cursor.advance()
+            let scale = try requireNumber(&cursor, field: "*L_UNIT")
+            let unit = try requireIdentifier(&cursor, field: "*L_UNIT")
+            try assignUniquePair(
+                scale,
+                unit,
+                toFirst: &fields.inductScale,
+                toSecond: &fields.inductUnit,
+                keyword: "*L_UNIT",
+                location: location
+            )
+        case "VERSION":
+            cursor.advance()
+            let value = try requireString(&cursor, field: "*VERSION")
+            try assignUnique(value, to: &fields.version, keyword: "*VERSION", location: location)
+        default:
+            throw SPEFParserDiagnostic(
+                severity: .error,
+                message: "Unsupported SPEF header keyword *\(keyword)",
+                location: cursor.currentLocation
+            )
+        }
+    }
+
+    private func assignUnique<T>(
+        _ value: T,
+        to storage: inout T?,
+        keyword: String,
+        location: SPEFSourceLocation?
+    ) throws {
+        if case .some = storage {
+            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+        }
+        storage = value
+    }
+
+    private func assignUniquePair<First, Second>(
+        _ first: First,
+        _ second: Second,
+        toFirst firstStorage: inout First?,
+        toSecond secondStorage: inout Second?,
+        keyword: String,
+        location: SPEFSourceLocation?
+    ) throws {
+        if case .some = firstStorage {
+            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+        }
+        if case .some = secondStorage {
+            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+        }
+        firstStorage = first
+        secondStorage = second
+    }
+
+    private struct SPEFHeaderFields {
         var spefVersion: String?
         var designName: String?
         var date: String?
         var vendor: String?
         var program: String?
+        var version: String?
         var divider: String?
         var delimiter: String?
         var busOpen: String?
@@ -141,108 +315,94 @@ public struct SPEFParser: Sendable {
         var inductUnit: String?
         var inductScale: Double?
 
-        // Parse header keywords until we hit a non-header keyword
-        cursor.skipNewlines()
-        while !cursor.isAtEnd {
-            guard let kw = cursor.currentKeyword else { break }
+        func build(location: SPEFSourceLocation?) throws -> SPEFHeader {
+            let required = try requiredFields(location: location)
 
-            switch kw {
-            case "SPEF":
-                cursor.advance()
-                spefVersion = try requireString(&cursor, field: "*SPEF")
-            case "DESIGN":
-                cursor.advance()
-                designName = try requireString(&cursor, field: "*DESIGN")
-            case "DATE":
-                cursor.advance()
-                date = try requireString(&cursor, field: "*DATE")
-            case "VENDOR":
-                cursor.advance()
-                vendor = try requireString(&cursor, field: "*VENDOR")
-            case "PROGRAM":
-                cursor.advance()
-                program = try requireString(&cursor, field: "*PROGRAM")
-            case "DESIGN_FLOW":
-                cursor.advance()
-                cursor.skipUntilLineEnd()
-            case "DIVIDER":
-                cursor.advance()
-                divider = try requireIdentifierOrPunctuation(&cursor, field: "*DIVIDER")
-            case "DELIMITER":
-                cursor.advance()
-                delimiter = try requireIdentifierOrPunctuation(&cursor, field: "*DELIMITER")
-            case "BUS_DELIMITER":
-                cursor.advance()
-                busOpen = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
-                busClose = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
-            case "T_UNIT":
-                cursor.advance()
-                timeScale = try requireNumber(&cursor, field: "*T_UNIT")
-                timeUnit = try requireIdentifier(&cursor, field: "*T_UNIT")
-            case "C_UNIT":
-                cursor.advance()
-                capScale = try requireNumber(&cursor, field: "*C_UNIT")
-                capUnit = try requireIdentifier(&cursor, field: "*C_UNIT")
-            case "R_UNIT":
-                cursor.advance()
-                resScale = try requireNumber(&cursor, field: "*R_UNIT")
-                resUnit = try requireIdentifier(&cursor, field: "*R_UNIT")
-            case "L_UNIT":
-                cursor.advance()
-                inductScale = try requireNumber(&cursor, field: "*L_UNIT")
-                inductUnit = try requireIdentifier(&cursor, field: "*L_UNIT")
-            case "VERSION":
-                cursor.advance()
-                _ = try requireString(&cursor, field: "*VERSION")
-            case "NAME_MAP", "PORTS", "D_NET":
-                break // End of header section
-            default:
-                throw SPEFParserDiagnostic(
-                    severity: .error,
-                    message: "Unsupported SPEF header keyword *\(kw)",
-                    location: cursor.currentLocation
-                )
+            return SPEFHeader(
+                spefVersion: required.spefVersion,
+                designName: required.designName,
+                date: date,
+                vendor: vendor,
+                program: program,
+                divider: required.divider,
+                delimiter: required.delimiter,
+                busDelimiterOpen: required.busOpen,
+                busDelimiterClose: required.busClose,
+                timeUnit: required.timeUnit,
+                timeScaleFactor: required.timeScale,
+                capUnit: required.capUnit,
+                capScaleFactor: required.capScale,
+                resUnit: required.resUnit,
+                resScaleFactor: required.resScale,
+                inductUnit: inductUnit,
+                inductScaleFactor: inductScale
+            )
+        }
+
+        private func requiredFields(location: SPEFSourceLocation?) throws -> RequiredSPEFHeaderFields {
+            guard let spefVersion else {
+                throw missing("*SPEF", location: location)
+            }
+            guard let designName else {
+                throw missing("*DESIGN", location: location)
+            }
+            guard let divider else {
+                throw missing("*DIVIDER", location: location)
+            }
+            guard let delimiter else {
+                throw missing("*DELIMITER", location: location)
+            }
+            guard let busOpen, let busClose else {
+                throw missing("*BUS_DELIMITER", location: location)
+            }
+            guard let timeUnit, let timeScale else {
+                throw missing("*T_UNIT", location: location)
+            }
+            guard let capUnit, let capScale else {
+                throw missing("*C_UNIT", location: location)
+            }
+            guard let resUnit, let resScale else {
+                throw missing("*R_UNIT", location: location)
             }
 
-            if kw == "NAME_MAP" || kw == "PORTS" || kw == "D_NET" { break }
-            cursor.skipNewlines()
+            return RequiredSPEFHeaderFields(
+                spefVersion: spefVersion,
+                designName: designName,
+                divider: divider,
+                delimiter: delimiter,
+                busOpen: busOpen,
+                busClose: busClose,
+                timeUnit: timeUnit,
+                timeScale: timeScale,
+                capUnit: capUnit,
+                capScale: capScale,
+                resUnit: resUnit,
+                resScale: resScale
+            )
         }
 
-        guard let spefVersion else {
-            throw diagnostic("Missing required SPEF header keyword *SPEF", location: cursor.currentLocation)
+        private func missing(_ keyword: String, location: SPEFSourceLocation?) -> SPEFParserDiagnostic {
+            SPEFParserDiagnostic(
+                severity: .error,
+                message: "Missing required SPEF header keyword \(keyword)",
+                location: location
+            )
         }
-        guard let designName else {
-            throw diagnostic("Missing required SPEF header keyword *DESIGN", location: cursor.currentLocation)
-        }
-        guard let divider else {
-            throw diagnostic("Missing required SPEF header keyword *DIVIDER", location: cursor.currentLocation)
-        }
-        guard let delimiter else {
-            throw diagnostic("Missing required SPEF header keyword *DELIMITER", location: cursor.currentLocation)
-        }
-        guard let busOpen, let busClose else {
-            throw diagnostic("Missing required SPEF header keyword *BUS_DELIMITER", location: cursor.currentLocation)
-        }
-        guard let timeUnit, let timeScale else {
-            throw diagnostic("Missing required SPEF header keyword *T_UNIT", location: cursor.currentLocation)
-        }
-        guard let capUnit, let capScale else {
-            throw diagnostic("Missing required SPEF header keyword *C_UNIT", location: cursor.currentLocation)
-        }
-        guard let resUnit, let resScale else {
-            throw diagnostic("Missing required SPEF header keyword *R_UNIT", location: cursor.currentLocation)
-        }
+    }
 
-        return SPEFHeader(
-            spefVersion: spefVersion, designName: designName,
-            date: date, vendor: vendor, program: program,
-            divider: divider, delimiter: delimiter,
-            busDelimiterOpen: busOpen, busDelimiterClose: busClose,
-            timeUnit: timeUnit, timeScaleFactor: timeScale,
-            capUnit: capUnit, capScaleFactor: capScale,
-            resUnit: resUnit, resScaleFactor: resScale,
-            inductUnit: inductUnit, inductScaleFactor: inductScale
-        )
+    private struct RequiredSPEFHeaderFields {
+        let spefVersion: String
+        let designName: String
+        let divider: String
+        let delimiter: String
+        let busOpen: String
+        let busClose: String
+        let timeUnit: String
+        let timeScale: Double
+        let capUnit: String
+        let capScale: Double
+        let resUnit: String
+        let resScale: Double
     }
 
     // MARK: - Name Map
@@ -296,7 +456,7 @@ public struct SPEFParser: Sendable {
 
     private func parseNetBlock(_ cursor: inout TokenCursor) throws -> SPEFNetBlock {
         guard cursor.currentKeyword == "D_NET" else {
-            throw SPEFParserDiagnostic(severity: .error, message: "Expected *D_NET keyword")
+            throw diagnostic("Expected *D_NET keyword", location: cursor.currentLocation)
         }
         cursor.advance() // consume *D_NET
 
@@ -304,51 +464,98 @@ public struct SPEFParser: Sendable {
         let totalCap = try requireNumber(&cursor, field: "*D_NET")
         cursor.skipNewlines()
 
-        var connections: [SPEFConnection] = []
-        var capacitors: [SPEFCapacitor] = []
-        var resistors: [SPEFResistor] = []
+        var sections = SPEFNetBlockSections()
 
         while !cursor.isAtEnd {
-            guard let kw = cursor.currentKeyword else {
-                cursor.advance()
-                cursor.skipNewlines()
-                continue
+            guard let keyword = cursor.currentKeyword else {
+                throw diagnostic("Unexpected SPEF token inside *D_NET \(netName)", location: cursor.currentLocation)
             }
 
-            switch kw {
-            case "CONN":
-                cursor.advance()
-                cursor.skipNewlines()
-                connections = try parseConnections(&cursor)
-            case "CAP":
-                cursor.advance()
-                cursor.skipNewlines()
-                capacitors = try parseCapacitors(&cursor)
-            case "RES":
-                cursor.advance()
-                cursor.skipNewlines()
-                resistors = try parseResistors(&cursor)
-            case "END":
-                cursor.advance()
-                cursor.skipNewlines()
-                return SPEFNetBlock(
-                    netName: netName, totalCap: totalCap,
-                    connections: connections, capacitors: capacitors, resistors: resistors
-                )
-            default:
-                throw SPEFParserDiagnostic(
-                    severity: .error,
-                    message: "Unsupported SPEF net section *\(kw)",
-                    location: cursor.currentLocation
-                )
+            if let block = try parseNetSection(
+                keyword,
+                cursor: &cursor,
+                sections: &sections,
+                netName: netName,
+                totalCap: totalCap
+            ) {
+                return block
             }
         }
 
         throw diagnostic("Unterminated SPEF net block *D_NET \(netName)", location: cursor.currentLocation)
     }
 
-    private func parseConnections(_ cursor: inout TokenCursor) throws -> [SPEFConnection] {
+    private struct SPEFNetBlockSections {
         var connections: [SPEFConnection] = []
+        var nodeCoordinates: [SPEFNodeCoordinate] = []
+        var capacitors: [SPEFCapacitor] = []
+        var resistors: [SPEFResistor] = []
+        var inductors: [SPEFInductor] = []
+
+        func makeBlock(netName: String, totalCap: Double) -> SPEFNetBlock {
+            SPEFNetBlock(
+                netName: netName,
+                totalCap: totalCap,
+                connections: connections,
+                nodeCoordinates: nodeCoordinates,
+                capacitors: capacitors,
+                resistors: resistors,
+                inductors: inductors
+            )
+        }
+    }
+
+    private func parseNetSection(
+        _ keyword: String,
+        cursor: inout TokenCursor,
+        sections: inout SPEFNetBlockSections,
+        netName: String,
+        totalCap: Double
+    ) throws -> SPEFNetBlock? {
+        switch keyword {
+        case "CONN":
+            cursor.advance()
+            cursor.skipNewlines()
+            let parsed = try parseConnections(&cursor)
+            sections.connections = parsed.connections
+            sections.nodeCoordinates = parsed.nodeCoordinates
+            return nil
+        case "CAP":
+            cursor.advance()
+            cursor.skipNewlines()
+            sections.capacitors = try parseCapacitors(&cursor)
+            return nil
+        case "RES":
+            cursor.advance()
+            cursor.skipNewlines()
+            sections.resistors = try parseResistors(&cursor)
+            return nil
+        case "INDUC":
+            cursor.advance()
+            cursor.skipNewlines()
+            sections.inductors = try parseInductors(&cursor)
+            return nil
+        case "END":
+            cursor.advance()
+            cursor.skipNewlines()
+            return sections.makeBlock(netName: netName, totalCap: totalCap)
+        default:
+            throw SPEFParserDiagnostic(
+                severity: .error,
+                message: "Unsupported SPEF net section *\(keyword)",
+                location: cursor.currentLocation
+            )
+        }
+    }
+
+    private struct ParsedConnections {
+        var connections: [SPEFConnection]
+        var nodeCoordinates: [SPEFNodeCoordinate]
+    }
+
+    private func parseConnections(_ cursor: inout TokenCursor) throws -> ParsedConnections {
+        var connections: [SPEFConnection] = []
+        var nodeCoordinates: [SPEFNodeCoordinate] = []
         while !cursor.isAtEnd {
             if let kw = cursor.currentKeyword {
                 // *I and *P are connection type markers, not section keywords
@@ -362,13 +569,22 @@ public struct SPEFParser: Sendable {
                     guard let direction = SPEFDirection(rawValue: dirStr) else {
                         throw diagnostic("Invalid SPEF connection direction '\(dirStr)'", location: cursor.currentLocation)
                     }
-                    connections.append(SPEFConnection(type: connType, name: name, direction: direction, coordinate: nil))
+                    let coordinate = optionalCoordinate(&cursor)
+                    connections.append(SPEFConnection(
+                        type: connType,
+                        name: name,
+                        direction: direction,
+                        coordinate: coordinate
+                    ))
                     cursor.skipUntilLineEnd()
                     cursor.skipNewlines()
                     continue
                 } else if kw == "N" {
                     cursor.advance()
-                    _ = try requireIdentifier(&cursor, field: "*N")
+                    let name = try requireIdentifier(&cursor, field: "*N")
+                    if let coordinate = optionalCoordinate(&cursor) {
+                        nodeCoordinates.append(SPEFNodeCoordinate(name: name, coordinate: coordinate))
+                    }
                     cursor.skipUntilLineEnd()
                     cursor.skipNewlines()
                     continue
@@ -378,7 +594,17 @@ public struct SPEFParser: Sendable {
             }
             throw diagnostic("Malformed SPEF connection entry", location: cursor.currentLocation)
         }
-        return connections
+        return ParsedConnections(connections: connections, nodeCoordinates: nodeCoordinates)
+    }
+
+    private func optionalCoordinate(_ cursor: inout TokenCursor) -> Point2D? {
+        let startIndex = cursor.index
+        guard let x = cursor.consumeNumber(),
+              let y = cursor.consumeNumber() else {
+            cursor.index = startIndex
+            return nil
+        }
+        return Point2D(x: x, y: y)
     }
 
     private func parseCapacitors(_ cursor: inout TokenCursor) throws -> [SPEFCapacitor] {
@@ -417,6 +643,21 @@ public struct SPEFParser: Sendable {
             cursor.skipNewlines()
         }
         return resistors
+    }
+
+    private func parseInductors(_ cursor: inout TokenCursor) throws -> [SPEFInductor] {
+        var inductors: [SPEFInductor] = []
+        while !cursor.isAtEnd {
+            if cursor.currentKeyword != nil { break }
+
+            let id = try requireIntNumber(&cursor, field: "*INDUC")
+            let nodeA = try requireIdentifier(&cursor, field: "*INDUC")
+            let nodeB = try requireIdentifier(&cursor, field: "*INDUC")
+            let value = try requireNumber(&cursor, field: "*INDUC")
+            inductors.append(SPEFInductor(id: id, nodeA: nodeA, nodeB: nodeB, value: value))
+            cursor.skipNewlines()
+        }
+        return inductors
     }
 
     private func requireString(_ cursor: inout TokenCursor, field: String) throws -> String {
@@ -581,8 +822,11 @@ struct TokenCursor: Sendable {
         skipNewlines()
         guard index < tokens.count else { return nil }
         if case .number(let n) = tokens[index].token {
+            guard let value = Int(exactly: n) else {
+                return nil
+            }
             index += 1
-            return Int(n)
+            return value
         }
         return nil
     }

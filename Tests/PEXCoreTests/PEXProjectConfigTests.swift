@@ -26,7 +26,7 @@ struct PEXProjectConfigTests {
         #expect(config.version == 1)
         #expect(config.enabled == true)
         #expect(config.topCell == "TOP")
-        #expect(config.backendID == "mock")
+        #expect(config.backendID == "")
         #expect(config.inputs.layout == "top.oas")
         #expect(config.options.includeCouplingCaps == true)
     }
@@ -48,12 +48,22 @@ struct PEXProjectConfigTests {
         let config = PEXProjectConfig(
             topCell: "TEST",
             backendID: "calibre",
+            processProfile: PEXProcessProfileReference(
+                profileID: "profile.test",
+                pdkID: "pdk.test",
+                source: "profiles/profile.test.json",
+                requirementID: "extractor",
+                pdkRoot: "/tmp/pdk",
+                primaryDeckPath: "/tmp/pdk/extractor.deck"
+            ),
             corners: ["ff_0c_1v1"]
         )
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(PEXProjectConfig.self, from: data)
         #expect(decoded.topCell == "TEST")
         #expect(decoded.backendID == "calibre")
+        #expect(decoded.processProfile?.profileID == "profile.test")
+        #expect(decoded.processProfile?.primaryDeckPath == "/tmp/pdk/extractor.deck")
         #expect(decoded.corners == ["ff_0c_1v1"])
     }
 }

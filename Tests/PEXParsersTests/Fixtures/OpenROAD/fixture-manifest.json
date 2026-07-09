@@ -4,6 +4,24 @@
   "pinnedCommit": "5ff1293e2e81fe162f836073ae51f2534febca8f",
   "sourceDirectory": "src/rcx/test",
   "license": "BSD-3-Clause",
+  "qualificationPolicy": {
+    "requiredCoverageTags": [
+      "pex.spef.connections",
+      "pex.spef.coordinates",
+      "pex.spef.coupling-cap",
+      "pex.spef.ground-cap",
+      "pex.spef.large-design",
+      "pex.spef.name-map",
+      "pex.spef.net-name-consistency",
+      "pex.spef.no-merging",
+      "pex.spef.openroad",
+      "pex.extract.openrcx",
+      "pex.physical-value",
+      "pex.spef.ports",
+      "pex.spef.resistance",
+      "pex.spef.short-resover"
+    ]
+  },
   "fixtures": [
     {
       "fileName": "45_gcd.spefok",
@@ -12,6 +30,18 @@
       "sha256": "264512161111a9e6fe6ab1e389e3fefc168ba10ff17aebe84a3e8de436d5683c",
       "byteCount": 358867,
       "designName": "gcd",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.large-design",
+        "pex.spef.name-map",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 2170,
         "portCount": 54,
@@ -39,6 +69,19 @@
       "sha256": "37213c37df2c9d1326a6bb8e8d5052c31fdacc652a1322bcaf52265996c53d01",
       "byteCount": 448059,
       "designName": "gcd",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coordinates",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.large-design",
+        "pex.spef.name-map",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 2170,
         "portCount": 54,
@@ -66,6 +109,17 @@
       "sha256": "de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab02",
       "byteCount": 5733,
       "designName": "blk",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.name-map",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 9,
         "portCount": 30,
@@ -93,6 +147,18 @@
       "sha256": "3f42eb50caf2a8990663f4e477ced79f220d56bc69856522d04c2c107cf9ada7",
       "byteCount": 504204,
       "designName": "gcd",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.large-design",
+        "pex.spef.name-map",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 8582,
         "portCount": 54,
@@ -120,6 +186,17 @@
       "sha256": "570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd",
       "byteCount": 968,
       "designName": "top",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.name-map",
+        "pex.spef.net-name-consistency",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 10,
         "portCount": 0,
@@ -147,6 +224,19 @@
       "sha256": "5d05ab216b75f0c39a7345900a51c89241abf90a28eea05677b7aa64cf67eb1d",
       "byteCount": 569303,
       "designName": "gcd",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.large-design",
+        "pex.spef.name-map",
+        "pex.spef.no-merging",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance"
+      ],
       "parseSummary": {
         "nameMapCount": 8582,
         "portCount": 54,
@@ -174,6 +264,19 @@
       "sha256": "e03647c62e2d7b67f08f9726bdd14354011d7f01785a34edce969436ae4eda4f",
       "byteCount": 418572,
       "designName": "gcd",
+      "coverageTags": [
+        "pex.spef.connections",
+        "pex.spef.coupling-cap",
+        "pex.spef.ground-cap",
+        "pex.spef.large-design",
+        "pex.spef.name-map",
+        "pex.spef.openroad",
+        "pex.extract.openrcx",
+        "pex.physical-value",
+        "pex.spef.ports",
+        "pex.spef.resistance",
+        "pex.spef.short-resover"
+      ],
       "parseSummary": {
         "nameMapCount": 8582,
         "portCount": 54,

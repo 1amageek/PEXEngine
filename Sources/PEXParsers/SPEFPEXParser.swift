@@ -7,16 +7,35 @@ public struct SPEFPEXParser: PEXParserProtocol {
     public init() {}
 
     public func parse(_ raw: PEXRawOutput, context: PEXParseContext) throws -> ParasiticIR {
+        try validateFormat(raw.format, context: context)
+        let fileURL = try selectedFile(from: raw, context: context)
+        let source = try readSource(from: fileURL, context: context)
+        let tree = try parseTree(source: source, fileURL: fileURL, context: context)
+        return try lower(tree: tree, context: context)
+    }
+
+    private func validateFormat(_ rawFormat: PEXOutputFormat, context: PEXParseContext) throws {
+        guard rawFormat == format else {
+            throw PEXError.parseFailed(
+                cornerID: context.cornerID,
+                message: "SPEF parser received raw output format '\(rawFormat.rawValue)'"
+            )
+        }
+    }
+
+    private func selectedFile(from raw: PEXRawOutput, context: PEXParseContext) throws -> URL {
         guard let fileURL = raw.fileURLs.first else {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,
                 message: "No SPEF file found in raw output"
             )
         }
+        return fileURL
+    }
 
-        let source: String
+    private func readSource(from fileURL: URL, context: PEXParseContext) throws -> String {
         do {
-            source = try String(contentsOf: fileURL, encoding: .utf8)
+            return try String(contentsOf: fileURL, encoding: .utf8)
         } catch {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,
@@ -24,16 +43,14 @@ public struct SPEFPEXParser: PEXParserProtocol {
                 underlying: error
             )
         }
+    }
 
-        // Stage 1: Lex
+    private func parseTree(source: String, fileURL: URL, context: PEXParseContext) throws -> SPEFParseTree {
         var lexer = SPEFLexer(source: source, fileName: fileURL.lastPathComponent)
         let tokens = lexer.tokenize()
-
-        // Stage 2: Parse
         let parser = SPEFParser()
-        let tree: SPEFParseTree
         do {
-            tree = try parser.parse(tokens: tokens)
+            return try parser.parse(tokens: tokens)
         } catch {
             throw PEXError.parseFailed(
                 cornerID: context.cornerID,
@@ -41,8 +58,9 @@ public struct SPEFPEXParser: PEXParserProtocol {
                 underlying: error
             )
         }
+    }
 
-        // Stage 3: Lower
+    private func lower(tree: SPEFParseTree, context: PEXParseContext) throws -> ParasiticIR {
         let lowering = SPEFLowering()
         do {
             return try lowering.lower(tree, cornerID: context.cornerID, options: context.options)

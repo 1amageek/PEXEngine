@@ -1,7 +1,7 @@
 import Foundation
 import PEXCore
 
-public struct MockPEXAdapter: PEXAdapter {
+public struct MockPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
     public let backendID = "mock"
     public let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
@@ -12,6 +12,26 @@ public struct MockPEXAdapter: PEXAdapter {
     )
 
     public init() {}
+
+    public func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
+        PEXExtractorToolReadiness(
+            backendID: backendID,
+            status: .ready,
+            reason: "Synthetic mock adapter is available in process.",
+            processProfile: processProfile,
+            capabilities: capabilities,
+            diagnostics: [
+                PEXExtractorDiagnostic(
+                    diagnosticID: "mock-adapter:synthetic-output",
+                    code: "synthetic_extractor",
+                    severity: .info,
+                    message: "Mock PEX output is deterministic test material and is not physical signoff evidence.",
+                    suggestedActions: ["use_external_extractor_for_physical_signoff"]
+                )
+            ],
+            suggestedActions: ["use_external_extractor_for_physical_signoff"]
+        )
+    }
 
     public func prepare(_ context: PEXExecutionContext) async throws {
         let fm = FileManager.default

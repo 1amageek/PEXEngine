@@ -36,7 +36,7 @@ public struct SummarizeCommand: Sendable {
             case "--json":
                 json = true
             default:
-                break
+                throw PEXError.invalidInput("Unknown summarize argument '\(arguments[i])'")
             }
             i += 1
         }
@@ -65,11 +65,32 @@ public struct SummarizeCommand: Sendable {
             print("Status: \(summary.status)")
             print("Backend: \(summary.backendID)")
             print("Corners: \(summary.corners.count)")
+            print("Successful corners: \(summary.multiCorner.successfulCornerCount)")
+            print("Failed corners: \(summary.multiCorner.failedCornerCount)")
+            if !summary.multiCorner.failedCornerIDs.isEmpty {
+                print("Failed corner IDs: \(summary.multiCorner.failedCornerIDs.joined(separator: ", "))")
+            }
+            if let worstCorner = summary.multiCorner.worstCapacitanceCornerID {
+                print("Worst capacitance corner: \(worstCorner)")
+                print("Capacitance spread: \(formatEngineering(summary.multiCorner.totalCapacitance.spread))F")
+            }
+            if let worstCorner = summary.multiCorner.worstResistanceCornerID {
+                print("Worst resistance corner: \(worstCorner)")
+                print("Resistance spread: \(formatEngineering(summary.multiCorner.totalResistance.spread))Ohm")
+            }
             print("")
 
             for cs in summary.corners {
                 print("Corner: \(cs.cornerID) (\(cs.status))")
                 print("  Nets: \(cs.netCount), Elements: \(cs.elementCount)")
+                print("  Totals: gnd=\(formatEngineering(cs.totalGroundCapF))F cc=\(formatEngineering(cs.totalCouplingCapF))F total=\(formatEngineering(cs.totalCapacitanceF))F R=\(formatEngineering(cs.totalResistanceOhm))Ohm")
+                print("  Units: \(cs.unitSystem)")
+                if let irArtifactID = cs.parasiticIRArtifactID {
+                    print("  ParasiticIR: \(irArtifactID)")
+                }
+                if let spefArtifactID = cs.spefRoundTripArtifactID {
+                    print("  SPEF round-trip: \(spefArtifactID)")
+                }
                 if !cs.topNets.isEmpty {
                     print("  Top \(cs.topNets.count) nets by capacitance:")
                     for net in cs.topNets {
@@ -78,60 +99,23 @@ public struct SummarizeCommand: Sendable {
                 }
                 print("")
             }
+
+            if !summary.multiCorner.topNetSpreads.isEmpty {
+                print("Top multi-corner net spreads:")
+                for net in summary.multiCorner.topNetSpreads {
+                    print("  \(net.netName): C spread=\(formatEngineering(net.totalCapacitance.spread))F R spread=\(formatEngineering(net.resistance.spread))Ohm")
+                }
+                print("")
+            }
         }
     }
 
-    func buildSummary() throws -> SummarizeJSONOutput {
+    func buildSummary() throws -> PEXRunSummaryReport {
         let manifestURL = resolveManifestURL()
-        let resolver = try PEXArtifactResolver(manifestURL: manifestURL)
-        let manifest = resolver.manifest
-        let completeness = resolver.completenessReport()
-        var cornerSummaries: [CornerSummary] = []
-
-        let cornersToProcess: [PEXArtifactCorner]
-        if let filter = cornerFilter {
-            cornersToProcess = manifest.corners.filter { $0.cornerID == filter }
-            if cornersToProcess.isEmpty {
-                throw PEXError.invalidInput("Corner '\(filter.value)' not found in run")
-            }
-        } else {
-            cornersToProcess = manifest.corners
-        }
-
-        for entry in cornersToProcess {
-            guard !resolver.records(kind: .parasiticIR, cornerID: entry.cornerID, status: .available).isEmpty else {
-                cornerSummaries.append(CornerSummary(cornerID: entry.cornerID.value, status: entry.status.rawValue, netCount: 0, elementCount: 0, topNets: []))
-                continue
-            }
-            do {
-                let ir = try resolver.loadIR(cornerID: entry.cornerID)
-                let sortedNets = ir.nets
-                    .sorted { ($0.totalGroundCapF + $0.totalCouplingCapF) > ($1.totalGroundCapF + $1.totalCouplingCapF) }
-                    .prefix(topNets)
-                let topNetEntries = sortedNets.map {
-                    NetEntry(name: $0.name.value, groundCapF: $0.totalGroundCapF, couplingCapF: $0.totalCouplingCapF, resistanceOhm: $0.totalResistanceOhm, nodeCount: $0.nodes.count)
-                }
-                cornerSummaries.append(CornerSummary(
-                    cornerID: entry.cornerID.value,
-                    status: entry.status.rawValue,
-                    netCount: ir.nets.count,
-                    elementCount: ir.elements.count,
-                    topNets: topNetEntries
-                ))
-            } catch {
-                cornerSummaries.append(CornerSummary(cornerID: entry.cornerID.value, status: "error", netCount: 0, elementCount: 0, topNets: []))
-            }
-        }
-
-        return SummarizeJSONOutput(
+        return try PEXRunSummaryBuilder().build(
             manifestURL: manifestURL,
-            completeness: completeness,
-            summary: RunSummary(
-                runID: manifest.runID.description,
-                status: manifest.status.rawValue,
-                backendID: manifest.backendID,
-                corners: cornerSummaries
-            )
+            topNets: topNets,
+            cornerFilter: cornerFilter
         )
     }
 
@@ -157,33 +141,4 @@ public struct SummarizeCommand: Sendable {
         }
         return runPath.appending(path: "manifest.json")
     }
-}
-
-struct SummarizeJSONOutput: Codable {
-    let manifestURL: URL
-    let completeness: PEXArtifactCompletenessReport
-    let summary: RunSummary
-}
-
-struct RunSummary: Codable {
-    let runID: String
-    let status: String
-    let backendID: String
-    let corners: [CornerSummary]
-}
-
-struct CornerSummary: Codable {
-    let cornerID: String
-    let status: String
-    let netCount: Int
-    let elementCount: Int
-    let topNets: [NetEntry]
-}
-
-struct NetEntry: Codable {
-    let name: String
-    let groundCapF: Double
-    let couplingCapF: Double
-    let resistanceOhm: Double
-    let nodeCount: Int
 }
