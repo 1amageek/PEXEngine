@@ -20,7 +20,9 @@
       "pex.spef.ports",
       "pex.spef.resistance",
       "pex.spef.short-resover"
-    ]
+    ],
+    "requireCorpusPassed": true,
+    "minimumPassRate": 1
   },
   "fixtures": [
     {
@@ -48,7 +50,8 @@
         "netCount": 316,
         "connectionCount": 998,
         "capacitorCount": 8724,
-        "resistorCount": 2656
+        "resistorCount": 2656,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 316,
@@ -56,10 +59,14 @@
         "capacitorElementCount": 2972,
         "couplingElementCount": 2876,
         "resistorElementCount": 2656,
-        "totalGroundCapF": 3.3303505241999987e-13,
-        "totalCouplingCapF": 8.195150034745995e-14,
+        "totalGroundCapF": 3.3303505241999987E-13,
+        "totalCouplingCapF": 8.195150034745995E-14,
         "totalResistanceOhm": 30601.93294799999,
-        "capTolerance": 1e-20
+        "capTolerance": 1E-20,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -88,7 +95,8 @@
         "netCount": 316,
         "connectionCount": 998,
         "capacitorCount": 8724,
-        "resistorCount": 2656
+        "resistorCount": 2656,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 316,
@@ -96,10 +104,14 @@
         "capacitorElementCount": 2972,
         "couplingElementCount": 2876,
         "resistorElementCount": 2656,
-        "totalGroundCapF": 3.3303505241999987e-13,
-        "totalCouplingCapF": 8.195150034745995e-14,
+        "totalGroundCapF": 3.3303505241999987E-13,
+        "totalCouplingCapF": 8.195150034745995E-14,
         "totalResistanceOhm": 30601.93294799999,
-        "capTolerance": 1e-20
+        "capTolerance": 1E-20,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -126,7 +138,8 @@
         "netCount": 9,
         "connectionCount": 18,
         "capacitorCount": 30,
-        "resistorCount": 9
+        "resistorCount": 9,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 21,
@@ -134,10 +147,14 @@
         "capacitorElementCount": 18,
         "couplingElementCount": 12,
         "resistorElementCount": 9,
-        "totalGroundCapF": 8.6383066e-15,
-        "totalCouplingCapF": 3.0694789499999997e-15,
+        "totalGroundCapF": 8.6383066E-15,
+        "totalCouplingCapF": 3.0694789499999997E-15,
         "totalResistanceOhm": 3871.4333079999997,
-        "capTolerance": 1e-22
+        "capTolerance": 1E-22,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -165,7 +182,8 @@
         "netCount": 411,
         "connectionCount": 1264,
         "capacitorCount": 8106,
-        "resistorCount": 3221
+        "resistorCount": 3221,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 411,
@@ -173,10 +191,14 @@
         "capacitorElementCount": 3632,
         "couplingElementCount": 2237,
         "resistorElementCount": 3221,
-        "totalGroundCapF": 2.0091396091999995e-12,
-        "totalCouplingCapF": 3.9532600181999976e-13,
+        "totalGroundCapF": 2.0091396091999995E-12,
+        "totalCouplingCapF": 3.9532600181999976E-13,
         "totalResistanceOhm": 44478.650613999984,
-        "capTolerance": 1e-19
+        "capTolerance": 1E-19,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -203,7 +225,8 @@
         "netCount": 3,
         "connectionCount": 7,
         "capacitorCount": 10,
-        "resistorCount": 5
+        "resistorCount": 5,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 3,
@@ -211,10 +234,14 @@
         "capacitorElementCount": 8,
         "couplingElementCount": 1,
         "resistorElementCount": 5,
-        "totalGroundCapF": 3.521008e-16,
-        "totalCouplingCapF": 3.1343000000000003e-17,
+        "totalGroundCapF": 3.521008E-16,
+        "totalCouplingCapF": 3.1343000000000003E-17,
         "totalResistanceOhm": 68.30357,
-        "capTolerance": 1e-24
+        "capTolerance": 1E-24,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -243,7 +270,8 @@
         "netCount": 411,
         "connectionCount": 1264,
         "capacitorCount": 9676,
-        "resistorCount": 4791
+        "resistorCount": 4791,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 411,
@@ -251,10 +279,14 @@
         "capacitorElementCount": 5202,
         "couplingElementCount": 2237,
         "resistorElementCount": 4791,
-        "totalGroundCapF": 2.00913955493e-12,
-        "totalCouplingCapF": 3.9532600181999976e-13,
+        "totalGroundCapF": 2.00913955493E-12,
+        "totalCouplingCapF": 3.9532600181999976E-13,
         "totalResistanceOhm": 44478.66342639999,
-        "capTolerance": 1e-19
+        "capTolerance": 1E-19,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     },
     {
@@ -283,7 +315,8 @@
         "netCount": 411,
         "connectionCount": 1264,
         "capacitorCount": 6130,
-        "resistorCount": 1575
+        "resistorCount": 1575,
+        "inductorCount": 0
       },
       "loweredSummary": {
         "netCount": 411,
@@ -291,10 +324,14 @@
         "capacitorElementCount": 1986,
         "couplingElementCount": 2072,
         "resistorElementCount": 1575,
-        "totalGroundCapF": 2.0091395428599997e-12,
-        "totalCouplingCapF": 3.9532600067999987e-13,
+        "totalGroundCapF": 2.0091395428599997E-12,
+        "totalCouplingCapF": 3.9532600067999987E-13,
         "totalResistanceOhm": 41920.684354,
-        "capTolerance": 1e-19
+        "capTolerance": 1E-19,
+        "inductorElementCount": 0,
+        "totalInductanceH": 0,
+        "resistanceTolerance": 1E-9,
+        "inductanceTolerance": 1E-18
       }
     }
   ]

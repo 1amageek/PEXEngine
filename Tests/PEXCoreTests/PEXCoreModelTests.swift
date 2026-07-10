@@ -235,7 +235,7 @@ struct PEXCoreModelTests {
         #expect(result.artifactIDs == ["input-request", "report-summary"])
     }
 
-    @Test func extractorRunResultDecodesLegacyPayloadWithoutMultiCorner() throws {
+    @Test func extractorRunResultRejectsMissingMultiCornerSummary() throws {
         let json = """
         {
           "request": {
@@ -307,14 +307,40 @@ struct PEXCoreModelTests {
         """
 
         let data = try #require(json.data(using: .utf8))
-        let decoded = try JSONDecoder().decode(PEXExtractorRunResult.self, from: data)
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(PEXExtractorRunResult.self, from: data)
+        }
+    }
 
-        #expect(decoded.multiCorner.comparisonStatus == .comparable)
-        #expect(decoded.multiCorner.successfulCornerCount == 2)
-        #expect(decoded.multiCorner.worstCapacitanceCornerID == "ss")
-        #expect(decoded.multiCorner.worstResistanceCornerID == "ss")
-        #expect(decoded.multiCorner.totalCapacitance.spread == 1.1e-15)
-        #expect(decoded.multiCorner.totalResistance.spread == 4.0)
+    @Test func evidencePacketRejectsMissingEvidenceCollections() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "packetID": "incomplete-packet",
+          "domain": "pex.parasitic-evidence",
+          "subject": {
+            "kind": "pex-run",
+            "identifier": "run-1"
+          },
+          "intent": {
+            "summary": "inspect run",
+            "cornerIDs": [],
+            "targetNets": [],
+            "requestedObservations": []
+          },
+          "confidence": {
+            "level": "unknown",
+            "rationale": "incomplete artifact",
+            "strengths": [],
+            "uncertainties": ["missing collections"]
+          }
+        }
+        """
+
+        let data = try #require(json.data(using: .utf8))
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(PEXEvidencePacket.self, from: data)
+        }
     }
 
     @Test func evidencePacketDecodeRestoresCanonicalCollections() throws {

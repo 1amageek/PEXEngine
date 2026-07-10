@@ -97,11 +97,8 @@ public struct PEXExtractorRunResult: Sendable, Codable, Hashable {
         let status = try container.decode(PEXRunStatus.self, forKey: .status)
         let cornerResults = try container.decode([CornerSummary].self, forKey: .cornerResults)
         let artifactIDs = try container.decode([String].self, forKey: .artifactIDs)
-        let diagnostics = try container.decodeIfPresent([PEXExtractorDiagnostic].self, forKey: .diagnostics) ?? []
-        let multiCorner = try container.decodeIfPresent(
-            PEXExtractorMultiCornerSummary.self,
-            forKey: .multiCorner
-        ) ?? PEXExtractorMultiCornerSummary(cornerResults: cornerResults)
+        let diagnostics = try container.decode([PEXExtractorDiagnostic].self, forKey: .diagnostics)
+        let multiCorner = try container.decode(PEXExtractorMultiCornerSummary.self, forKey: .multiCorner)
 
         self.init(
             request: request,

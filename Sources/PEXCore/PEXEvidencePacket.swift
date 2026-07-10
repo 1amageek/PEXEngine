@@ -75,30 +75,38 @@ public struct PEXEvidencePacket: Sendable, Hashable, Codable {
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let failureClassifications = try container.decodeIfPresent(
+        let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported PEX evidence packet schema version: \(schemaVersion)."
+            )
+        }
+        let failureClassifications = try container.decode(
             [PEXFailureDiagnosticClassification].self,
             forKey: .failureClassifications
-        ) ?? []
+        )
         self.init(
-            schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
+            schemaVersion: schemaVersion,
             packetID: try container.decode(String.self, forKey: .packetID),
             domain: try container.decode(String.self, forKey: .domain),
             subject: try container.decode(PEXEvidenceSubject.self, forKey: .subject),
             intent: try container.decode(PEXEvidenceIntent.self, forKey: .intent),
-            inputs: try container.decodeIfPresent([PEXEvidenceArtifactRef].self, forKey: .inputs) ?? [],
-            readiness: try container.decodeIfPresent([PEXEvidenceReadiness].self, forKey: .readiness) ?? [],
-            artifacts: try container.decodeIfPresent([PEXEvidenceArtifactRef].self, forKey: .artifacts) ?? [],
-            normalizedViews: try container.decodeIfPresent(
+            inputs: try container.decode([PEXEvidenceArtifactRef].self, forKey: .inputs),
+            readiness: try container.decode([PEXEvidenceReadiness].self, forKey: .readiness),
+            artifacts: try container.decode([PEXEvidenceArtifactRef].self, forKey: .artifacts),
+            normalizedViews: try container.decode(
                 [PEXEvidenceNormalizedView].self,
                 forKey: .normalizedViews
-            ) ?? [],
-            metrics: try container.decodeIfPresent([PEXEvidenceMetric].self, forKey: .metrics) ?? [],
-            diagnostics: try container.decodeIfPresent([PEXEvidenceDiagnostic].self, forKey: .diagnostics) ?? [],
+            ),
+            metrics: try container.decode([PEXEvidenceMetric].self, forKey: .metrics),
+            diagnostics: try container.decode([PEXEvidenceDiagnostic].self, forKey: .diagnostics),
             failureClassifications: failureClassifications.map(Self.normalizedFailureClassification),
             confidence: try container.decode(PEXEvidenceConfidence.self, forKey: .confidence),
-            decisionHints: try container.decodeIfPresent([PEXEvidenceDecisionHint].self, forKey: .decisionHints) ?? [],
-            coverageTags: try container.decodeIfPresent([String].self, forKey: .coverageTags) ?? [],
-            relatedEvidenceIDs: try container.decodeIfPresent([String].self, forKey: .relatedEvidenceIDs) ?? []
+            decisionHints: try container.decode([PEXEvidenceDecisionHint].self, forKey: .decisionHints),
+            coverageTags: try container.decode([String].self, forKey: .coverageTags),
+            relatedEvidenceIDs: try container.decode([String].self, forKey: .relatedEvidenceIDs)
         )
     }
 
@@ -178,12 +186,12 @@ public struct PEXEvidenceIntent: Sendable, Hashable, Codable {
         self.init(
             summary: try container.decode(String.self, forKey: .summary),
             designContext: try container.decodeIfPresent(String.self, forKey: .designContext),
-            cornerIDs: try container.decodeIfPresent([String].self, forKey: .cornerIDs) ?? [],
-            targetNets: try container.decodeIfPresent([String].self, forKey: .targetNets) ?? [],
-            requestedObservations: try container.decodeIfPresent(
+            cornerIDs: try container.decode([String].self, forKey: .cornerIDs),
+            targetNets: try container.decode([String].self, forKey: .targetNets),
+            requestedObservations: try container.decode(
                 [String].self,
                 forKey: .requestedObservations
-            ) ?? []
+            )
         )
     }
 }
@@ -260,8 +268,8 @@ public struct PEXEvidenceReadiness: Sendable, Hashable, Codable {
             component: try container.decode(String.self, forKey: .component),
             status: try container.decode(PEXEvidenceReadinessStatus.self, forKey: .status),
             reason: try container.decode(String.self, forKey: .reason),
-            artifactIDs: try container.decodeIfPresent([String].self, forKey: .artifactIDs) ?? [],
-            suggestedActions: try container.decodeIfPresent([String].self, forKey: .suggestedActions) ?? []
+            artifactIDs: try container.decode([String].self, forKey: .artifactIDs),
+            suggestedActions: try container.decode([String].self, forKey: .suggestedActions)
         )
     }
 }
@@ -310,12 +318,12 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
             kind: try container.decode(String.self, forKey: .kind),
             scope: try container.decode(String.self, forKey: .scope),
             unitSystem: try container.decodeIfPresent(String.self, forKey: .unitSystem),
-            summaryMetrics: try container.decodeIfPresent(
+            summaryMetrics: try container.decode(
                 [String: Double].self,
                 forKey: .summaryMetrics
-            ) ?? [:],
-            summaryCounts: try container.decodeIfPresent([String: Int].self, forKey: .summaryCounts) ?? [:],
-            sourceArtifactIDs: try container.decodeIfPresent([String].self, forKey: .sourceArtifactIDs) ?? []
+            ),
+            summaryCounts: try container.decode([String: Int].self, forKey: .summaryCounts),
+            sourceArtifactIDs: try container.decode([String].self, forKey: .sourceArtifactIDs)
         )
     }
 }
@@ -439,8 +447,8 @@ public struct PEXEvidenceDiagnostic: Sendable, Hashable, Codable {
             observedValue: try container.decodeIfPresent(Double.self, forKey: .observedValue),
             expectedValue: try container.decodeIfPresent(Double.self, forKey: .expectedValue),
             tolerance: try container.decodeIfPresent(Double.self, forKey: .tolerance),
-            artifactIDs: try container.decodeIfPresent([String].self, forKey: .artifactIDs) ?? [],
-            suggestedActions: try container.decodeIfPresent([String].self, forKey: .suggestedActions) ?? []
+            artifactIDs: try container.decode([String].self, forKey: .artifactIDs),
+            suggestedActions: try container.decode([String].self, forKey: .suggestedActions)
         )
     }
 }
@@ -482,8 +490,8 @@ public struct PEXEvidenceConfidence: Sendable, Hashable, Codable {
         self.init(
             level: try container.decode(PEXEvidenceConfidenceLevel.self, forKey: .level),
             rationale: try container.decode(String.self, forKey: .rationale),
-            strengths: try container.decodeIfPresent([String].self, forKey: .strengths) ?? [],
-            uncertainties: try container.decodeIfPresent([String].self, forKey: .uncertainties) ?? []
+            strengths: try container.decode([String].self, forKey: .strengths),
+            uncertainties: try container.decode([String].self, forKey: .uncertainties)
         )
     }
 }
@@ -535,11 +543,11 @@ public struct PEXEvidenceDecisionHint: Sendable, Hashable, Codable {
             priority: try container.decode(PEXEvidenceDecisionPriority.self, forKey: .priority),
             action: try container.decode(String.self, forKey: .action),
             rationale: try container.decode(String.self, forKey: .rationale),
-            relatedDiagnosticIDs: try container.decodeIfPresent(
+            relatedDiagnosticIDs: try container.decode(
                 [String].self,
                 forKey: .relatedDiagnosticIDs
-            ) ?? [],
-            artifactIDs: try container.decodeIfPresent([String].self, forKey: .artifactIDs) ?? []
+            ),
+            artifactIDs: try container.decode([String].self, forKey: .artifactIDs)
         )
     }
 }

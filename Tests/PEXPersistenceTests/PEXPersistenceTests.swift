@@ -5,6 +5,21 @@ import Foundation
 
 @Suite("PEXPersistence Tests")
 struct PEXPersistenceTests {
+    @Test func runSummaryRejectsMissingMultiCornerProjection() {
+        let data = Data("""
+        {
+          "runID": "run-1",
+          "status": "success",
+          "backendID": "mock",
+          "corners": []
+        }
+        """.utf8)
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(PEXRunSummary.self, from: data)
+        }
+    }
+
     @Test func workspaceDirectoryLayout() {
         let runID = PEXRunID()
         let base = FileManager.default.temporaryDirectory

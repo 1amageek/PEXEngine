@@ -220,7 +220,7 @@ All styles must resolve to `TechnologyIR`:
 4. Validate required fields.
 5. Emit `TechnologyIR` + diagnostics.
 
-### 8.4 Compatibility policy
+### 8.4 Loader policy
 - `TechnologyIR` is the only runtime dependency for core execution.
 - New config formats are added as loaders, not by changing runtime contracts.
 
@@ -491,4 +491,3 @@ Recommended app query surface:
 - AC-004: At least one parser (SPEF) passes golden tests.
 - AC-005: Technology input is accepted from at least two styles and normalized to one `TechnologyIR`.
 - AC-006: CLI exposes stable exit codes and JSON output for CI automation.
-

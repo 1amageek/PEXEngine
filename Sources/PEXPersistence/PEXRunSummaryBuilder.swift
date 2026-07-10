@@ -369,10 +369,7 @@ public struct PEXRunSummary: Sendable, Codable, Hashable {
         let status = try container.decode(String.self, forKey: .status)
         let backendID = try container.decode(String.self, forKey: .backendID)
         let corners = try container.decode([PEXCornerParasiticSummary].self, forKey: .corners)
-        let multiCorner = try container.decodeIfPresent(
-            PEXMultiCornerParasiticSummary.self,
-            forKey: .multiCorner
-        ) ?? PEXMultiCornerParasiticSummary(corners: corners)
+        let multiCorner = try container.decode(PEXMultiCornerParasiticSummary.self, forKey: .multiCorner)
 
         self.init(
             runID: runID,

@@ -5,6 +5,79 @@ import Testing
 
 @Suite("SPEF Corpus Runner Diagnostics")
 struct SPEFCorpusRunnerDiagnosticsTests {
+    @Test("SPEF corpus manifest rejects missing current physical fields")
+    func manifestRejectsMissingCurrentPhysicalFields() {
+        let data = Data("""
+        {
+          "schemaVersion": 1,
+          "sourceRepository": "https://example.invalid/source",
+          "pinnedCommit": "revision",
+          "sourceDirectory": "fixtures",
+          "license": "test",
+          "qualificationPolicy": {
+            "requireCorpusPassed": true,
+            "minimumPassRate": 1,
+            "requiredCoverageTags": []
+          },
+          "fixtures": [
+            {
+              "fileName": "fixture.spef",
+              "sourcePath": "fixture.spef",
+              "gitBlobSHA": "blob",
+              "sha256": "hash",
+              "byteCount": 1,
+              "designName": "top",
+              "coverageTags": [],
+              "parseSummary": {
+                "nameMapCount": 0,
+                "portCount": 0,
+                "netCount": 0,
+                "connectionCount": 0,
+                "capacitorCount": 0,
+                "resistorCount": 0
+              },
+              "loweredSummary": {
+                "netCount": 0,
+                "elementCount": 0,
+                "capacitorElementCount": 0,
+                "couplingElementCount": 0,
+                "resistorElementCount": 0,
+                "inductorElementCount": 0,
+                "totalGroundCapF": 0,
+                "totalCouplingCapF": 0,
+                "totalResistanceOhm": 0,
+                "totalInductanceH": 0,
+                "capTolerance": 0,
+                "resistanceTolerance": 0,
+                "inductanceTolerance": 0
+              }
+            }
+          ]
+        }
+        """.utf8)
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(SPEFCorpus.Manifest.self, from: data)
+        }
+    }
+
+    @Test("SPEF corpus report rejects missing source artifact inventory")
+    func reportRejectsMissingSourceArtifactInventory() throws {
+        let corpus = try makeEmptyCorpus()
+        defer { removeTemporaryItem(corpus.directory) }
+        let report = try SPEFCorpusRunner().run(manifestURL: corpus.manifestURL)
+        let encoded = try JSONEncoder().encode(report)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object.removeValue(forKey: "sourceArtifacts")
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(SPEFCorpus.Report.self, from: data)
+        }
+    }
+
     @Test("SPEF corpus reports physical bound failures with observed expected tolerance")
     func corpusReportsPhysicalBoundFailuresWithObservedExpectedTolerance() throws {
         let corpus = try makePhysicalBoundCorpus()

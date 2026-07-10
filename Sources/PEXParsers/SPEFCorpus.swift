@@ -2,6 +2,8 @@ import Foundation
 
 public enum SPEFCorpus {
     public struct Manifest: Sendable, Hashable, Codable {
+        public static let currentSchemaVersion = 1
+
         public let schemaVersion: Int
         public let sourceRepository: String
         public let pinnedCommit: String
@@ -41,14 +43,21 @@ public enum SPEFCorpus {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            guard schemaVersion == Self.currentSchemaVersion else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .schemaVersion,
+                    in: container,
+                    debugDescription: "Unsupported SPEF corpus manifest schema version: \(schemaVersion)."
+                )
+            }
             sourceRepository = try container.decode(String.self, forKey: .sourceRepository)
             pinnedCommit = try container.decode(String.self, forKey: .pinnedCommit)
             sourceDirectory = try container.decode(String.self, forKey: .sourceDirectory)
             license = try container.decode(String.self, forKey: .license)
-            qualificationPolicy = try container.decodeIfPresent(
+            qualificationPolicy = try container.decode(
                 QualificationPolicy.self,
                 forKey: .qualificationPolicy
-            ) ?? .strict
+            )
             fixtures = try container.decode([Fixture].self, forKey: .fixtures)
         }
     }
@@ -106,10 +115,10 @@ public enum SPEFCorpus {
             sha256 = try container.decode(String.self, forKey: .sha256)
             byteCount = try container.decode(Int.self, forKey: .byteCount)
             designName = try container.decode(String.self, forKey: .designName)
-            coverageTags = Self.normalizedCoverageTags(try container.decodeIfPresent(
+            coverageTags = Self.normalizedCoverageTags(try container.decode(
                 [String].self,
                 forKey: .coverageTags
-            ) ?? [])
+            ))
             parseSummary = try container.decode(ParseSummary.self, forKey: .parseSummary)
             loweredSummary = try container.decode(LoweredSummary.self, forKey: .loweredSummary)
         }
@@ -164,7 +173,7 @@ public enum SPEFCorpus {
             connectionCount = try container.decode(Int.self, forKey: .connectionCount)
             capacitorCount = try container.decode(Int.self, forKey: .capacitorCount)
             resistorCount = try container.decode(Int.self, forKey: .resistorCount)
-            inductorCount = try container.decodeIfPresent(Int.self, forKey: .inductorCount) ?? 0
+            inductorCount = try container.decode(Int.self, forKey: .inductorCount)
         }
 
         public init(tree: SPEFParseTree) {
@@ -248,20 +257,14 @@ public enum SPEFCorpus {
             capacitorElementCount = try container.decode(Int.self, forKey: .capacitorElementCount)
             couplingElementCount = try container.decode(Int.self, forKey: .couplingElementCount)
             resistorElementCount = try container.decode(Int.self, forKey: .resistorElementCount)
-            inductorElementCount = try container.decodeIfPresent(Int.self, forKey: .inductorElementCount) ?? 0
+            inductorElementCount = try container.decode(Int.self, forKey: .inductorElementCount)
             totalGroundCapF = try container.decode(Double.self, forKey: .totalGroundCapF)
             totalCouplingCapF = try container.decode(Double.self, forKey: .totalCouplingCapF)
             totalResistanceOhm = try container.decode(Double.self, forKey: .totalResistanceOhm)
-            totalInductanceH = try container.decodeIfPresent(Double.self, forKey: .totalInductanceH) ?? 0
+            totalInductanceH = try container.decode(Double.self, forKey: .totalInductanceH)
             capTolerance = try container.decode(Double.self, forKey: .capTolerance)
-            resistanceTolerance = try container.decodeIfPresent(
-                Double.self,
-                forKey: .resistanceTolerance
-            ) ?? 1e-9
-            inductanceTolerance = try container.decodeIfPresent(
-                Double.self,
-                forKey: .inductanceTolerance
-            ) ?? 1e-18
+            resistanceTolerance = try container.decode(Double.self, forKey: .resistanceTolerance)
+            inductanceTolerance = try container.decode(Double.self, forKey: .inductanceTolerance)
         }
     }
 
@@ -320,7 +323,7 @@ public enum SPEFCorpus {
             observedDouble = try container.decodeIfPresent(Double.self, forKey: .observedDouble)
             expectedDouble = try container.decodeIfPresent(Double.self, forKey: .expectedDouble)
             tolerance = try container.decodeIfPresent(Double.self, forKey: .tolerance)
-            suggestedActions = try container.decodeIfPresent([String].self, forKey: .suggestedActions) ?? []
+            suggestedActions = try container.decode([String].self, forKey: .suggestedActions)
         }
     }
 
@@ -416,14 +419,8 @@ public enum SPEFCorpus {
             totalGroundCapF = try container.decode(Double.self, forKey: .totalGroundCapF)
             totalCouplingCapF = try container.decode(Double.self, forKey: .totalCouplingCapF)
             totalResistanceOhm = try container.decode(Double.self, forKey: .totalResistanceOhm)
-            failureCodeCounts = try container.decodeIfPresent(
-                [String: Int].self,
-                forKey: .failureCodeCounts
-            ) ?? [:]
-            failureCategoryCounts = try container.decodeIfPresent(
-                [String: Int].self,
-                forKey: .failureCategoryCounts
-            ) ?? [:]
+            failureCodeCounts = try container.decode([String: Int].self, forKey: .failureCodeCounts)
+            failureCategoryCounts = try container.decode([String: Int].self, forKey: .failureCategoryCounts)
         }
 
         private static func coverageTagCounts(in caseResults: [CaseResult]) -> [String: Int] {
@@ -507,12 +504,12 @@ public enum SPEFCorpus {
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            requireCorpusPassed = try container.decodeIfPresent(Bool.self, forKey: .requireCorpusPassed) ?? true
-            minimumPassRate = try container.decodeIfPresent(Double.self, forKey: .minimumPassRate) ?? 1
-            requiredCoverageTags = Self.normalizedCoverageTags(try container.decodeIfPresent(
+            requireCorpusPassed = try container.decode(Bool.self, forKey: .requireCorpusPassed)
+            minimumPassRate = try container.decode(Double.self, forKey: .minimumPassRate)
+            requiredCoverageTags = Self.normalizedCoverageTags(try container.decode(
                 [String].self,
                 forKey: .requiredCoverageTags
-            ) ?? [])
+            ))
         }
 
         public func evaluate(summary: Summary) -> QualificationResult {
@@ -594,7 +591,7 @@ public enum SPEFCorpus {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             policy = try container.decode(QualificationPolicy.self, forKey: .policy)
             failures = try container.decode([QualificationFailure].self, forKey: .failures)
-            qualified = try container.decodeIfPresent(Bool.self, forKey: .qualified) ?? failures.isEmpty
+            qualified = try container.decode(Bool.self, forKey: .qualified)
         }
     }
 
@@ -676,6 +673,8 @@ public enum SPEFCorpus {
     }
 
     public struct Report: Sendable, Hashable, Codable {
+        public static let currentSchemaVersion = 1
+
         public let schemaVersion: Int
         public let status: String
         public let manifestPath: String
@@ -701,7 +700,7 @@ public enum SPEFCorpus {
         }
 
         public init(
-            schemaVersion: Int = 1,
+            schemaVersion: Int = Report.currentSchemaVersion,
             manifestPath: String,
             manifest: Manifest,
             summary: Summary,
@@ -759,13 +758,18 @@ public enum SPEFCorpus {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+            guard schemaVersion == Self.currentSchemaVersion else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .schemaVersion,
+                    in: container,
+                    debugDescription: "Unsupported SPEF corpus report schema version: \(schemaVersion)."
+                )
+            }
             status = try container.decode(String.self, forKey: .status)
             manifestPath = try container.decode(String.self, forKey: .manifestPath)
             sourceRepository = try container.decode(String.self, forKey: .sourceRepository)
             pinnedCommit = try container.decode(String.self, forKey: .pinnedCommit)
-            sourceArtifacts = try container.decodeIfPresent([FileReference].self, forKey: .sourceArtifacts) ?? [
-                FileReference(path: manifestPath, kind: "corpus-manifest", format: "JSON")
-            ]
+            sourceArtifacts = try container.decode([FileReference].self, forKey: .sourceArtifacts)
             summary = try container.decode(Summary.self, forKey: .summary)
             qualification = try container.decode(QualificationResult.self, forKey: .qualification)
             toolEvidence = try container.decode(ToolEvidence.self, forKey: .toolEvidence)
