@@ -172,10 +172,10 @@ public struct ExtractCommand: Sendable {
         ])
     }
 
-    private static func loadConfigProvider(_ configURL: URL) async throws -> JSONProvider {
+    private static func loadConfigProvider(_ configURL: URL) async throws -> FileProvider<JSONSnapshot> {
         let filePath = FilePath(configURL.path(percentEncoded: false))
         do {
-            return try await JSONProvider(filePath: filePath)
+            return try await FileProvider<JSONSnapshot>(filePath: filePath)
         } catch {
             throw PEXError.invalidInput("Failed to read config file: \(configURL.path(percentEncoded: false))")
         }
