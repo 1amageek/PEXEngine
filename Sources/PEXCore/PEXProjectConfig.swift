@@ -6,15 +6,38 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public var layout: String
         public var netlist: String
         public var technology: String
+        public var technologyByCorner: [String: String]
 
         public init(
             layout: String = "top.oas",
             netlist: String = "top.cir",
-            technology: String = "tech.json"
+            technology: String = "tech.json",
+            technologyByCorner: [String: String] = [:]
         ) {
             self.layout = layout
             self.netlist = netlist
             self.technology = technology
+            self.technologyByCorner = technologyByCorner
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case layout
+            case netlist
+            case technology
+            case technologyByCorner
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                layout: try container.decodeIfPresent(String.self, forKey: .layout) ?? "top.oas",
+                netlist: try container.decodeIfPresent(String.self, forKey: .netlist) ?? "top.cir",
+                technology: try container.decodeIfPresent(String.self, forKey: .technology) ?? "tech.json",
+                technologyByCorner: try container.decodeIfPresent(
+                    [String: String].self,
+                    forKey: .technologyByCorner
+                ) ?? [:]
+            )
         }
     }
 
@@ -32,19 +55,43 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public var minResistanceOhm: Double?
         public var maxParallelJobs: Int
         public var strictValidation: Bool
+        public var sourceConnectivityPolicy: PEXSourceConnectivityPolicy
 
         public init(
             includeCouplingCaps: Bool = true,
             minCapacitanceF: Double? = nil,
             minResistanceOhm: Double? = nil,
             maxParallelJobs: Int = 2,
-            strictValidation: Bool = false
+            strictValidation: Bool = false,
+            sourceConnectivityPolicy: PEXSourceConnectivityPolicy = .warn
         ) {
             self.includeCouplingCaps = includeCouplingCaps
             self.minCapacitanceF = minCapacitanceF
             self.minResistanceOhm = minResistanceOhm
             self.maxParallelJobs = maxParallelJobs
             self.strictValidation = strictValidation
+            self.sourceConnectivityPolicy = sourceConnectivityPolicy
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case includeCouplingCaps
+            case minCapacitanceF
+            case minResistanceOhm
+            case maxParallelJobs
+            case strictValidation
+            case sourceConnectivityPolicy
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                includeCouplingCaps: try container.decodeIfPresent(Bool.self, forKey: .includeCouplingCaps) ?? true,
+                minCapacitanceF: try container.decodeIfPresent(Double.self, forKey: .minCapacitanceF),
+                minResistanceOhm: try container.decodeIfPresent(Double.self, forKey: .minResistanceOhm),
+                maxParallelJobs: try container.decodeIfPresent(Int.self, forKey: .maxParallelJobs) ?? 2,
+                strictValidation: try container.decodeIfPresent(Bool.self, forKey: .strictValidation) ?? false,
+                sourceConnectivityPolicy: try container.decodeIfPresent(PEXSourceConnectivityPolicy.self, forKey: .sourceConnectivityPolicy) ?? .warn
+            )
         }
     }
 
@@ -54,7 +101,7 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
     public var topCell: String
     public var backendID: String
     public var processProfile: PEXProcessProfileReference?
-    public var corners: [String]
+        public var corners: [String]
     public var inputs: InputPaths
     public var output: OutputPaths
     public var options: Options

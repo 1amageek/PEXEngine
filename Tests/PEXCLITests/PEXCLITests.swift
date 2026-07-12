@@ -6,6 +6,137 @@ import Foundation
 
 @Suite("PEXCLI Tests")
 struct PEXCLITests {
+    @Test func backannotateCommandParsesRequiredPaths() throws {
+        let command = try BackannotateCommand(arguments: [
+            "--netlist", "/tmp/source.sp",
+            "--ir", "/tmp/tt.json",
+            "--output", "/tmp/post.sp",
+            "--top-cell", "TOP",
+            "--json",
+        ])
+        #expect(command.sourceNetlistURL.path(percentEncoded: false) == "/tmp/source.sp")
+        #expect(command.irURL.path(percentEncoded: false) == "/tmp/tt.json")
+        #expect(command.outputURL.path(percentEncoded: false) == "/tmp/post.sp")
+        #expect(command.topCell == "TOP")
+        #expect(command.jsonOutput)
+    }
+
+    @Test func backannotateCommandRejectsMissingIR() {
+        do {
+            _ = try BackannotateCommand(arguments: ["--netlist", "/tmp/source.sp", "--output", "/tmp/post.sp"])
+            #expect(Bool(false), "Expected missing --ir to fail")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("--ir"))
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
+    }
+
+    @Test func backannotateCommandWritesComposedDeck() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-backannotate-cli-\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        let sourceURL = tempDir.appending(path: "source.cir")
+        let irURL = tempDir.appending(path: "tt.json")
+        let outputURL = tempDir.appending(path: "post.cir")
+        try Data(".subckt TOP in out\nR1 in out 1k\n.ends TOP\nV1 in 0 1\nXTOP in out TOP\n.end\n".utf8)
+            .write(to: sourceURL)
+        let inNet = NetName("IN")
+        let outNet = NetName("OUT")
+        let inNode = NodeName("in")
+        let outNode = NodeName("out")
+        let ir = ParasiticIR(
+            version: ParasiticIR.currentVersion,
+            cornerID: "tt",
+            units: .canonical,
+            nets: [
+                ParasiticNet(name: inNet, nodes: [ParasiticNode(name: inNode, kind: .pin, instancePath: nil, coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
+                ParasiticNet(name: outNet, nodes: [ParasiticNode(name: outNode, kind: .pin, instancePath: nil, coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
+            ],
+            elements: [ParasiticElement(
+                id: "Rout",
+                kind: .resistor,
+                nodeA: NodeRef(netName: inNet, nodeName: inNode),
+                nodeB: NodeRef(netName: outNet, nodeName: outNode),
+                value: 2,
+                source: .extracted
+            )],
+            metadata: ["topCell": "TOP"]
+        )
+        try PEXIRSerializer().encode(ir).write(to: irURL)
+
+        try await BackannotateCommand(arguments: [
+            "--netlist", sourceURL.path(percentEncoded: false),
+            "--ir", irURL.path(percentEncoded: false),
+            "--output", outputURL.path(percentEncoded: false),
+            "--top-cell", "TOP",
+            "--json",
+        ]).run()
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        #expect(output.contains("XPEX_tt in out PEX_TOP_tt"))
+        #expect(output.contains(".subckt PEX_TOP_tt in out"))
+    }
+
+    @Test func retryCommandRequiresPersistedManifest() throws {
+        let command = try RetryCommand(arguments: ["--run", "/tmp/run/manifest.json", "--json"])
+        #expect(command.manifestURL.path(percentEncoded: false) == "/tmp/run/manifest.json")
+        #expect(command.jsonOutput)
+    }
+
+    @Test func lineageCommandRequiresLeafManifest() throws {
+        let command = try LineageCommand(arguments: ["--run", "/tmp/leaf/manifest.json", "--json"])
+        #expect(command.manifestURL.path(percentEncoded: false) == "/tmp/leaf/manifest.json")
+        #expect(command.jsonOutput)
+    }
+
+    @Test func queryCommandParsesNetModuleAndCornerDeltaModes() throws {
+        let net = try QueryCommand(arguments: [
+            "--run", "/tmp/run", "--net", "VDD", "--corner", "tt", "--json",
+        ])
+        #expect(net.runPath.path(percentEncoded: false) == "/tmp/run")
+        #expect(net.jsonOutput)
+        #expect(net.kind == .net(NetName("VDD"), PEXCornerID("tt")))
+
+        let module = try QueryCommand(arguments: [
+            "--run", "/tmp/run/manifest.json", "--module", "TOP/u1", "--corner", "ss",
+        ])
+        #expect(module.kind == .module(InstancePath("TOP/u1"), PEXCornerID("ss")))
+
+        let delta = try QueryCommand(arguments: [
+            "--run", "/tmp/run", "--base-corner", "tt", "--target-corner", "ss",
+        ])
+        #expect(delta.kind == .cornerDelta(PEXCornerID("tt"), PEXCornerID("ss")))
+    }
+
+    @Test func queryCommandRejectsAmbiguousModes() {
+        do {
+            _ = try QueryCommand(arguments: [
+                "--run", "/tmp/run", "--net", "VDD", "--module", "TOP", "--corner", "tt",
+            ])
+            #expect(Bool(false), "Expected ambiguous query mode to fail")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
+    }
+
+    @Test func retryCommandRejectsMissingManifest() {
+        do {
+            _ = try RetryCommand(arguments: ["--json"])
+            #expect(Bool(false), "Expected missing --run to fail")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("retry"))
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
+    }
+
     // MARK: - ExtractCommand Argument Parsing
 
     @Test func extractCommandConfigMode() throws {
@@ -35,6 +166,10 @@ struct PEXCLITests {
             "--process-requirement", "magic",
             "--pdk-root", "/tmp/pdk",
             "--primary-deck", "/tmp/pdk/libs.tech/magic/sky130A.magicrc",
+            "--corner-deck", "tt=/tmp/pdk/libs.tech/magic/sky130A-tt.magicrc",
+            "--corner-deck", "ss=/tmp/pdk/libs.tech/magic/sky130A-ss.magicrc",
+            "--corner-technology", "ss=/tmp/pdk/technology/sky130B.json",
+            "--source-connectivity", "strict",
             "--strict",
         ])
         #expect(cmd.configURL == nil)
@@ -56,7 +191,51 @@ struct PEXCLITests {
         #expect(params?.processProfile?.requirementID == "magic")
         #expect(params?.processProfile?.pdkRoot == "/tmp/pdk")
         #expect(params?.processProfile?.primaryDeckPath == "/tmp/pdk/libs.tech/magic/sky130A.magicrc")
+        #expect(params?.processProfile?.cornerDeckPaths == [
+            "tt": "/tmp/pdk/libs.tech/magic/sky130A-tt.magicrc",
+            "ss": "/tmp/pdk/libs.tech/magic/sky130A-ss.magicrc",
+        ])
+        #expect(params?.technologyByCorner == ["ss": "/tmp/pdk/technology/sky130B.json"])
+        #expect(params?.sourceConnectivityPolicy == .strict)
         #expect(params?.strict == true)
+    }
+
+    @Test func extractCommandRejectsUnknownSourceConnectivityPolicy() {
+        do {
+            _ = try ExtractCommand(arguments: [
+                "--layout", "/tmp/l.gds",
+                "--netlist", "/tmp/n.sp",
+                "--top-cell", "T",
+                "--technology", "/tmp/t.json",
+                "--backend", "mock",
+                "--source-connectivity", "audit",
+            ])
+            #expect(Bool(false), "Expected unknown source-connectivity policy to fail")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("source-connectivity"))
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
+    }
+
+    @Test func extractCommandRejectsMalformedCornerDeck() {
+        do {
+            _ = try ExtractCommand(arguments: [
+                "--layout", "/tmp/l.gds",
+                "--netlist", "/tmp/n.sp",
+                "--top-cell", "T",
+                "--technology", "/tmp/t.json",
+                "--backend", "mock",
+                "--corner-deck", "ss",
+            ])
+            #expect(Bool(false), "Expected malformed corner deck to fail")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("--corner-deck"))
+        } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+        }
     }
 
     @Test func extractCommandDefaultCorner() throws {
@@ -221,11 +400,16 @@ struct PEXCLITests {
                 "requirementID": "magic",
                 "pdkRoot": "/tmp/pdk",
                 "primaryDeckPath": "/tmp/pdk/libs.tech/magic/sky130A.magicrc",
+                "cornerDeckPaths": [
+                    "tt": "/tmp/pdk/libs.tech/magic/sky130A-tt.magicrc",
+                    "ss": "/tmp/pdk/libs.tech/magic/sky130A-ss.magicrc",
+                ],
             ],
             "inputs": [
                 "layout": "chip.gds",
                 "netlist": "chip.sp",
                 "technology": "tech.json",
+                "technologyByCorner": ["ss": "tech/sky130B.json"],
             ],
             "corners": ["ff_m40c_0v9"],
             "options": [
@@ -234,6 +418,7 @@ struct PEXCLITests {
                 "strictValidation": true,
                 "minCapacitanceF": 5e-16,
                 "minResistanceOhm": 0.05,
+                "sourceConnectivityPolicy": "strict",
             ],
         ]
         let configURL = tmpDir.appending(path: "config.json")
@@ -251,11 +436,16 @@ struct PEXCLITests {
         #expect(request.options.strictValidation == true)
         #expect(request.options.minCapacitanceF == 5e-16)
         #expect(request.options.minResistanceOhm == 0.05)
+        #expect(request.options.sourceConnectivityPolicy == .strict)
         #expect(request.options.emitRawArtifacts == true)
         #expect(request.options.emitIRJSON == true)
+        #expect(request.technologyByCorner["ss"] == .jsonFile(
+            tmpDir.appending(path: "tech/sky130B.json")
+        ))
         #expect(request.processProfile?.profileID == "sky130.signoff")
         #expect(request.processProfile?.pdkID == "sky130")
         #expect(request.processProfile?.requirementID == "magic")
+        #expect(request.processProfile?.cornerDeckPaths["tt"] == "/tmp/pdk/libs.tech/magic/sky130A-tt.magicrc")
     }
 
     @Test func buildRequestFromConfigFileDefaultsThresholdsToNil() async throws {
@@ -283,6 +473,68 @@ struct PEXCLITests {
         #expect(request.options.minCapacitanceF == nil)
         #expect(request.options.minResistanceOhm == nil)
         #expect(request.options.strictValidation == true)
+    }
+
+    @Test func buildRequestFromConfigFileResolvesRelativeProcessDeckPaths() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-relative-profile-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(tmpDir) }
+
+        let configJSON: [String: Any] = [
+            "topCell": "TOP",
+            "backendID": "mock",
+            "processProfile": [
+                "pdkRoot": "pdk",
+                "primaryDeckPath": "pdk/tt.magicrc",
+                "cornerDeckPaths": [
+                    "tt": "pdk/tt.magicrc",
+                    "ss": "decks/ss.magicrc",
+                ],
+            ],
+            "inputs": [
+                "layout": "top.gds",
+                "netlist": "top.sp",
+                "technology": "tech.json",
+            ],
+        ]
+        let configURL = tmpDir.appending(path: "config.json")
+        try JSONSerialization.data(withJSONObject: configJSON, options: []).write(to: configURL)
+
+        let command = try ExtractCommand(arguments: ["--config", configURL.path(percentEncoded: false)])
+        let request = try await command.buildRequestFromConfigFile(configURL)
+        let base = tmpDir.path(percentEncoded: false)
+        #expect(request.processProfile?.pdkRoot == "\(base)/pdk")
+        #expect(request.processProfile?.primaryDeckPath == "\(base)/pdk/tt.magicrc")
+        #expect(request.processProfile?.cornerDeckPaths["ss"] == "\(base)/decks/ss.magicrc")
+    }
+
+    @Test func configModeAppliesProcessProfileCLIOverrides() async throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex-profile-override-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(tmpDir) }
+        let configJSON: [String: Any] = [
+            "topCell": "TOP",
+            "backendID": "mock",
+            "processProfile": [
+                "pdkRoot": "pdk",
+                "cornerDeckPaths": ["tt": "pdk/tt.magicrc", "ss": "pdk/ss.magicrc"],
+            ],
+            "inputs": ["layout": "top.gds", "netlist": "top.sp", "technology": "tech.json"],
+        ]
+        let configURL = tmpDir.appending(path: "config.json")
+        try JSONSerialization.data(withJSONObject: configJSON, options: []).write(to: configURL)
+
+        let command = try ExtractCommand(arguments: [
+            "--config", configURL.path(percentEncoded: false),
+            "--pdk-root", "/override/pdk",
+            "--corner-deck", "ss=/override/ss.magicrc",
+        ])
+        let request = try await command.buildRequestFromConfigFile(configURL)
+        #expect(request.processProfile?.pdkRoot == "/override/pdk")
+        #expect(request.processProfile?.cornerDeckPaths["tt"] == "\(tmpDir.path(percentEncoded: false))/pdk/tt.magicrc")
+        #expect(request.processProfile?.cornerDeckPaths["ss"] == "/override/ss.magicrc")
     }
 
     @Test func buildRequestFromConfigFileRequiresExplicitBackend() async throws {
@@ -1113,6 +1365,37 @@ struct PEXCLITests {
             #expect(error.message.contains("--unexpected"))
         } catch {
             #expect(Bool(false), "Unexpected error: \(error)")
+        }
+    }
+
+    @Test func validateTechCommandStrictJSONRejectsInvalidTechnology() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "pex_validate_tech_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(tempDir) }
+
+        let technology = TechnologyIR(
+            processName: "",
+            stack: [],
+            logicalToPhysicalLayerMap: [:],
+            vias: [],
+            defaultExtractionRules: .default,
+            backendHints: [:]
+        )
+        let technologyURL = tempDir.appending(path: "technology.json")
+        try JSONEncoder().encode(technology).write(to: technologyURL)
+        let command = try ValidateTechCommand(arguments: [
+            "--technology", technologyURL.path(percentEncoded: false),
+            "--strict", "--json",
+        ])
+
+        do {
+            try await command.run()
+            #expect(Bool(false), "Strict JSON validation must reject an empty technology")
+        } catch let error as PEXError {
+            #expect(error.kind == .technologyResolutionFailed)
+        } catch {
+            #expect(Bool(false), "Unexpected validation error: \(error)")
         }
     }
 

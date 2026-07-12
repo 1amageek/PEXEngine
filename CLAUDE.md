@@ -33,8 +33,8 @@ swift build -c release
 
 - Swift Tools Version: **6.3** (requires Swift 6.3+, macOS 26+)
 - Test framework: **Swift Testing** (`import Testing`, `@Test`, `#expect`)  — not XCTest
-- External dependency: `apple/swift-configuration` (CLI config loading)
-- 157 tests across 15 test suites
+- CLI configuration uses Foundation JSON loading with file-over-default precedence; no external configuration package is required.
+- Swift Testing suites cover core models, adapters, parsers, persistence, runtime, and CLI contracts.
 
 ## Architecture
 
@@ -46,26 +46,27 @@ The package is designed around a pipeline: `PEXRunRequest` → adapter execution
 |---|---|---|
 | **PEXCore** | Domain models, IR, protocols, typed errors, registries, validation | ~53 files |
 | **PEXAdapters** | Backend adapters (`MagicPEXAdapter` real extraction, `MockPEXAdapter`, `MagicToolchain`, `ProcessRunner`, default backend registry) | 6 files |
-| **PEXParsers** | SPEF lexer/parser/lowering pipeline, SPEF writer, Magic SPICE parasitic parser | 13 files |
+| **PEXParsers** | SPEF lexer/parser/lowering pipeline, SPEF writer, deterministic SPICE backannotation writer/composer, Magic SPICE parasitic parser | tracked |
 | **PEXPersistence** | Manifest, workspace, IR serializer, artifact store, report generator | 5 files |
-| **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, default engine | 5 files |
+| **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, source-connectivity parsers, default engine | tracked |
 | **PEXEngine** | Umbrella module (`@_exported import` of all above) | 1 file |
-| **PEXCLICore** | CLI command logic: router, commands, formatter (testable library) | 8 files |
+| **PEXCLICore** | CLI command logic: router, commands, formatter (testable library) | tracked |
 | **PEXCLI** | Thin executable entry point (imports PEXCLICore) | 1 file |
 
 ### Core Protocols
 
-- **`PEXEngineProtocol`** — `func run(_ request: PEXRunRequest) async throws -> PEXRunResult`
+- **`PEXEngineProtocol`** — extraction plus selective failed-corner retry with `resumedFromRunID` provenance
 - **`PEXAdapter`** — `prepare`/`execute`/`cleanup` lifecycle with `PEXBackendCapabilities`
 - **`PEXParserProtocol`** — parses `PEXRawOutput` into `ParasiticIR` via `PEXParseContext`
 - **`PEXService`** — host app integration (`extract(for:corners:backend:)`)
 
 ### Canonical IR (`ParasiticIR`)
 
-Tool-independent representation with three element types:
+Tool-independent representation with four element types:
 - `resistor(nodeA, nodeB, valueOhm)`
 - `capacitor(nodeA, nodeB?, valueF)` — `nodeB=nil` means ground cap
 - `coupling(nodeA, nodeB, valueF)`
+- `inductor(nodeA, nodeB, valueH)`
 
 ### SPEF Parser Pipeline
 
@@ -105,6 +106,7 @@ Each run produces immutable artifacts:
 <run-id>/
   manifest.json    # request hash, backend version, timestamps
   raw/             # backend-native files (SPEF/DSPF/logs)
+  spice/           # deterministic SPICE backannotation fragments per corner
   ir/              # normalized IR per corner
   reports/summary.md
 ```
@@ -112,6 +114,6 @@ Each run produces immutable artifacts:
 ## Milestones
 
 1. **M1** (Complete): Core domain + Mock adapter + SPEF parser + IR validator + JSON persistence + CLI + multi-corner orchestration
-2. **M2**: DSPF parser + additional output format support
-3. **M3** (Complete for Magic): real backend adapter — `MagicPEXAdapter` + `MagicSPICEParasiticParser` run Magic parasitic extraction end to end; Calibre/StarRC/Quantus adapters remain open
-4. **M4** (Complete): semiconductor-layout / circuit-studio integration (`PEXCommandService` invokes the CLI; results feed post-layout simulation)
+2. **M2** (Complete for SPEF/DSPF/extracted-SPICE): DSPF hierarchy/annotation lowering, inductor preservation, and parser/report CLI support
+3. **M3** (Complete for Magic): real backend adapter — `MagicPEXAdapter` + `MagicSPICEParasiticParser` run Magic parasitic extraction end to end; Magic declares `supportsCornerSweep=false` for native sweep, while explicit per-corner extraction decks and `technologyByCorner` provide a qualified process-corner path; Calibre/StarRC/Quantus adapters remain open
+4. **M4** (Partial): PEX emits a deterministic canonical-IR SPICE fragment, supports hierarchy-aware `backannotate`, artifact-only failed-corner retry, and merged lineage; foundry signoff breadth remains open

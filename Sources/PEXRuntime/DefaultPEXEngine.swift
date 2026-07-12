@@ -35,4 +35,55 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
     ) async throws -> PEXRunResult {
         try await orchestrator.run(request, cancellationCheck: cancellationCheck)
     }
+
+    public func retryFailedCorners(
+        _ request: PEXRunRequest,
+        from previousResult: PEXRunResult
+    ) async throws -> PEXRunResult {
+        guard previousResult.status == .failed || previousResult.status == .partialSuccess else {
+            throw PEXError.invalidInput(
+                "Only failed or partial-success PEX runs can be retried"
+            )
+        }
+        guard previousResult.artifacts.backendID == request.backendSelection.backendID else {
+            throw PEXError.invalidInput(
+                "Retry backend '\(request.backendSelection.backendID)' does not match prior backend '\(previousResult.artifacts.backendID)'"
+            )
+        }
+
+        let failedCornerIDs = Set(
+            previousResult.cornerResults
+                .filter { $0.status == .failed }
+                .map(\.cornerID)
+        )
+        guard !failedCornerIDs.isEmpty else {
+            throw PEXError.invalidInput("Prior PEX result has no failed corners to retry")
+        }
+        let retryCorners = request.corners.filter { failedCornerIDs.contains($0.id) }
+        guard retryCorners.count == failedCornerIDs.count else {
+            throw PEXError.invalidInput(
+                "Retry request does not contain every failed corner from prior run"
+            )
+        }
+
+        let retryRequest = PEXRunRequest(
+            layoutURL: request.layoutURL,
+            layoutFormat: request.layoutFormat,
+            sourceNetlistURL: request.sourceNetlistURL,
+            sourceNetlistFormat: request.sourceNetlistFormat,
+            topCell: request.topCell,
+            corners: retryCorners,
+            technology: request.technology,
+            technologyByCorner: request.technologyByCorner,
+            processProfile: request.processProfile,
+            backendSelection: request.backendSelection,
+            options: request.options,
+            workingDirectory: request.workingDirectory
+        )
+        return try await orchestrator.run(
+            retryRequest,
+            cancellationCheck: nil,
+            resumedFromRunID: previousResult.runID
+        )
+    }
 }

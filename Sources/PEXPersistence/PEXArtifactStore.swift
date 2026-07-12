@@ -89,9 +89,132 @@ public struct PEXArtifactStore: Sendable {
         }
     }
 
+    /// Reconstructs a runnable request exclusively from the captured inputs of
+    /// this run. The returned request points at immutable run-local copies, so
+    /// retry/resume does not depend on the original source paths remaining
+    /// available.
+    public func loadRequest() throws -> PEXRunRequest {
+        let manifest = try loadManifest()
+        let resolver = try PEXArtifactResolver(workspace: workspace, manifest: manifest)
+        let completeness = resolver.completenessReport()
+        guard completeness.status != .invalid else {
+            let details = completeness.issues.map(\.message).joined(separator: "; ")
+            throw PEXError.persistenceFailed("Artifact manifest integrity validation failed: \(details)")
+        }
+
+        guard let requestRecord = resolver.records(kind: .request, status: .available).first else {
+            throw PEXError.persistenceFailed("Run does not contain a captured request artifact")
+        }
+        let requestURL = try resolver.validatedURL(for: requestRecord)
+        let requestData: Data
+        do {
+            requestData = try Data(contentsOf: requestURL)
+        } catch {
+            throw PEXError.persistenceFailed("Failed to read captured request artifact", underlying: error)
+        }
+        let captured: PEXCapturedRunRequest
+        do {
+            captured = try JSONDecoder().decode(PEXCapturedRunRequest.self, from: requestData)
+        } catch {
+            throw PEXError.persistenceFailed("Failed to decode captured request artifact", underlying: error)
+        }
+
+        let inputRecords = captured.inputArtifactIDs.compactMap { manifest.artifact(id: $0) }
+        guard let layoutRecord = inputRecords.first(where: {
+                  $0.kind == .layoutInput && $0.status == .available
+              }),
+              let netlistRecord = inputRecords.first(where: {
+                  $0.kind == .netlistInput && $0.status == .available
+              }) else {
+            throw PEXError.persistenceFailed("Captured request is missing layout or source-netlist inputs")
+        }
+        let layoutURL = try resolver.validatedURL(for: layoutRecord)
+        let netlistURL = try resolver.validatedURL(for: netlistRecord)
+        let technologyRecord = inputRecords.first(where: {
+            $0.kind == .technologyInput && $0.status == .available
+        })
+
+        let technology: TechnologyInput
+        if let capturedTechnology = captured.technology {
+            switch capturedTechnology {
+            case .jsonFile:
+                guard let technologyRecord else {
+                    throw PEXError.persistenceFailed("Captured JSON technology input is missing")
+                }
+                technology = .jsonFile(try resolver.validatedURL(for: technologyRecord))
+            case .inline(let value):
+                technology = .inline(value)
+            }
+        } else if let technologyRecord {
+            // Compatibility path for manifests created before the technology
+            // payload was included in the captured request schema.
+            technology = .jsonFile(try resolver.validatedURL(for: technologyRecord))
+        } else {
+            throw PEXError.persistenceFailed("Captured request is missing technology input")
+        }
+
+        var technologyByCorner: [String: TechnologyInput] = [:]
+        for cornerID in captured.technologyByCorner.keys.sorted() {
+            guard let capturedInput = captured.technologyByCorner[cornerID] else { continue }
+            technologyByCorner[cornerID] = try resolveCapturedTechnology(
+                capturedInput,
+                inputRecords: inputRecords,
+                resolver: resolver,
+                label: "corner '(cornerID)'"
+            )
+        }
+
+        let processProfile = try captured.processProfile.map {
+            try resolveProcessProfile($0, inputRecords: inputRecords, resolver: resolver)
+        }
+        return PEXRunRequest(
+            layoutURL: layoutURL,
+            layoutFormat: captured.layoutFormat,
+            sourceNetlistURL: netlistURL,
+            sourceNetlistFormat: captured.sourceNetlistFormat,
+            topCell: captured.topCell,
+            corners: captured.corners,
+            technology: technology,
+            technologyByCorner: technologyByCorner,
+            processProfile: processProfile,
+            backendSelection: captured.backendSelection,
+            options: captured.options,
+            workingDirectory: workspace.baseURL
+        )
+    }
+
+    private func resolveCapturedTechnology(
+        _ input: TechnologyInput,
+        inputRecords: [PEXArtifactRecord],
+        resolver: PEXArtifactResolver,
+        label: String
+    ) throws -> TechnologyInput {
+        switch input {
+        case .inline:
+            return input
+        case .jsonFile(let capturedURL):
+            let normalizedCapturedURL = capturedURL.standardizedFileURL
+            guard let record = inputRecords.first(where: { record in
+                guard record.kind == .technologyInput, record.status == .available else { return false }
+                let recordURL = workspace.runDirectory.appending(path: record.relativePath.value)
+                return recordURL.standardizedFileURL == normalizedCapturedURL
+            }) else {
+                throw PEXError.persistenceFailed(
+                    "Captured technology input for (label) is not present in the manifest"
+                )
+            }
+            return .jsonFile(try resolver.validatedURL(for: record))
+        }
+    }
+
     public func loadResult(manifest: PEXArtifactManifest? = nil) throws -> PEXRunResult {
         let manifest = try manifest ?? loadManifest()
         let resolver = try PEXArtifactResolver(workspace: workspace, manifest: manifest)
+        let completeness = resolver.completenessReport()
+        if completeness.status == .invalid {
+            let details = completeness.issues.map(\.message).joined(separator: "; ")
+            throw PEXError.persistenceFailed("Artifact manifest integrity validation failed: \(details)")
+        }
         var cornerResults: [PEXCornerResult] = []
 
         for corner in manifest.corners {
@@ -143,7 +266,75 @@ public struct PEXArtifactStore: Sendable {
                 successCount: successCount,
                 failureCount: failureCount
             ),
-            extractorRun: manifest.extractorRun
+            extractorRun: manifest.extractorRun,
+            resumedFromRunID: manifest.resumedFromRunID
+        )
+    }
+
+    /// Loads the complete parent-to-leaf retry history and computes an
+    /// effective corner view without copying or mutating any run artifacts.
+    public func loadLineage() throws -> PEXRunLineage {
+        var currentResult = try loadResult()
+        var visited: Set<PEXRunID> = []
+        var results: [PEXRunResult] = []
+
+        while true {
+            guard visited.insert(currentResult.runID).inserted else {
+                throw PEXError.persistenceFailed("PEX run lineage contains a parent cycle at \(currentResult.runID)")
+            }
+            results.append(currentResult)
+            guard let parentRunID = currentResult.resumedFromRunID else {
+                break
+            }
+
+            let parentWorkspace = PEXRunWorkspace(baseURL: workspace.baseURL, runID: parentRunID)
+            let parentResult = try PEXArtifactStore(workspace: parentWorkspace).loadResult()
+            guard parentResult.runID == parentRunID else {
+                throw PEXError.persistenceFailed(
+                    "PEX parent manifest run ID \(parentResult.runID) does not match \(parentRunID)"
+                )
+            }
+            currentResult = parentResult
+        }
+
+        return PEXRunLineage(results: results.reversed())
+    }
+
+    private func resolveProcessProfile(
+        _ profile: PEXProcessProfileReference,
+        inputRecords: [PEXArtifactRecord],
+        resolver: PEXArtifactResolver
+    ) throws -> PEXProcessProfileReference {
+        func capturedPath(_ originalPath: String?) throws -> String? {
+            guard let originalPath else { return nil }
+            guard let record = inputRecords.first(where: {
+                $0.kind == .processProfileDeckInput
+                    && $0.status == .available
+                    && $0.provenance?.sourcePath == originalPath
+            }) else {
+                throw PEXError.persistenceFailed(
+                    "Captured process-profile deck is missing for \(originalPath)"
+                )
+            }
+            return try resolver.validatedURL(for: record).path(percentEncoded: false)
+        }
+
+        var cornerDeckPaths: [String: String] = [:]
+        for cornerID in profile.cornerDeckPaths.keys.sorted() {
+            let originalPath = profile.cornerDeckPaths[cornerID]
+            if let resolvedPath = try capturedPath(originalPath) {
+                cornerDeckPaths[cornerID] = resolvedPath
+            }
+        }
+        return PEXProcessProfileReference(
+            profileID: profile.profileID,
+            pdkID: profile.pdkID,
+            source: profile.source,
+            requirementID: profile.requirementID,
+            pdkRoot: profile.pdkRoot,
+            primaryDeckPath: try capturedPath(profile.primaryDeckPath),
+            cornerDeckPaths: cornerDeckPaths,
+            metadata: profile.metadata
         )
     }
 }

@@ -504,6 +504,7 @@ private struct DSPFLowering {
             "sourceFile": sourceFileName,
             "dspf.topSubckt": selection.topSubcktName,
             "dspf.topSubcktSelection": selection.reason,
+            "topCell": selection.topSubcktName,
             "dspf.subckt.count": "\(document.subckts.count)",
             "dspf.annotation.count": "\(sourceAnnotations.count)",
             "dspf.annotation.pin.count": "\(sourceAnnotations.filter { $0.kind == "P" }.count)",

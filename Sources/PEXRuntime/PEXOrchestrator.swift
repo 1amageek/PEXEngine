@@ -20,12 +20,24 @@ public actor PEXOrchestrator {
     }
 
     public func run(_ request: PEXRunRequest) async throws -> PEXRunResult {
-        try await run(request, cancellationCheck: nil)
+        try await run(request, cancellationCheck: nil, resumedFromRunID: nil)
     }
 
     public func run(
         _ request: PEXRunRequest,
         cancellationCheck: PEXExecutionContext.CancellationCheck?
+    ) async throws -> PEXRunResult {
+        try await run(
+            request,
+            cancellationCheck: cancellationCheck,
+            resumedFromRunID: nil
+        )
+    }
+
+    public func run(
+        _ request: PEXRunRequest,
+        cancellationCheck: PEXExecutionContext.CancellationCheck?,
+        resumedFromRunID: PEXRunID?
     ) async throws -> PEXRunResult {
         let runID = PEXRunID()
         let startedAt = Date()
@@ -34,36 +46,53 @@ public actor PEXOrchestrator {
         try pipeline.validateRequest(request)
 
         let technology = try technologyResolver.resolve(request.technology)
+        let technologiesByCorner = try request.technologyByCorner.reduce(into: [:]) { result, entry in
+            result[entry.key] = try technologyResolver.resolve(entry.value)
+        }
 
         let adapter = try pipeline.resolveAdapter(for: request.backendSelection.backendID)
+        try pipeline.validateInputFiles(request)
         let extractorReadiness = toolReadiness(
             adapter: adapter,
             processProfile: request.processProfile
         )
+        let effectiveRequest = requestWithProcessProfile(
+            request,
+            profile: request.processProfile ?? extractorReadiness.processProfile
+        )
         try validateExecutionGate(
-            request: request,
+            request: effectiveRequest,
             adapter: adapter,
             readiness: extractorReadiness
         )
-        let extractorRequest = PEXExtractorRunRequest(
-            runRequest: request,
-            processProfile: request.processProfile ?? extractorReadiness.processProfile,
-            capabilities: adapter.capabilities
-        )
-
-        let baseURL = request.workingDirectory ?? URL(filePath: FileManager.default.temporaryDirectory.path(percentEncoded: false))
+        let baseURL = effectiveRequest.workingDirectory ?? URL(filePath: FileManager.default.temporaryDirectory.path(percentEncoded: false))
         let workspace = PEXRunWorkspace(baseURL: baseURL, runID: runID)
-        let cornerIDs = request.corners.map(\.id)
+        let cornerIDs = effectiveRequest.corners.map(\.id)
         try workspace.createDirectories(corners: cornerIDs)
 
         let store = PEXArtifactStore(workspace: workspace)
         let recorder = PEXArtifactRecorder(workspace: workspace)
-        let inputArtifacts = try captureInputs(request: request, technology: technology, recorder: recorder)
+        let inputArtifacts = try captureInputs(
+            request: effectiveRequest,
+            technology: technology,
+            technologiesByCorner: technologiesByCorner,
+            recorder: recorder
+        )
+        let capturedRequest = try recorder.capturedRequest(
+            effectiveRequest,
+            inputArtifacts: inputArtifacts
+        )
+        let extractorRequest = PEXExtractorRunRequest(
+            runRequest: capturedRequest,
+            processProfile: effectiveRequest.processProfile,
+            capabilities: adapter.capabilities
+        )
 
         let cornerOutcomes = await executeCorners(
-            request: request,
+            request: effectiveRequest,
             adapter: adapter,
             technology: technology,
+            technologiesByCorner: technologiesByCorner,
             workspace: workspace,
             runID: runID,
             recorder: recorder,
@@ -85,7 +114,7 @@ public actor PEXOrchestrator {
             status = .failed
         }
 
-        let requestHash = try PEXRequestHash.compute(for: request, inputArtifacts: inputArtifacts)
+        let requestHash = try PEXRequestHash.compute(for: effectiveRequest, inputArtifacts: inputArtifacts)
 
         let metrics = PEXRunMetrics(
             totalDurationSeconds: finishedAt.timeIntervalSince(startedAt),
@@ -150,7 +179,8 @@ public actor PEXOrchestrator {
             },
             artifacts: allArtifacts,
             warnings: allWarnings,
-            extractorRun: extractorRun
+            extractorRun: extractorRun,
+            resumedFromRunID: resumedFromRunID
         )
         try store.saveManifest(manifest)
 
@@ -165,7 +195,8 @@ public actor PEXOrchestrator {
             artifacts: manifest,
             manifestURL: workspace.manifestURL,
             metrics: metrics,
-            extractorRun: extractorRun
+            extractorRun: extractorRun,
+            resumedFromRunID: resumedFromRunID
         )
     }
 
@@ -195,6 +226,26 @@ public actor PEXOrchestrator {
         )
     }
 
+    private func requestWithProcessProfile(
+        _ request: PEXRunRequest,
+        profile: PEXProcessProfileReference?
+    ) -> PEXRunRequest {
+        PEXRunRequest(
+            layoutURL: request.layoutURL,
+            layoutFormat: request.layoutFormat,
+            sourceNetlistURL: request.sourceNetlistURL,
+            sourceNetlistFormat: request.sourceNetlistFormat,
+            topCell: request.topCell,
+            corners: request.corners,
+            technology: request.technology,
+            technologyByCorner: request.technologyByCorner,
+            processProfile: profile,
+            backendSelection: request.backendSelection,
+            options: request.options,
+            workingDirectory: request.workingDirectory
+        )
+    }
+
     private func validateExecutionGate(
         request: PEXRunRequest,
         adapter: any PEXAdapter,
@@ -210,7 +261,12 @@ public actor PEXOrchestrator {
         }
 
         let capabilities = readiness.capabilities ?? adapter.capabilities
-        if request.corners.count > 1 && !capabilities.supportsCornerSweep {
+        let supportsCornerSweep = capabilities.supportsCornerSweep ||
+            ((adapter as? any PEXAdapterReadinessProviding)?.supportsCornerSweep(
+                corners: request.corners,
+                processProfile: request.processProfile
+            ) ?? false)
+        if request.corners.count > 1 && !supportsCornerSweep {
             throw PEXError.invalidInput(
                 "PEX backend '\(adapter.backendID)' does not support corner sweep, but \(request.corners.count) corners were requested"
             )
@@ -234,6 +290,12 @@ public actor PEXOrchestrator {
             let spefRoundTripArtifactID = outcome.artifacts.first {
                 $0.kind == .spefRoundTrip && $0.status == .available
             }?.id
+            let spiceBackannotationArtifactID = outcome.artifacts.first {
+                $0.kind == .spiceBackannotation && $0.status == .available
+            }?.id
+            let connectivityArtifactID = outcome.artifacts.first {
+                $0.kind == .sourceConnectivityReport && $0.status == .available
+            }?.id
             let totals = parasiticTotals(outcome.result.ir)
             return PEXExtractorRunResult.CornerSummary(
                 cornerID: outcome.result.cornerID,
@@ -250,6 +312,8 @@ public actor PEXOrchestrator {
                 rawOutputArtifactIDs: rawArtifactIDs,
                 parasiticIRArtifactID: irArtifactID,
                 spefRoundTripArtifactID: spefRoundTripArtifactID,
+                spiceBackannotationArtifactID: spiceBackannotationArtifactID,
+                sourceConnectivityArtifactID: connectivityArtifactID,
                 failureStage: outcome.failure?.stage,
                 failureMessage: outcome.failure?.message
             )
@@ -264,12 +328,25 @@ public actor PEXOrchestrator {
                 suggestedActions: failure.suggestedActions
             )
         }
+        let comparisonNotes = request.technologyByCorner.isEmpty
+            ? []
+            : [
+                "Per-corner technology overrides are active; multi-corner spreads are process-specific unless the supplied corner metadata establishes PVT equivalence.",
+            ]
+        let comparisonBasis: PEXExtractorMultiCornerComparisonBasis = request.technologyByCorner.isEmpty
+            ? .sharedTechnology
+            : .perCornerTechnology
         return PEXExtractorRunResult(
             request: request,
             readiness: readiness,
             status: status,
             cornerResults: cornerSummaries,
             artifactIDs: artifactIDs,
+            multiCorner: PEXExtractorMultiCornerSummary(
+                cornerResults: cornerSummaries,
+                comparisonBasis: comparisonBasis,
+                additionalNotes: comparisonNotes
+            ),
             diagnostics: readiness.diagnostics + failureDiagnostics
         )
     }
@@ -293,6 +370,7 @@ public actor PEXOrchestrator {
     private func captureInputs(
         request: PEXRunRequest,
         technology: TechnologyIR,
+        technologiesByCorner: [String: TechnologyIR],
         recorder: PEXArtifactRecorder
     ) throws -> [PEXArtifactRecord] {
         var artifacts: [PEXArtifactRecord] = []
@@ -300,9 +378,75 @@ public actor PEXOrchestrator {
         artifacts.append(try recorder.captureInput(url: request.sourceNetlistURL, kind: .netlistInput))
         switch request.technology {
         case .jsonFile(let url):
-            artifacts.append(try recorder.captureInput(url: url, kind: .technologyInput))
+            artifacts.append(try recorder.captureInput(
+                url: url,
+                kind: .technologyInput,
+                id: "input-technologyInput",
+                destinationFilename: "technology.json"
+            ))
         case .inline:
-            artifacts.append(try recorder.captureInlineTechnology(technology))
+            artifacts.append(try recorder.captureInlineTechnology(
+                technology,
+                id: "input-technologyInput",
+                destinationFilename: "technology.json"
+            ))
+        }
+        for cornerID in request.technologyByCorner.keys.sorted() {
+            let input = request.technologyByCorner[cornerID]!
+            let artifactID = "input-technologyInput-\(sanitizeTechnologyCornerID(cornerID))"
+            let filename = "technology-\(sanitizeTechnologyCornerID(cornerID)).json"
+            switch input {
+            case .jsonFile(let url):
+                artifacts.append(try recorder.captureInput(
+                    url: url,
+                    kind: .technologyInput,
+                    id: artifactID,
+                    destinationFilename: filename
+                ))
+            case .inline:
+                guard let cornerTechnology = technologiesByCorner[cornerID] else {
+                    throw PEXError.internalInvariantViolation(
+                        "Resolved per-corner technology is missing for corner '\(cornerID)'"
+                    )
+                }
+                artifacts.append(try recorder.captureInlineTechnology(
+                    cornerTechnology,
+                    id: artifactID,
+                    destinationFilename: filename
+                ))
+            }
+        }
+        if let profile = request.processProfile {
+            var deckEntries: [(identifier: String, path: String)] = []
+            if let primaryDeckPath = profile.primaryDeckPath {
+                deckEntries.append((identifier: "primary", path: primaryDeckPath))
+            }
+            deckEntries.append(contentsOf: profile.cornerDeckPaths.map { entry in
+                (identifier: "corner-\(entry.key)", path: entry.value)
+            })
+            var capturedPaths: Set<String> = []
+            var capturedDeckIDs: Set<String> = []
+            for entry in deckEntries.sorted(by: { $0.identifier < $1.identifier }) {
+                guard capturedPaths.insert(entry.path).inserted else { continue }
+                var deckArtifact = try recorder.captureProcessProfileDeck(
+                    path: entry.path,
+                    identifier: entry.identifier
+                )
+                if !capturedDeckIDs.insert(deckArtifact.id).inserted {
+                    let collisionSeed = Data("\(entry.identifier)\n\(entry.path)".utf8)
+                    let suffix = String(PEXRequestHash.compute(from: collisionSeed).value.prefix(10))
+                    deckArtifact = try recorder.captureProcessProfileDeck(
+                        path: entry.path,
+                        identifier: "\(entry.identifier)-\(suffix)"
+                    )
+                    guard capturedDeckIDs.insert(deckArtifact.id).inserted else {
+                        throw PEXError.internalInvariantViolation(
+                            "Process profile deck artifact identifiers are not unique"
+                        )
+                    }
+                }
+                artifacts.append(deckArtifact)
+            }
         }
         artifacts.append(try recorder.recordRequest(request, inputArtifacts: artifacts))
         return artifacts
@@ -312,6 +456,7 @@ public actor PEXOrchestrator {
         request: PEXRunRequest,
         adapter: any PEXAdapter,
         technology: TechnologyIR,
+        technologiesByCorner: [String: TechnologyIR],
         workspace: PEXRunWorkspace,
         runID: PEXRunID,
         recorder: PEXArtifactRecorder,
@@ -333,13 +478,16 @@ public actor PEXOrchestrator {
                     }
                 }
 
+                let cornerTechnology = technologiesByCorner[corner.id.value] ?? technology
                 let context = PEXExecutionContext(
                     runID: runID,
                     corner: corner,
                     layoutURL: request.layoutURL,
                     sourceNetlistURL: request.sourceNetlistURL,
+                    sourceNetlistFormat: request.sourceNetlistFormat,
                     topCell: request.topCell,
-                    technology: technology,
+                    technology: cornerTechnology,
+                    processProfile: request.processProfile,
                     backendSelection: request.backendSelection,
                     options: request.options,
                     workingDirectory: workspace.runDirectory,
@@ -372,6 +520,15 @@ public actor PEXOrchestrator {
             warnings.append(contentsOf: outcome.result.warnings)
         }
         return outcomes
+    }
+
+    private func sanitizeTechnologyCornerID(_ value: String) -> String {
+        let base = value.isEmpty ? "corner" : value
+        return base.map { character in
+            character.isLetter || character.isNumber || character == "-" || character == "_"
+                ? character
+                : "-"
+        }.map(String.init).joined()
     }
 
     private func executeSingleCorner(
@@ -431,11 +588,42 @@ public actor PEXOrchestrator {
         let parseContext = PEXParseContext(
             cornerID: cornerID,
             runID: context.runID,
+            topCell: context.topCell,
             technology: context.technology,
             options: context.options
         )
         let ir = try pipeline.parseOutput(raw: rawOutput, context: parseContext)
         let (validatedIR, validationWarnings) = try pipeline.validateIR(ir, strict: options.strictValidation)
+
+        var connectivityWarnings: [PEXWarning] = []
+        if options.sourceConnectivityPolicy != .disabled {
+            let connectivityReport = try PEXSourceConnectivityChecker().check(
+                sourceNetlistURL: context.sourceNetlistURL,
+                sourceNetlistFormat: context.sourceNetlistFormat,
+                ir: validatedIR
+            )
+            artifacts.append(try recorder.recordSourceConnectivityReport(
+                connectivityReport,
+                cornerID: cornerID
+            ))
+            retainedArtifacts = artifacts
+            if options.sourceConnectivityPolicy == .strict && !connectivityReport.isSatisfied {
+                throw PEXError(
+                    kind: .irValidationFailed,
+                    stage: .irValidation,
+                    cornerID: cornerID,
+                    backendID: adapter.backendID,
+                    message: "Source-netlist connectivity validation failed: \(connectivityReport.diagnostics.joined(separator: "; "))"
+                )
+            }
+            connectivityWarnings = connectivityReport.diagnostics.map { diagnostic in
+                PEXWarning(
+                    stage: .irValidation,
+                    cornerID: cornerID,
+                    message: "Source-netlist connectivity: \(diagnostic)"
+                )
+            }
+        }
 
         artifacts.append(try recordIRArtifact(
             validatedIR,
@@ -445,11 +633,17 @@ public actor PEXOrchestrator {
             options: options
         ))
         retainedArtifacts = artifacts
+        let spiceOutcome = recordSPICEBackannotationArtifact(
+            validatedIR,
+            context: context,
+            recorder: recorder
+        )
         let spefOutcome = recordSPEFRoundTripArtifact(
             validatedIR,
             context: context,
             recorder: recorder
         )
+        artifacts.append(contentsOf: spiceOutcome.artifacts)
         artifacts.append(contentsOf: spefOutcome.artifacts)
 
         let cornerEnd = Date()
@@ -459,7 +653,7 @@ public actor PEXOrchestrator {
             ir: validatedIR,
             rawOutputURLs: rawOutput.fileURLs,
             logURL: rawOutput.logURL,
-            warnings: validationWarnings + spefOutcome.warnings,
+            warnings: validationWarnings + connectivityWarnings + spiceOutcome.warnings + spefOutcome.warnings,
             metrics: PEXCornerMetrics(
                 durationSeconds: cornerEnd.timeIntervalSince(cornerStart),
                 netCount: validatedIR.nets.count,
@@ -556,6 +750,55 @@ public actor PEXOrchestrator {
                 recorder: recorder,
                 spefURL: spefURL
             )
+        }
+    }
+
+    private func recordSPICEBackannotationArtifact(
+        _ ir: ParasiticIR,
+        context: PEXExecutionContext,
+        recorder: PEXArtifactRecorder
+    ) -> PEXCornerArtifactRecordingOutcome {
+        let cornerID = context.corner.id
+        let spiceURL = context.workingDirectory.appending(path: "spice").appending(path: "\(cornerID.value).cir")
+        do {
+            try PEXSPICEWriter(options: PEXSPICEWriterOptions(
+                subcircuitName: "PEX_\(context.topCell)_\(cornerID.value)"
+            )).write(ir, to: spiceURL)
+            let artifact = try recorder.recordExistingArtifact(
+                url: spiceURL,
+                kind: .spiceBackannotation,
+                stage: .persistence,
+                cornerID: cornerID,
+                id: "spice-backannotation-\(cornerID.value)",
+                provenance: PEXArtifactProvenance(note: "Deterministic SPICE fragment generated from canonical ParasiticIR")
+            )
+            return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [])
+        } catch {
+            let warning = PEXWarning(
+                stage: .persistence,
+                cornerID: cornerID,
+                message: "Failed to write SPICE backannotation artifact: \(error)"
+            )
+            do {
+                let artifact = try recorder.recordMissingArtifact(
+                    kind: .spiceBackannotation,
+                    stage: .persistence,
+                    cornerID: cornerID,
+                    expectedURL: spiceURL,
+                    id: "spice-backannotation-\(cornerID.value)",
+                    note: "SPICE backannotation generation failed: \(error)"
+                )
+                return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [warning])
+            } catch {
+                return PEXCornerArtifactRecordingOutcome(
+                    artifacts: [],
+                    warnings: [warning, PEXWarning(
+                        stage: .persistence,
+                        cornerID: cornerID,
+                        message: "Failed to record missing SPICE backannotation artifact: \(error)"
+                    )]
+                )
+            }
         }
     }
 

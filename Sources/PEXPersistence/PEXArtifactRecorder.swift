@@ -9,11 +9,18 @@ public struct PEXArtifactRecorder: Sendable {
         self.workspace = workspace
     }
 
-    public func captureInput(url sourceURL: URL, kind: PEXArtifactKind) throws -> PEXArtifactRecord {
-        let destination = workspace.inputsDirectory.appending(path: sanitizedFileName(sourceURL.lastPathComponent))
+    public func captureInput(
+        url sourceURL: URL,
+        kind: PEXArtifactKind,
+        id: String? = nil,
+        destinationFilename: String? = nil
+    ) throws -> PEXArtifactRecord {
+        let destination = workspace.inputsDirectory.appending(
+            path: sanitizedFileName(destinationFilename ?? sourceURL.lastPathComponent)
+        )
         let capturedURL = try copy(sourceURL, to: destination)
         return try availableRecord(
-            id: "input-\(kind.rawValue)",
+            id: id ?? "input-\(kind.rawValue)",
             kind: kind,
             stage: .inputValidation,
             cornerID: nil,
@@ -22,18 +29,41 @@ public struct PEXArtifactRecorder: Sendable {
         )
     }
 
-    public func captureInlineTechnology(_ technology: TechnologyIR) throws -> PEXArtifactRecord {
+    public func captureProcessProfileDeck(
+        path: String,
+        identifier: String
+    ) throws -> PEXArtifactRecord {
+        let sourceURL = URL(filePath: path)
+        let directory = workspace.inputsDirectory.appending(path: "process-profile-decks")
+        let filename = "\(sanitizedIdentifier(identifier))-\(sanitizedFileName(sourceURL.lastPathComponent))"
+        let destination = directory.appending(path: filename)
+        let capturedURL = try copy(sourceURL, to: destination)
+        return try availableRecord(
+            id: "input-process-profile-deck-\(sanitizedIdentifier(identifier))",
+            kind: .processProfileDeckInput,
+            stage: .inputValidation,
+            cornerID: nil,
+            url: capturedURL,
+            provenance: PEXArtifactProvenance(sourcePath: sourceURL.path(percentEncoded: false))
+        )
+    }
+
+    public func captureInlineTechnology(
+        _ technology: TechnologyIR,
+        id: String = "input-technologyInput",
+        destinationFilename: String = "technology.json"
+    ) throws -> PEXArtifactRecord {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(technology)
-        let destination = workspace.inputsDirectory.appending(path: "technology.json")
+        let destination = workspace.inputsDirectory.appending(path: sanitizedFileName(destinationFilename))
         let capturedURL = try writeImmutableArtifactData(
             data,
             requestedURL: destination,
             failureMessage: "Failed to capture inline technology"
         )
         return try availableRecord(
-            id: "input-technologyInput",
+            id: id,
             kind: .technologyInput,
             stage: .technologyResolution,
             cornerID: nil,
@@ -42,14 +72,78 @@ public struct PEXArtifactRecorder: Sendable {
         )
     }
 
+    public func recordSourceConnectivityReport(
+        _ report: PEXSourceConnectivityReport,
+        cornerID: PEXCornerID
+    ) throws -> PEXArtifactRecord {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data: Data
+        do {
+            data = try encoder.encode(report)
+        } catch {
+            throw PEXError.persistenceFailed("Failed to encode source connectivity report", underlying: error)
+        }
+        let destination = workspace.cornerSourceConnectivityURL(cornerID)
+        let capturedURL = try writeImmutableArtifactData(
+            data,
+            requestedURL: destination,
+            failureMessage: "Failed to capture source connectivity report"
+        )
+        return try availableRecord(
+            id: "source-connectivity-\(cornerID.value)",
+            kind: .sourceConnectivityReport,
+            stage: .irValidation,
+            cornerID: cornerID,
+            url: capturedURL,
+            provenance: PEXArtifactProvenance(note: "Source-netlist to extracted-pin connectivity comparison")
+        )
+    }
+
+    public func capturedRequest(
+        _ request: PEXRunRequest,
+        inputArtifacts: [PEXArtifactRecord]
+    ) throws -> PEXRunRequest {
+        let capturedTechnology = try capturedTechnologyInput(
+            request.technology,
+            artifactID: "input-technologyInput",
+            inputArtifacts: inputArtifacts
+        )
+        var capturedTechnologyByCorner: [String: TechnologyInput] = [:]
+        for cornerID in request.technologyByCorner.keys.sorted() {
+            capturedTechnologyByCorner[cornerID] = try capturedTechnologyInput(
+                request.technologyByCorner[cornerID]!,
+                artifactID: "input-technologyInput-\(sanitizedIdentifier(cornerID))",
+                inputArtifacts: inputArtifacts
+            )
+        }
+        return PEXRunRequest(
+            layoutURL: request.layoutURL,
+            layoutFormat: request.layoutFormat,
+            sourceNetlistURL: request.sourceNetlistURL,
+            sourceNetlistFormat: request.sourceNetlistFormat,
+            topCell: request.topCell,
+            corners: request.corners,
+            technology: capturedTechnology,
+            technologyByCorner: capturedTechnologyByCorner,
+            processProfile: request.processProfile,
+            backendSelection: request.backendSelection,
+            options: request.options,
+            workingDirectory: request.workingDirectory
+        )
+    }
+
     public func recordRequest(_ request: PEXRunRequest, inputArtifacts: [PEXArtifactRecord]) throws -> PEXArtifactRecord {
+        let capturedRequest = try capturedRequest(request, inputArtifacts: inputArtifacts)
         let captured = PEXCapturedRunRequest(
             topCell: request.topCell,
             layoutFormat: request.layoutFormat,
             sourceNetlistFormat: request.sourceNetlistFormat,
             corners: request.corners,
+            technology: capturedRequest.technology,
+            technologyByCorner: capturedRequest.technologyByCorner,
             processProfile: request.processProfile,
-            extractorRunRequest: PEXExtractorRunRequest(runRequest: request),
+            extractorRunRequest: PEXExtractorRunRequest(runRequest: capturedRequest),
             backendSelection: request.backendSelection,
             options: request.options,
             inputArtifactIDs: inputArtifacts.map(\.id)
@@ -70,6 +164,27 @@ public struct PEXArtifactRecorder: Sendable {
             url: capturedURL,
             provenance: nil
         )
+    }
+
+    private func capturedTechnologyInput(
+        _ input: TechnologyInput,
+        artifactID: String,
+        inputArtifacts: [PEXArtifactRecord]
+    ) throws -> TechnologyInput {
+        switch input {
+        case .inline(let technology):
+            return .inline(technology)
+        case .jsonFile:
+            guard let record = inputArtifacts.first(where: { $0.id == artifactID && $0.status == .available }) else {
+                throw PEXError.persistenceFailed(
+                    "Captured technology artifact '\(artifactID)' is missing"
+                )
+            }
+            let path = workspace.runDirectory
+                .appending(path: record.relativePath.value)
+                .path(percentEncoded: false)
+            return .jsonFile(URL(filePath: path))
+        }
     }
 
     public func recordMissingArtifact(
@@ -213,8 +328,14 @@ public struct PEXArtifactRecorder: Sendable {
         }
         let name = sanitizedFileName(artifact.url.lastPathComponent)
         switch artifact.kind {
-        case .layoutInput, .netlistInput, .technologyInput, .request:
+        case .layoutInput, .netlistInput, .technologyInput, .processProfileDeckInput, .request:
             return workspace.inputsDirectory.appending(path: name)
+        case .sourceConnectivityReport:
+            let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
+            return workspace.runDirectory
+                .appending(path: "reports")
+                .appending(path: "source-connectivity")
+                .appending(path: name.isEmpty ? "\(cornerID.value).json" : name)
         case .rawOutput, .log:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
             return workspace.cornerRawDirectory(cornerID).appending(path: name)
@@ -224,6 +345,9 @@ public struct PEXArtifactRecorder: Sendable {
         case .spefRoundTrip:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
             return workspace.spefDirectory.appending(path: name.isEmpty ? "\(cornerID.value).spef" : name)
+        case .spiceBackannotation:
+            let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
+            return workspace.runDirectory.appending(path: "spice").appending(path: name.isEmpty ? "\(cornerID.value).cir" : name)
         case .report:
             return workspace.runDirectory.appending(path: "reports").appending(path: name)
         }
@@ -442,14 +566,77 @@ public struct PEXArtifactRecorder: Sendable {
     }
 }
 
-private struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
+struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
     let topCell: String
     let layoutFormat: LayoutFormat
     let sourceNetlistFormat: NetlistFormat
     let corners: [PEXCorner]
+    let technology: TechnologyInput?
+    let technologyByCorner: [String: TechnologyInput]
     let processProfile: PEXProcessProfileReference?
     let extractorRunRequest: PEXExtractorRunRequest
     let backendSelection: PEXBackendSelection
     let options: PEXRunOptions
     let inputArtifactIDs: [String]
+
+    init(
+        topCell: String,
+        layoutFormat: LayoutFormat,
+        sourceNetlistFormat: NetlistFormat,
+        corners: [PEXCorner],
+        technology: TechnologyInput?,
+        technologyByCorner: [String: TechnologyInput],
+        processProfile: PEXProcessProfileReference?,
+        extractorRunRequest: PEXExtractorRunRequest,
+        backendSelection: PEXBackendSelection,
+        options: PEXRunOptions,
+        inputArtifactIDs: [String]
+    ) {
+        self.topCell = topCell
+        self.layoutFormat = layoutFormat
+        self.sourceNetlistFormat = sourceNetlistFormat
+        self.corners = corners
+        self.technology = technology
+        self.technologyByCorner = technologyByCorner
+        self.processProfile = processProfile
+        self.extractorRunRequest = extractorRunRequest
+        self.backendSelection = backendSelection
+        self.options = options
+        self.inputArtifactIDs = inputArtifactIDs
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case topCell
+        case layoutFormat
+        case sourceNetlistFormat
+        case corners
+        case technology
+        case technologyByCorner
+        case processProfile
+        case extractorRunRequest
+        case backendSelection
+        case options
+        case inputArtifactIDs
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.topCell = try container.decode(String.self, forKey: .topCell)
+        self.layoutFormat = try container.decode(LayoutFormat.self, forKey: .layoutFormat)
+        self.sourceNetlistFormat = try container.decode(NetlistFormat.self, forKey: .sourceNetlistFormat)
+        self.corners = try container.decode([PEXCorner].self, forKey: .corners)
+        self.technology = try container.decodeIfPresent(TechnologyInput.self, forKey: .technology)
+        self.technologyByCorner = try container.decodeIfPresent(
+            [String: TechnologyInput].self,
+            forKey: .technologyByCorner
+        ) ?? [:]
+        self.processProfile = try container.decodeIfPresent(
+            PEXProcessProfileReference.self,
+            forKey: .processProfile
+        )
+        self.extractorRunRequest = try container.decode(PEXExtractorRunRequest.self, forKey: .extractorRunRequest)
+        self.backendSelection = try container.decode(PEXBackendSelection.self, forKey: .backendSelection)
+        self.options = try container.decode(PEXRunOptions.self, forKey: .options)
+        self.inputArtifactIDs = try container.decode([String].self, forKey: .inputArtifactIDs)
+    }
 }

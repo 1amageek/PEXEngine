@@ -27,6 +27,23 @@ struct PEXPipeline: Sendable {
                 throw PEXError.invalidInput("corner id '\(corner.id.value)' is duplicated")
             }
         }
+        let requestedCornerIDs = Set(request.corners.map(\.id.value))
+        for cornerID in request.technologyByCorner.keys {
+            let normalizedCornerID = cornerID.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedCornerID.isEmpty else {
+                throw PEXError.invalidInput("technologyByCorner contains an empty corner ID")
+            }
+            guard normalizedCornerID == cornerID else {
+                throw PEXError.invalidInput(
+                    "technologyByCorner corner ID '\(cornerID)' contains surrounding whitespace"
+                )
+            }
+            guard requestedCornerIDs.contains(normalizedCornerID) else {
+                throw PEXError.invalidInput(
+                    "technologyByCorner references unknown corner '\(cornerID)'"
+                )
+            }
+        }
         if request.backendSelection.backendID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw PEXError.invalidInput("backendID must not be empty")
         }
@@ -40,6 +57,24 @@ struct PEXPipeline: Sendable {
         if let minResistanceOhm = request.options.minResistanceOhm,
            !minResistanceOhm.isFinite || minResistanceOhm < 0 {
             throw PEXError.invalidInput("minResistanceOhm must be finite and non-negative")
+        }
+    }
+
+    func validateInputFiles(_ request: PEXRunRequest) throws {
+        let inputs = [
+            (label: "layout", url: request.layoutURL),
+            (label: "source netlist", url: request.sourceNetlistURL),
+        ]
+        for input in inputs {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(
+                atPath: input.url.path(percentEncoded: false),
+                isDirectory: &isDirectory
+            ), !isDirectory.boolValue else {
+                throw PEXError.invalidInput(
+                    "\(input.label) input is not an existing regular file: \(input.url.path(percentEncoded: false))"
+                )
+            }
         }
     }
 

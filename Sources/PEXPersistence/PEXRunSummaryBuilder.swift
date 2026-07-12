@@ -54,7 +54,11 @@ public struct PEXRunSummaryBuilder: Sendable {
                 status: manifest.status.rawValue,
                 backendID: manifest.backendID,
                 corners: cornerSummaries,
-                multiCorner: multiCornerSummary(corners: cornerSummaries, topNets: topNets)
+                multiCorner: multiCornerSummary(
+                    corners: cornerSummaries,
+                    topNets: topNets,
+                    comparisonBasis: manifest.extractorRun?.multiCorner.comparisonBasis ?? .unknown
+                )
             )
         )
     }
@@ -67,6 +71,7 @@ public struct PEXRunSummaryBuilder: Sendable {
         let rawArtifactIDs = resolver.records(kind: .rawOutput, cornerID: entry.cornerID, status: .available).map(\.id)
         let irArtifactID = resolver.records(kind: .parasiticIR, cornerID: entry.cornerID, status: .available).first?.id
         let spefRoundTripArtifactID = resolver.records(kind: .spefRoundTrip, cornerID: entry.cornerID, status: .available).first?.id
+        let spiceBackannotationArtifactID = resolver.records(kind: .spiceBackannotation, cornerID: entry.cornerID, status: .available).first?.id
         guard irArtifactID != nil else {
             return PEXCornerParasiticSummary(
                 cornerID: entry.cornerID.value,
@@ -81,6 +86,7 @@ public struct PEXRunSummaryBuilder: Sendable {
                 rawOutputArtifactIDs: rawArtifactIDs,
                 parasiticIRArtifactID: nil,
                 spefRoundTripArtifactID: spefRoundTripArtifactID,
+                spiceBackannotationArtifactID: spiceBackannotationArtifactID,
                 topNets: [],
                 diagnostics: [
                     PEXRunSummaryDiagnostic(
@@ -121,6 +127,7 @@ public struct PEXRunSummaryBuilder: Sendable {
                 rawOutputArtifactIDs: rawArtifactIDs,
                 parasiticIRArtifactID: irArtifactID,
                 spefRoundTripArtifactID: spefRoundTripArtifactID,
+                spiceBackannotationArtifactID: spiceBackannotationArtifactID,
                 topNets: topNetEntries,
                 diagnostics: []
             )
@@ -138,6 +145,7 @@ public struct PEXRunSummaryBuilder: Sendable {
                 rawOutputArtifactIDs: rawArtifactIDs,
                 parasiticIRArtifactID: irArtifactID,
                 spefRoundTripArtifactID: spefRoundTripArtifactID,
+                spiceBackannotationArtifactID: spiceBackannotationArtifactID,
                 topNets: [],
                 diagnostics: [
                     PEXRunSummaryDiagnostic(
@@ -164,7 +172,8 @@ public struct PEXRunSummaryBuilder: Sendable {
 
     private func multiCornerSummary(
         corners: [PEXCornerParasiticSummary],
-        topNets: Int
+        topNets: Int,
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis
     ) -> PEXMultiCornerParasiticSummary {
         let successfulCorners = corners.filter { $0.status == PEXRunStatus.success.rawValue }
         let successfulCornerIDs = successfulCorners.map(\.cornerID)
@@ -187,6 +196,7 @@ public struct PEXRunSummaryBuilder: Sendable {
             successfulCornerCount: successfulCorners.count,
             failedCornerCount: failedCornerIDs.count,
             failedCornerIDs: failedCornerIDs,
+            comparisonBasis: comparisonBasis,
             totalCapacitance: metricSpread(
                 metric: "totalCapacitanceF",
                 unit: "F",
@@ -391,6 +401,7 @@ public struct PEXRunSummary: Sendable, Codable, Hashable {
 }
 
 public struct PEXMultiCornerParasiticSummary: Sendable, Codable, Hashable {
+    public let comparisonBasis: PEXExtractorMultiCornerComparisonBasis
     public let cornerCount: Int
     public let successfulCornerCount: Int
     public let failedCornerCount: Int
@@ -413,11 +424,13 @@ public struct PEXMultiCornerParasiticSummary: Sendable, Codable, Hashable {
         successfulCornerCount: Int,
         failedCornerCount: Int,
         failedCornerIDs: [String],
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
         totalCapacitance: PEXCornerMetricSpreadSummary,
         totalResistance: PEXCornerMetricSpreadSummary,
         topNetSpreads: [PEXNetCornerSpreadSummary],
         diagnostics: [PEXRunSummaryDiagnostic]
     ) {
+        self.comparisonBasis = comparisonBasis
         self.cornerCount = cornerCount
         self.successfulCornerCount = successfulCornerCount
         self.failedCornerCount = failedCornerCount
@@ -449,11 +462,61 @@ public struct PEXMultiCornerParasiticSummary: Sendable, Codable, Hashable {
             successfulCornerCount: successfulCorners.count,
             failedCornerCount: failedCornerIDs.count,
             failedCornerIDs: failedCornerIDs,
+            comparisonBasis: .unknown,
             totalCapacitance: totalCapacitance,
             totalResistance: totalResistance,
             topNetSpreads: [],
             diagnostics: corners.flatMap(\.diagnostics)
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case comparisonBasis
+        case cornerCount
+        case successfulCornerCount
+        case failedCornerCount
+        case failedCornerIDs
+        case totalCapacitance
+        case totalResistance
+        case topNetSpreads
+        case diagnostics
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            cornerCount: try container.decode(Int.self, forKey: .cornerCount),
+            successfulCornerCount: try container.decode(Int.self, forKey: .successfulCornerCount),
+            failedCornerCount: try container.decode(Int.self, forKey: .failedCornerCount),
+            failedCornerIDs: try container.decode([String].self, forKey: .failedCornerIDs),
+            comparisonBasis: try container.decodeIfPresent(
+                PEXExtractorMultiCornerComparisonBasis.self,
+                forKey: .comparisonBasis
+            ) ?? .unknown,
+            totalCapacitance: try container.decode(
+                PEXCornerMetricSpreadSummary.self,
+                forKey: .totalCapacitance
+            ),
+            totalResistance: try container.decode(
+                PEXCornerMetricSpreadSummary.self,
+                forKey: .totalResistance
+            ),
+            topNetSpreads: try container.decode([PEXNetCornerSpreadSummary].self, forKey: .topNetSpreads),
+            diagnostics: try container.decode([PEXRunSummaryDiagnostic].self, forKey: .diagnostics)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(comparisonBasis, forKey: .comparisonBasis)
+        try container.encode(cornerCount, forKey: .cornerCount)
+        try container.encode(successfulCornerCount, forKey: .successfulCornerCount)
+        try container.encode(failedCornerCount, forKey: .failedCornerCount)
+        try container.encode(failedCornerIDs, forKey: .failedCornerIDs)
+        try container.encode(totalCapacitance, forKey: .totalCapacitance)
+        try container.encode(totalResistance, forKey: .totalResistance)
+        try container.encode(topNetSpreads, forKey: .topNetSpreads)
+        try container.encode(diagnostics, forKey: .diagnostics)
     }
 
     private static func metricSpread(
@@ -571,6 +634,7 @@ public struct PEXCornerParasiticSummary: Sendable, Codable, Hashable {
     public let rawOutputArtifactIDs: [String]
     public let parasiticIRArtifactID: String?
     public let spefRoundTripArtifactID: String?
+    public let spiceBackannotationArtifactID: String?
     public let topNets: [PEXNetParasiticSummary]
     public let diagnostics: [PEXRunSummaryDiagnostic]
 
@@ -587,6 +651,7 @@ public struct PEXCornerParasiticSummary: Sendable, Codable, Hashable {
         rawOutputArtifactIDs: [String] = [],
         parasiticIRArtifactID: String? = nil,
         spefRoundTripArtifactID: String? = nil,
+        spiceBackannotationArtifactID: String? = nil,
         topNets: [PEXNetParasiticSummary],
         diagnostics: [PEXRunSummaryDiagnostic] = []
     ) {
@@ -602,6 +667,7 @@ public struct PEXCornerParasiticSummary: Sendable, Codable, Hashable {
         self.rawOutputArtifactIDs = Array(Set(rawOutputArtifactIDs.filter { !$0.isEmpty })).sorted()
         self.parasiticIRArtifactID = parasiticIRArtifactID
         self.spefRoundTripArtifactID = spefRoundTripArtifactID
+        self.spiceBackannotationArtifactID = spiceBackannotationArtifactID
         self.topNets = topNets
         self.diagnostics = diagnostics
     }

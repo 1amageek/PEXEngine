@@ -37,7 +37,10 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
             layoutFormat: request.layoutFormat,
             sourceNetlistFormat: request.sourceNetlistFormat,
             corners: request.corners,
+            technology: PEXCanonicalTechnologyInput(input: request.technology),
+            technologyByCorner: request.technologyByCorner.mapValues(PEXCanonicalTechnologyInput.init(input:)),
             processProfile: request.processProfile,
+            processProfileDeckSHA256: try processProfileDeckSHA256(request.processProfile),
             backendSelection: PEXCanonicalBackendSelection(request.backendSelection),
             options: request.options,
             inputArtifacts: canonicalArtifacts
@@ -46,6 +49,34 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         encoder.outputFormatting = .sortedKeys
         return compute(from: try encoder.encode(snapshot))
     }
+
+    private static func processProfileDeckSHA256(_ profile: PEXProcessProfileReference?) throws -> [String: String] {
+        guard let profile else { return [:] }
+        var paths: [String: String] = [:]
+        if let primaryDeckPath = profile.primaryDeckPath {
+            paths["primary"] = primaryDeckPath
+        }
+        for (cornerID, path) in profile.cornerDeckPaths {
+            paths["corner:\(cornerID)"] = path
+        }
+
+        var hashes: [String: String] = [:]
+        for (key, path) in paths {
+            let url = URL(filePath: path)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+                throw PEXError.persistenceFailed("Process profile deck is not a regular file: \(path)")
+            }
+            do {
+                hashes[key] = SHA256.hash(data: try Data(contentsOf: url))
+                    .map { String(format: "%02x", $0) }
+                    .joined()
+            } catch {
+                throw PEXError.persistenceFailed("Failed to fingerprint process profile deck \(path)", underlying: error)
+            }
+        }
+        return hashes
+    }
 }
 
 private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
@@ -53,10 +84,32 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
     let layoutFormat: LayoutFormat
     let sourceNetlistFormat: NetlistFormat
     let corners: [PEXCorner]
+    let technology: PEXCanonicalTechnologyInput
+    let technologyByCorner: [String: PEXCanonicalTechnologyInput]
     let processProfile: PEXProcessProfileReference?
+    let processProfileDeckSHA256: [String: String]
     let backendSelection: PEXCanonicalBackendSelection
     let options: PEXRunOptions
     let inputArtifacts: [PEXCanonicalInputArtifact]
+}
+
+private struct PEXCanonicalTechnologyInput: Sendable, Codable, Hashable {
+    let sourceKind: String
+    let processName: String?
+    let inlineTechnology: TechnologyIR?
+
+    init(input: TechnologyInput) {
+        switch input {
+        case .jsonFile:
+            self.sourceKind = "jsonFile"
+            self.processName = nil
+            self.inlineTechnology = nil
+        case .inline(let technology):
+            self.sourceKind = "inline"
+            self.processName = technology.processName
+            self.inlineTechnology = technology
+        }
+    }
 }
 
 private struct PEXCanonicalBackendSelection: Sendable, Codable, Hashable {

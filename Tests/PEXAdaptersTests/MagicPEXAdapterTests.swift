@@ -16,6 +16,12 @@ import SignoffToolSupport
 struct MagicPEXAdapterTests {
 
     static let toolchain = MagicToolchain.locate()
+    static let installedAAndBDecksAvailable: Bool = {
+        guard let toolchain else { return false }
+        let parent = URL(filePath: toolchain.pdkRoot).deletingLastPathComponent()
+        let sky130BDeck = parent.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
+        return FileManager.default.fileExists(atPath: sky130BDeck.path(percentEncoded: false))
+    }()
 
     private func options(_ mode: PEXExtractMode = .cOnly) -> PEXRunOptions {
         PEXRunOptions(
@@ -137,6 +143,49 @@ struct MagicPEXAdapterTests {
         #expect(readiness.suggestedActions.contains("run_pex_doctor"))
     }
 
+    @Test("Distinct profile-declared corner decks enable a real Magic sweep")
+    func profileDeclaredCornerDecksEnableCornerSweep() throws {
+        let root = try makeDir("corner-decks")
+        defer { removeTemporaryItem(root) }
+        let ttDeck = root.appending(path: "tt.magicrc")
+        let ssDeck = root.appending(path: "ss.magicrc")
+        try Data("tt\n".utf8).write(to: ttDeck)
+        try Data("ss\n".utf8).write(to: ssDeck)
+        let profile = PEXProcessProfileReference(
+            primaryDeckPath: ttDeck.path(percentEncoded: false),
+            cornerDeckPaths: [
+                "tt": ttDeck.path(percentEncoded: false),
+                "ss": ssDeck.path(percentEncoded: false),
+            ]
+        )
+        let adapter = MagicPEXAdapter(toolchain: nil)
+        #expect(adapter.supportsCornerSweep(
+            corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss")],
+            processProfile: profile
+        ))
+    }
+
+    @Test("Magic rejects duplicated corner deck content")
+    func profileDeclaredCornerDecksRejectIdenticalContent() throws {
+        let root = try makeDir("duplicate-corner-decks")
+        defer { removeTemporaryItem(root) }
+        let ttDeck = root.appending(path: "tt.magicrc")
+        let ssDeck = root.appending(path: "ss.magicrc")
+        try Data("same deck\n".utf8).write(to: ttDeck)
+        try Data("same deck\n".utf8).write(to: ssDeck)
+        let profile = PEXProcessProfileReference(
+            cornerDeckPaths: [
+                "tt": ttDeck.path(percentEncoded: false),
+                "ss": ssDeck.path(percentEncoded: false),
+            ]
+        )
+        let adapter = MagicPEXAdapter(toolchain: nil)
+        #expect(!adapter.supportsCornerSweep(
+            corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss")],
+            processProfile: profile
+        ))
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func fakeMagicExecutionProducesRawOutputLogAndCanonicalIR() async throws {
         let root = try makeDir("fake-success")
@@ -151,6 +200,47 @@ struct MagicPEXAdapterTests {
 
         try assertFakeMagicRawArtifacts(result, context: context, fixture: fixture)
         try assertFakeMagicCanonicalIR(result, context: context, runOptions: runOptions)
+    }
+
+    @Test("Magic execution selects the deck declared for the active corner")
+    func fakeMagicExecutionSelectsCornerDeck() async throws {
+        let root = try makeDir("corner-deck-selection")
+        defer { removeTemporaryItem(root) }
+        let fixture = try makeFakeMagicSuccessFixture(in: root)
+        let ssDeck = root.appending(path: "ss.magicrc")
+        let captureURL = root.appending(path: "selected-deck.txt")
+        try Data("ss deck\n".utf8).write(to: ssDeck)
+        let profile = PEXProcessProfileReference(
+            pdkRoot: fixture.pdkRoot.path(percentEncoded: false),
+            primaryDeckPath: fixture.rcFileURL.path(percentEncoded: false),
+            cornerDeckPaths: [
+                "tt": fixture.rcFileURL.path(percentEncoded: false),
+                "ss": ssDeck.path(percentEncoded: false),
+            ]
+        )
+        let context = PEXExecutionContext(
+            runID: PEXRunID(),
+            corner: PEXCorner(id: "ss"),
+            layoutURL: fixture.layoutURL,
+            sourceNetlistURL: fixture.sourceNetlistURL,
+            topCell: "inv",
+            technology: minimalTechnology(),
+            processProfile: profile,
+            backendSelection: PEXBackendSelection(
+                backendID: "magic",
+                environmentOverrides: ["PEX_RC_CAPTURE": captureURL.path(percentEncoded: false)]
+            ),
+            options: options(.rc),
+            workingDirectory: fixture.workingDirectory,
+            rawOutputDirectory: fixture.rawOutputDirectory
+        )
+        let adapter = MagicPEXAdapter(toolchain: fakeMagicSuccessToolchain(fixture: fixture))
+
+        try await adapter.prepare(context)
+        _ = try await adapter.execute(context)
+        let selectedDeck = try String(contentsOf: captureURL, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(selectedDeck == ssDeck.path(percentEncoded: false))
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -236,6 +326,9 @@ struct MagicPEXAdapterTests {
         if [ "${PEX_CUSTOM_SENTINEL:-selected}" != "selected" ]; then
             echo "PEX_ERROR selection environment missing"
             exit 10
+        fi
+        if [ -n "${PEX_RC_CAPTURE:-}" ]; then
+            printf '%s' "$4" > "$PEX_RC_CAPTURE"
         fi
         mkdir -p "$(dirname "$PEX_OUT")"
         cat > "$PEX_OUT" <<'SPICE'
@@ -466,6 +559,74 @@ struct MagicPEXAdapterTests {
             abs(totalGroundCap - 4.2008e-15) < 0.2e-15,
             "extracted \(totalGroundCap * 1e15) fF, expected ~4.20 fF (Sky130 met1)"
         )
+    }
+
+    @Test(
+        "Runs two installed profile-declared Magic decks as separate physical profiles",
+        .enabled(if: MagicPEXAdapterTests.installedAAndBDecksAvailable),
+        .timeLimit(.minutes(2))
+    )
+    func runsDistinctInstalledProfileDecks() async throws {
+        let gds = try #require(
+            Bundle.module.url(forResource: "pex_plate", withExtension: "gds"),
+            "missing fixture pex_plate.gds"
+        )
+        let toolchain = try #require(MagicPEXAdapterTests.toolchain)
+        let parent = URL(filePath: toolchain.pdkRoot).deletingLastPathComponent()
+        let ttDeck = parent.appending(path: "sky130A/libs.tech/magic/sky130A.magicrc")
+        let ssDeck = parent.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
+        let profile = PEXProcessProfileReference(
+            pdkRoot: parent.path(percentEncoded: false),
+            primaryDeckPath: ttDeck.path(percentEncoded: false),
+            cornerDeckPaths: [
+                "sky130A": ttDeck.path(percentEncoded: false),
+                "sky130B": ssDeck.path(percentEncoded: false),
+            ]
+        )
+        let adapter = MagicPEXAdapter(toolchain: MagicToolchain(
+            magicExecutableURL: toolchain.magicExecutableURL,
+            rcFileURL: ttDeck,
+            pdkRoot: parent.path(percentEncoded: false),
+            profileID: "sky130.profile-sweep",
+            pdkID: "sky130",
+            requirementID: MagicToolchain.magicRequirementID
+        ))
+
+        var extracted: [ParasiticIR] = []
+        for cornerID in ["sky130A", "sky130B"] {
+            let working = try makeDir("profile-\(cornerID)-work")
+            let rawOut = try makeDir("profile-\(cornerID)-raw")
+            defer {
+                removeTemporaryItem(working)
+                removeTemporaryItem(rawOut)
+            }
+            let context = PEXExecutionContext(
+                runID: PEXRunID(),
+                corner: PEXCorner(id: cornerID),
+                layoutURL: gds,
+                sourceNetlistURL: gds,
+                topCell: "pex_plate",
+                technology: minimalTechnology(),
+                processProfile: profile,
+                options: options(.cOnly),
+                workingDirectory: working,
+                rawOutputDirectory: rawOut
+            )
+            try await adapter.prepare(context)
+            let result = try await adapter.execute(context)
+            let parseContext = PEXParseContext(
+                cornerID: context.corner.id,
+                runID: context.runID,
+                technology: nil,
+                options: options(.cOnly)
+            )
+            let ir = try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
+            #expect(ParasiticIRValidator().validate(ir).isValid)
+            #expect(ir.nets.map(\.totalGroundCapF).reduce(0, +) > 0)
+            extracted.append(ir)
+        }
+
+        #expect(extracted.count == 2)
     }
 }
 

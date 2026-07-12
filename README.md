@@ -7,12 +7,19 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 - **Backend-agnostic pipeline** -- Abstracts extraction tools behind a unified adapter protocol
 - **Canonical Parasitic IR** -- Tool-independent representation of resistors, capacitors, coupling capacitors, and inductors
 - **SPEF, DSPF, and Magic SPICE parsers** -- Standard parasitic output lowering with unit normalization, SPEF `*INDUC` and DSPF / extracted-SPICE `L*` inductor support, and consistent `PEXRunOptions` filtering
+- **Deterministic SPICE backannotation** -- Each successful corner emits a standalone `.cir` subcircuit with all canonical R/C/coupling/L elements and explicit node-map comments; source netlists are not silently rewritten
 - **Multi-corner extraction** -- Parallel corner processing with configurable job limits and `extractorRun.multiCorner` worst/spread summaries
 - **Immutable artifact persistence** -- Manifest, raw outputs, normalized IR, and summary reports
-- **CLI tool** -- `pexengine` commands for extraction, parsing, validation, diagnostics, and optional extraction summaries
+- **Selective retry/resume contract** -- Failed corners can be retried as a new run with `resumedFromRunID` provenance
+- **Artifact-only retry CLI** -- `pexengine retry --run <manifest.json>` reconstructs the request from captured inputs and retries failed corners without the original source paths
+- **Run lineage view** -- `PEXArtifactStore.loadLineage()` overlays child retry corners on immutable parent results for a complete effective-corner view, including source run IDs and artifact provenance per selected corner
+- **Lineage CLI** -- `pexengine lineage --run <manifest.json>` exposes the effective corner statuses, source run IDs, and parent/child run chain
+- **Hierarchy-aware SPICE composition** -- `pexengine backannotate` inserts a retained ParasiticIR fragment into a source deck, validates source ports, and preserves the selected `.subckt` boundary
+- **Structured source connectivity** -- SPICE/CDL continuation lines and Verilog module ports/basic instance connections are compared against extracted pin nodes with explicit warning states for malformed syntax
+- **CLI tool** -- `pexengine` commands for extraction, parsing, validation, diagnostics, summaries, and typed ParasiticIR queries
 - **Parser corpus qualification** -- OpenROAD OpenRCX SPEF fixtures emit structured qualification evidence
 - **ToolEvidence export** -- Saved parser-corpus reports can be converted into flow-compatible evidence JSON
-- **Configuration via `swift-configuration`** -- JSON config with provider hierarchy (file > defaults)
+- **Configuration via Foundation JSON** -- JSON config with deterministic provider hierarchy (file > defaults)
 - **Real-data validation** -- OpenROAD OpenRCX SPEF fixtures and Sky130 back-annotation gates
 
 ## Requirements
@@ -31,6 +38,11 @@ dependencies: [
     .package(url: "https://github.com/1amageek/PEXEngine.git", from: "0.1.0"),
 ]
 ```
+
+The current checkout resolves the Magic PDK profile catalog through the sibling
+`SignoffToolSupport` package (`../SignoffToolSupport`). A published standalone
+distribution must publish that dependency or vendor an equivalent profile
+resolver before remote SwiftPM consumers can build the Magic adapter.
 
 Then add the dependency to your target:
 
@@ -59,7 +71,7 @@ PEXRunRequest
 [ IRValidator ]        --> Validation warnings/errors
     |
     v
-[ ArtifactStore ]      --> manifest.json + IR JSON + reports
+[ ArtifactStore ]      --> manifest.json + IR JSON + SPICE/SPEF + reports
     |
     v
 PEXRunResult
@@ -71,7 +83,7 @@ PEXRunResult
 |---|---|
 | **PEXCore** | Domain models, IR types, protocols, typed errors, registries, validation |
 | **PEXAdapters** | Backend adapters (MockPEXAdapter, ProcessRunner) |
-| **PEXParsers** | SPEF lexer / parser / lowering pipeline including `*INDUC`, DSPF lowering including `L*` elements, and Magic SPICE parasitic lowering including `L*` elements |
+| **PEXParsers** | SPEF lexer / parser / lowering pipeline including `*INDUC`, DSPF lowering including `L*` elements, Magic SPICE parasitic lowering including `L*` elements, and deterministic SPICE backannotation writing |
 | **PEXPersistence** | Manifest, workspace layout, IR serializer, artifact store, report generator, run summary builder |
 | **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, engine |
 | **PEXEngine** | Umbrella module (re-exports all above) |
@@ -108,6 +120,12 @@ let request = PEXRunRequest(
 let result = try await engine.run(request)
 let multiCorner = result.extractorRun?.multiCorner
 
+// Retry only failed corners from a retained partial/failed run.
+if result.status == .partialSuccess || result.status == .failed {
+    let retried = try await engine.retryFailedCorners(request, from: result)
+    let parentRun = retried.resumedFromRunID
+}
+
 // Query parasitic data
 let service = DefaultPEXService.withDefaults()
 let summary = try service.queryNet(
@@ -117,12 +135,42 @@ let summary = try service.queryNet(
     workspace: workspaceURL
 )
 
+// Query all nets owned by a hierarchy and compare two persisted corners.
+let module = try service.moduleSummary(
+    InstancePath("top"),
+    runID: result.runID,
+    corner: PEXCornerID("tt_25c_1v0"),
+    workspace: workspaceURL
+)
+let delta = try service.cornerDelta(
+    runID: result.runID,
+    baseCorner: PEXCornerID("tt_25c_1v0"),
+    targetCorner: PEXCornerID("ss_125c_0v81"),
+    workspace: workspaceURL
+)
+
+// LayoutSelection can also carry a process profile, extraction options, and
+// an explicit workspace when the host app uses the service facade.
+let configuredSelection = LayoutSelection(
+    layoutURL: layoutURL,
+    netlistURL: netlistURL,
+    topCell: "top",
+    technologyPath: techURL,
+    processProfile: processProfile,
+    options: .default,
+    workingDirectory: workspaceURL
+)
+
 // Build an Agent-readable per-corner run summary from persisted artifacts
 let runSummary = try PEXRunSummaryBuilder().build(
     manifestURL: result.manifestURL,
     topNets: 5
 )
 ```
+
+`moduleSummary` treats nodes without hierarchy annotations as root-design
+content only when the requested path matches the IR `topCell`/`designName`.
+They are never silently attributed to a child instance path.
 
 ### CLI
 
@@ -136,6 +184,19 @@ pexengine extract \
     --netlist design.sp \
     --top-cell top \
     --technology tech.json \
+    --backend mock \
+    --corner tt --corner ss \
+    --corner-deck tt=/pdk/libs.tech/magic/sky130A-tt.magicrc \
+    --corner-deck ss=/pdk/libs.tech/magic/sky130A-ss.magicrc \
+    --json
+
+# Use an explicit technology reference for one corner.
+pexengine extract \
+    --layout design.gds \
+    --netlist design.sp \
+    --top-cell top \
+    --technology sky130A.json \
+    --corner-technology ss=sky130B.json \
     --backend mock \
     --corner tt --corner ss \
     --json
@@ -152,6 +213,20 @@ pexengine extract \
     --summary \
     --summary-top-nets 5 \
     --json
+
+# Retry only failed corners using the parent run's captured inputs.
+pexengine retry --run .xcircuite/pex/runs/<run-id>/manifest.json --json
+
+# Compose one retained corner IR into the source deck.
+pexengine backannotate \
+    --netlist top.cir \
+    --ir .xcircuite/pex/runs/<run-id>/ir/tt.json \
+    --output .xcircuite/pex/runs/<run-id>/reports/post-tt.cir \
+    --top-cell TOP \
+    --json
+
+# Inspect the effective result after one or more retries.
+pexengine lineage --run .xcircuite/pex/runs/<leaf-run-id>/manifest.json --json
 
 # Parse a SPEF or DSPF file
 pexengine parse --input output.spef --corner tt --json
@@ -183,11 +258,16 @@ pexengine evidence-packet-from-extractor-report \
     --out /tmp/pex-extractor-evidence-packet.json \
     --json
 
-# Validate technology file
+# Validate technology file (strict mode checks layer/via/map semantics, not only JSON shape)
 pexengine validate-tech --technology tech.json --strict
 
 # Summarize extraction results
 pexengine summarize --run /path/to/run --top-nets 5
+
+# Query retained ParasiticIR without a UI
+pexengine query --run /path/to/run --net VDD --corner tt --json
+pexengine query --run /path/to/run --module TOP/u1 --corner tt --json
+pexengine query --run /path/to/run --base-corner tt --target-corner ss --json
 
 # List available backends
 pexengine list-backends --json
@@ -195,6 +275,35 @@ pexengine list-backends --json
 # Environment diagnostics
 pexengine doctor
 ```
+
+For a Magic multi-corner run, configure `processProfile.cornerDeckPaths` as a
+JSON object keyed by the requested corner IDs, or pass repeatable
+`--corner-deck <corner-id>=<deck-path>` flags in direct mode. Each value must be
+an existing extraction deck with distinct content; otherwise the run is
+rejected as unsupported instead of producing repeated single-deck parasitics.
+Distinct bytes are an input-integrity prerequisite, not proof of PVT semantics.
+When process decks differ, provide matching `technologyByCorner` references;
+this proves process-specific routing, while PVT equivalence still requires
+foundry-qualified decks and correlation evidence.
+The typed `extractorRun.multiCorner.comparisonBasis` field is
+`perCornerTechnology` for this case and `sharedTechnology` when every corner
+uses the run-level technology. Agents must inspect this field before treating
+the numeric spread as a PVT metric; neither value replaces foundry correlation
+evidence, and older manifests decode it as `unknown`.
+The persisted `extractorRun.multiCorner.notes` repeats this distinction for
+Agent and human review, so a numerically comparable spread is not mistaken for
+a foundry-correlated PVT result.
+Paths in a
+JSON config are resolved relative to that config file, including `pdkRoot` and
+`primaryDeckPath`.
+
+Source-netlist connectivity checking is controlled by
+`options.sourceConnectivityPolicy` or `--source-connectivity`. `warn` retains a
+per-corner JSON report and warning when extracted pin nodes cannot be matched to
+the source SPICE/CDL nodes; `strict` turns that mismatch into a failed corner;
+`disabled` omits the check. Verilog module ports, declarations, and basic named
+or positional instance connections are parsed structurally; malformed or
+unsupported constructs remain an explicit warning rather than a false pass.
 
 ### Exit Codes
 
@@ -317,8 +426,15 @@ the repair flow. `evidence-packet-from-extractor-report` emits the same packet
 shape from retained Magic/OpenRCX-style real-extractor reports, separating
 extractor readiness from physical-bound mismatch diagnostics so an Agent can
 decide whether to inspect the toolchain, the raw artifacts, or the design impact.
-The retained Magic extractor lane includes `tt` and `ss` corner evidence plus
-RC-network resistance coverage, and its report preserves input/output
+The retained Magic extractor lane includes independent `tt` and `ss` case evidence,
+RC-network resistance coverage, and a two-corner Sky130 process case. The latter
+uses distinct `sky130A`/`sky130B` decks together with explicit
+`technologyByCorner` references; the report records deck hashes, technology
+artifacts, and a comparable multi-corner summary. This proves process-specific
+routing, not PVT equivalence: PVT signoff still requires foundry-qualified corner
+decks and correlation data. Magic still declares `supportsCornerSweep=false` for
+native sweep, so all physical variation is driven by explicit per-corner profiles.
+The report preserves input/output
 `artifactRefs` with SHA-256 and byte counts so downstream planning can verify
 layout, netlist, technology, manifest, and normalized `ParasiticIR` provenance.
 
@@ -358,9 +474,12 @@ Each extraction run produces immutable artifacts:
 <run-id>/
   manifest.json          # Run metadata, request hash, timestamps
   request.json           # Original request
+  inputs/process-profile-decks/ # Immutable copies of declared RC decks
   raw/<corner-id>/       # Backend-native files (SPEF/DSPF/logs)
   ir/<corner-id>.json    # Normalized IR per corner
+  spice/<corner-id>.cir # Deterministic SPICE backannotation subcircuit
   reports/summary.md     # Human-readable summary
+  reports/source-connectivity/<corner-id>.json
 ```
 
 Loading a run reconstructs corner results from the manifest rather than assuming default paths. Successful corners retain their IR, raw output files, log file paths, and extractor multi-corner comparison summaries; failed corners retain raw and log evidence even when no IR artifact exists.

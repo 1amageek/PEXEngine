@@ -281,6 +281,9 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
     public let unitSystem: String?
     public let summaryMetrics: [String: Double]
     public let summaryCounts: [String: Int]
+    /// Stable string dimensions that cannot be represented as numeric metrics
+    /// or counts, such as the basis of a multi-corner comparison.
+    public let summaryAttributes: [String: String]
     public let sourceArtifactIDs: [String]
 
     public init(
@@ -290,6 +293,7 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
         unitSystem: String? = nil,
         summaryMetrics: [String: Double] = [:],
         summaryCounts: [String: Int] = [:],
+        summaryAttributes: [String: String] = [:],
         sourceArtifactIDs: [String] = []
     ) {
         self.viewID = viewID
@@ -298,6 +302,7 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
         self.unitSystem = unitSystem
         self.summaryMetrics = summaryMetrics
         self.summaryCounts = summaryCounts
+        self.summaryAttributes = summaryAttributes.filter { !$0.key.isEmpty && !$0.value.isEmpty }
         self.sourceArtifactIDs = Array(Set(sourceArtifactIDs.filter { !$0.isEmpty })).sorted()
     }
 
@@ -308,6 +313,7 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
         case unitSystem
         case summaryMetrics
         case summaryCounts
+        case summaryAttributes
         case sourceArtifactIDs
     }
 
@@ -323,6 +329,10 @@ public struct PEXEvidenceNormalizedView: Sendable, Hashable, Codable {
                 forKey: .summaryMetrics
             ),
             summaryCounts: try container.decode([String: Int].self, forKey: .summaryCounts),
+            summaryAttributes: try container.decodeIfPresent(
+                [String: String].self,
+                forKey: .summaryAttributes
+            ) ?? [:],
             sourceArtifactIDs: try container.decode([String].self, forKey: .sourceArtifactIDs)
         )
     }

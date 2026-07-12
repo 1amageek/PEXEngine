@@ -61,6 +61,48 @@ struct PEXRuntimeTests {
         #expect(request.sourceNetlistURL.path(percentEncoded: false) == "/absolute/path/netlist.cir")
     }
 
+    @Test func configMapperMapsPerCornerTechnologyPaths() throws {
+        let config = PEXProjectConfig(
+            topCell: "TOP",
+            backendID: "mock",
+            corners: ["tt", "ss"],
+            inputs: PEXProjectConfig.InputPaths(
+                layout: "layout.gds",
+                netlist: "source.cir",
+                technology: "tech/sky130A.json",
+                technologyByCorner: ["ss": "tech/sky130B.json"]
+            )
+        )
+        let configURL = URL(filePath: "/tmp/project/pex-config.json")
+        let request = try PEXConfigMapper().mapToRunRequest(config: config, configFileURL: configURL)
+
+        #expect(request.technologyByCorner["ss"] == .jsonFile(URL(filePath: "/tmp/project/tech/sky130B.json")))
+    }
+
+    @Test func configMapperResolvesProcessProfileDeckPathsRelativeToConfig() throws {
+        let config = PEXProjectConfig(
+            topCell: "TOP",
+            backendID: "magic",
+            processProfile: PEXProcessProfileReference(
+                profileID: "sky130",
+                pdkRoot: "pdk/sky130A",
+                primaryDeckPath: "pdk/sky130A/libs.tech/magic/sky130A.magicrc",
+                cornerDeckPaths: [
+                    "tt": "pdk/sky130A/libs.tech/magic/sky130A.magicrc",
+                    "ss": "pdk/sky130B/libs.tech/magic/sky130B.magicrc",
+                ]
+            ),
+            corners: ["tt", "ss"]
+        )
+        let request = try PEXConfigMapper().mapToRunRequest(
+            config: config,
+            configFileURL: URL(filePath: "/tmp/project/pex-config.json")
+        )
+
+        #expect(request.processProfile?.pdkRoot == "/tmp/project/pdk/sky130A")
+        #expect(request.processProfile?.cornerDeckPaths["ss"] == "/tmp/project/pdk/sky130B/libs.tech/magic/sky130B.magicrc")
+    }
+
     @Test func technologyResolverInline() throws {
         let tech = TechnologyIR(
             processName: "test",
@@ -115,6 +157,8 @@ struct PEXRuntimeTests {
         #expect(result.extractorRun?.request.corners.count == 2)
         #expect(result.extractorRun?.cornerResults.count == 2)
         #expect(result.extractorRun?.cornerResults.allSatisfy { $0.spefRoundTripArtifactID != nil } == true)
+        #expect(result.extractorRun?.cornerResults.allSatisfy { $0.spiceBackannotationArtifactID != nil } == true)
+        #expect(result.extractorRun?.cornerResults.allSatisfy { $0.sourceConnectivityArtifactID != nil } == true)
         #expect(result.extractorRun?.cornerResults.allSatisfy { $0.unitSystem == "canonical" } == true)
         #expect(result.extractorRun?.cornerResults.allSatisfy { ($0.totalCapacitanceF ?? 0) > 0 } == true)
         #expect(result.extractorRun?.multiCorner.comparisonStatus == .comparable)
@@ -124,7 +168,9 @@ struct PEXRuntimeTests {
         #expect(result.artifacts.extractorRun?.readiness.status == .ready)
         #expect(result.artifacts.extractorRun?.multiCorner.comparisonStatus == .comparable)
         #expect(result.artifacts.artifacts(kind: .spefRoundTrip).count == 2)
-        #expect(result.warnings.count == 20)
+        #expect(result.artifacts.artifacts(kind: .spiceBackannotation).count == 2)
+        #expect(result.artifacts.artifacts(kind: .sourceConnectivityReport).count == 2)
+        #expect(result.warnings.count == 22)
         #expect(result.artifacts.warnings == result.warnings)
         #expect(result.warnings.allSatisfy { $0.stage == .irValidation })
         #expect(Set(result.warnings.compactMap(\.cornerID)) == Set([PEXCornerID("tt_25c_1v0"), PEXCornerID("ss_125c_0v81")]))
@@ -132,12 +178,14 @@ struct PEXRuntimeTests {
         let manifestArtifactIDs = Set(result.artifacts.artifacts.map(\.id))
         let extractorRun = try #require(result.extractorRun)
         for summary in extractorRun.cornerResults {
-            #expect(summary.warningCount == 10)
+            #expect(summary.warningCount == 11)
             #expect(summary.rawOutputCount == 1)
             let parasiticIRArtifactID = try #require(summary.parasiticIRArtifactID)
             let spefRoundTripArtifactID = try #require(summary.spefRoundTripArtifactID)
+            let spiceBackannotationArtifactID = try #require(summary.spiceBackannotationArtifactID)
             #expect(manifestArtifactIDs.contains(parasiticIRArtifactID))
             #expect(manifestArtifactIDs.contains(spefRoundTripArtifactID))
+            #expect(manifestArtifactIDs.contains(spiceBackannotationArtifactID))
             #expect(summary.rawOutputArtifactIDs.allSatisfy { manifestArtifactIDs.contains($0) })
         }
 
@@ -146,9 +194,10 @@ struct PEXRuntimeTests {
             #expect(cr.ir != nil)
             #expect(cr.metrics.netCount > 0)
             #expect(cr.metrics.elementCount > 0)
-            #expect(cr.warnings.count == 10)
+            #expect(cr.warnings.count == 11)
             #expect(cr.warnings.allSatisfy { $0.stage == .irValidation && $0.cornerID == cr.cornerID })
-            #expect(cr.warnings.allSatisfy { $0.message.contains("disconnectedNode") })
+            #expect(cr.warnings.filter { $0.message.contains("disconnectedNode") }.count == 10)
+            #expect(cr.warnings.contains { $0.message.contains("Source-netlist connectivity") })
         }
 
     }
@@ -248,6 +297,11 @@ struct PEXRuntimeTests {
         #expect(loaded.artifacts.artifacts(kind: .parasiticIR, cornerID: PEXCornerID("tt")).count == 1)
         #expect(loaded.extractorRun?.request.backendID == "mock")
         #expect(loaded.extractorRun?.readiness.status == .ready)
+        let lineage = try service.loadLineage(result.runID, workspace: tempDir)
+        #expect(lineage.rootRunID == result.runID)
+        #expect(lineage.leafRunID == result.runID)
+        #expect(lineage.effectiveStatus == .success)
+        #expect(lineage.effectiveCornerResults.map(\.cornerID) == [PEXCornerID("tt")])
 
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
@@ -255,8 +309,10 @@ struct PEXRuntimeTests {
         #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.relativePath.value == "raw/tt/tt.spef")
         #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.relativePath.value == "ir/tt.json")
         #expect(manifest.artifacts(kind: .spefRoundTrip, cornerID: "tt").first?.relativePath.value == "spef/tt.spef")
+        #expect(manifest.artifacts(kind: .spiceBackannotation, cornerID: "tt").first?.relativePath.value == "spice/tt.cir")
         #expect(manifestCorner.artifactIDs.contains("ir-tt"))
         #expect(manifestCorner.artifactIDs.contains("spef-roundtrip-tt"))
+        #expect(manifestCorner.artifactIDs.contains("spice-backannotation-tt"))
     }
 
     @Test func defaultPEXServiceQueryNet() async throws {
@@ -305,6 +361,151 @@ struct PEXRuntimeTests {
         #expect(summary.netName == firstNet.name)
         #expect(summary.cornerID == PEXCornerID("tt"))
         #expect(summary.nodeCount == firstNet.nodes.count)
+    }
+
+    @Test func defaultPEXServiceModuleSummaryAndCornerDelta() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_module_query_test_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let engine = DefaultPEXEngine.withDefaults()
+        let request = PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [
+                PEXCorner(id: "tt", name: "tt", temperature: 25),
+                PEXCorner(id: "hot", name: "hot", temperature: 125),
+            ],
+            technology: .inline(makeTestTech()),
+            backendSelection: .mock(),
+            options: .default,
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        let service = DefaultPEXService.withDefaults()
+        let module = try service.moduleSummary(
+            InstancePath("TESTCELL"),
+            runID: result.runID,
+            corner: PEXCornerID("tt"),
+            workspace: tempDir
+        )
+        #expect(module.netNames.count == 10)
+        #expect(module.nodeCount == 30)
+        #expect(module.totalGroundCapF > 0)
+
+        let delta = try service.cornerDelta(
+            runID: result.runID,
+            baseCorner: PEXCornerID("tt"),
+            targetCorner: PEXCornerID("hot"),
+            workspace: tempDir
+        )
+        #expect(delta.netDeltas.count == 10)
+        #expect(delta.totalGroundCapDeltaF > 0)
+        #expect(delta.totalResistanceDeltaOhm > 0)
+        #expect(delta.netDeltas.first?.targetNodeCount == 3)
+    }
+
+    @Test func moduleSummaryIncludesUnscopedRootNetsWithoutAttributingThemToChildren() throws {
+        let baseURL = FileManager.default.temporaryDirectory
+            .appending(path: "pex-module-root-query-(UUID().uuidString)")
+        defer { removeTemporaryItem(baseURL) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: baseURL, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let rootNet = ParasiticNet(
+            name: NetName("VDD"),
+            nodes: [ParasiticNode(name: NodeName("vdd"), kind: .pin, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 1e-12,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 1
+        )
+        let childNet = ParasiticNet(
+            name: NetName("N1"),
+            nodes: [ParasiticNode(name: NodeName("u1:n1"), kind: .pin, instancePath: InstancePath("TOP/u1"), coordinate: nil)],
+            totalGroundCapF: 2e-12,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 2
+        )
+        let ir = ParasiticIR(
+            version: ParasiticIR.currentVersion,
+            cornerID: "tt",
+            units: .canonical,
+            nets: [rootNet, childNet],
+            elements: [],
+            metadata: ["topCell": "TOP"]
+        )
+        let store = PEXArtifactStore(workspace: workspace)
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        try store.saveIR(ir, for: "tt")
+        let irRecord = try recorder.recordExistingArtifact(
+            url: workspace.cornerIRURL("tt"),
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: "tt",
+            id: "ir-tt"
+        )
+        try store.saveManifest(PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("module-root-query"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(timeIntervalSince1970: 1),
+            finishedAt: Date(timeIntervalSince1970: 2),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
+            artifacts: [irRecord],
+            warnings: []
+        ))
+
+        let service = DefaultPEXService.withDefaults()
+        let root = try service.moduleSummary(InstancePath("TOP"), runID: runID, corner: "tt", workspace: baseURL)
+        #expect(root.netNames == [NetName("N1"), NetName("VDD")])
+        let child = try service.moduleSummary(InstancePath("TOP/u1"), runID: runID, corner: "tt", workspace: baseURL)
+        #expect(child.netNames == [NetName("N1")])
+    }
+
+    @Test func profileDeclaredCornerDecksAllowNonNativeMultiCornerAdapter() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_profile_corner_test_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let ttDeck = tempDir.appending(path: "tt.magicrc")
+        let ssDeck = tempDir.appending(path: "ss.magicrc")
+        try Data("tt\n".utf8).write(to: ttDeck)
+        try Data("ss\n".utf8).write(to: ssDeck)
+        let profile = PEXProcessProfileReference(
+            primaryDeckPath: ttDeck.path(percentEncoded: false),
+            cornerDeckPaths: [
+                "tt": ttDeck.path(percentEncoded: false),
+                "ss": ssDeck.path(percentEncoded: false),
+            ]
+        )
+        let engine = makeEngine(adapter: CornerDeckAwarePEXAdapter())
+        let request = PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss")],
+            technology: .inline(makeTestTech()),
+            processProfile: profile,
+            backendSelection: PEXBackendSelection(backendID: "corner-deck-aware"),
+            options: .default,
+            workingDirectory: tempDir
+        )
+
+        let result = try await engine.run(request)
+        #expect(result.status == .success)
+        #expect(result.cornerResults.map(\.cornerID) == [PEXCornerID("tt"), PEXCornerID("ss")])
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
+        let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
+        let deckArtifacts = manifest.artifacts(kind: .processProfileDeckInput)
+        #expect(deckArtifacts.count == 2)
+        #expect(deckArtifacts.allSatisfy { $0.status == .available && $0.sha256 != nil && $0.byteCount != nil })
+        #expect(deckArtifacts.allSatisfy { $0.relativePath.value.hasPrefix("inputs/process-profile-decks/") })
     }
 
     @Test func loadRunDoesNotRequireIRWhenIRJSONEmissionIsDisabled() async throws {
@@ -723,6 +924,8 @@ struct PEXRuntimeTests {
         #expect(result.status == .success)
         #expect(result.cornerResults.count == 1)
         #expect(result.cornerResults[0].ir != nil)
+        #expect(result.extractorRun?.request.sourceNetlistFormat == .spice)
+        #expect(result.extractorRun?.request.processProfile == nil)
     }
 
     @Test func multiCornerLoadRunPreservesAll() async throws {
@@ -1014,6 +1217,49 @@ private struct SingleCornerReadyPEXAdapter: PEXAdapter, PEXAdapterReadinessProvi
     }
 
     func cleanup(_ context: PEXExecutionContext) async {}
+}
+
+private struct CornerDeckAwarePEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+    let backendID = "corner-deck-aware"
+    let capabilities = PEXBackendCapabilities(
+        supportsCouplingCaps: true,
+        supportsCornerSweep: false,
+        supportsIncremental: false,
+        supportsRCReduction: false,
+        nativeOutputFormats: [.spef]
+    )
+    private let base = MockPEXAdapter()
+
+    func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
+        PEXExtractorToolReadiness(
+            backendID: backendID,
+            status: .ready,
+            reason: "Ready when each corner has a distinct profile deck.",
+            processProfile: processProfile,
+            capabilities: capabilities
+        )
+    }
+
+    func supportsCornerSweep(
+        corners: [PEXCorner],
+        processProfile: PEXProcessProfileReference?
+    ) -> Bool {
+        guard let processProfile else { return false }
+        let paths = corners.compactMap { processProfile.cornerDeckPaths[$0.id.value] }
+        return paths.count == corners.count && Set(paths).count == corners.count
+    }
+
+    func prepare(_ context: PEXExecutionContext) async throws {
+        try await base.prepare(context)
+    }
+
+    func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        try await base.execute(context)
+    }
+
+    func cleanup(_ context: PEXExecutionContext) async {
+        await base.cleanup(context)
+    }
 }
 
 private struct BlockedReadinessPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {

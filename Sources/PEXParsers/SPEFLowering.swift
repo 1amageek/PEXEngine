@@ -12,6 +12,7 @@ public struct SPEFLowering: Sendable {
         let (capScale, resScale, inductScale) = unitScaleFactors(from: tree.header)
         let delimiter = tree.header.delimiter
         let explicitNodeOwners = explicitNodeOwnerMap(from: tree)
+        let instancePathByNode = instancePathMap(from: tree, delimiter: delimiter)
         let portNames = Set(tree.ports.map { resolveNameMap($0.name, nameMap: tree.nameMap) })
         let portCoordinates = Dictionary(uniqueKeysWithValues: tree.ports.compactMap { port -> (String, Point2D)? in
             guard let coordinate = port.coordinate else { return nil }
@@ -73,7 +74,7 @@ public struct SPEFLowering: Sendable {
                 return ParasiticNode(
                     name: NodeName(nodeName),
                     kind: kind,
-                    instancePath: nil,
+                    instancePath: instancePathByNode[nodeName],
                     coordinate: connectionCoordinates[nodeName]
                 )
             }
@@ -231,7 +232,7 @@ public struct SPEFLowering: Sendable {
                 ParasiticNode(
                     name: NodeName(nodeName),
                     kind: portNames.contains(nodeName) ? .pin : .internal,
-                    instancePath: nil,
+                    instancePath: instancePathByNode[nodeName],
                     coordinate: portCoordinates[nodeName]
                 )
             }
@@ -254,6 +255,7 @@ public struct SPEFLowering: Sendable {
                 "sourceFormat": "SPEF",
                 "spefVersion": tree.header.spefVersion,
                 "designName": tree.header.designName,
+                "topCell": tree.header.designName,
             ]
         )
     }
@@ -314,6 +316,19 @@ public struct SPEFLowering: Sendable {
             }
         }
         return owners
+    }
+
+    private func instancePathMap(from tree: SPEFParseTree, delimiter: String) -> [String: InstancePath] {
+        var paths: [String: InstancePath] = [:]
+        for netBlock in tree.nets {
+            for connection in netBlock.connections where connection.type == .instancePin {
+                let nodeName = resolveNameMap(connection.name, nameMap: tree.nameMap)
+                let path = nodeName.components(separatedBy: delimiter).first ?? nodeName
+                guard !path.isEmpty, path != nodeName else { continue }
+                paths[nodeName] = InstancePath(path)
+            }
+        }
+        return paths
     }
 
     private func localNodes(in netBlock: SPEFNetBlock, nameMap: [Int: String]) -> Set<String> {

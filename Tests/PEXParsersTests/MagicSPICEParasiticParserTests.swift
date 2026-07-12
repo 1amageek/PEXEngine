@@ -256,6 +256,7 @@ struct MagicSPICEParasiticParserTests {
         // Unrecognized suffix fails loud (nil) rather than mis-scaling.
         #expect(MagicSPICEParasiticParser.parseSPICEValue("5x") == nil)
         #expect(MagicSPICEParasiticParser.parseSPICEValue("abc") == nil)
+        #expect(MagicSPICEParasiticParser.parseSPICEValue("5pf-extra") == nil)
     }
 }
 

@@ -29,8 +29,19 @@ public struct PEXRunWorkspace: Sendable {
         spefDirectory.appending(path: "\(cornerID.value).spef")
     }
 
+    public func cornerSPICEBackannotationURL(_ cornerID: PEXCornerID) -> URL {
+        runDirectory.appending(path: "spice").appending(path: "\(cornerID.value).cir")
+    }
+
     public func cornerLogURL(_ cornerID: PEXCornerID) -> URL {
         runDirectory.appending(path: "raw").appending(path: cornerID.value).appending(path: "extraction.log")
+    }
+
+    public func cornerSourceConnectivityURL(_ cornerID: PEXCornerID) -> URL {
+        runDirectory
+            .appending(path: "reports")
+            .appending(path: "source-connectivity")
+            .appending(path: "\(cornerID.value).json")
     }
 
     public func createDirectories(corners: [PEXCornerID]) throws {
@@ -40,6 +51,7 @@ public struct PEXRunWorkspace: Sendable {
             try fm.createDirectory(at: inputsDirectory, withIntermediateDirectories: true)
             try fm.createDirectory(at: runDirectory.appending(path: "ir"), withIntermediateDirectories: true)
             try fm.createDirectory(at: spefDirectory, withIntermediateDirectories: true)
+            try fm.createDirectory(at: runDirectory.appending(path: "spice"), withIntermediateDirectories: true)
             try fm.createDirectory(at: runDirectory.appending(path: "reports"), withIntermediateDirectories: true)
             for corner in corners {
                 try fm.createDirectory(at: cornerRawDirectory(corner), withIntermediateDirectories: true)

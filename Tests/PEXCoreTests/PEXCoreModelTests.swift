@@ -49,6 +49,26 @@ struct PEXCoreModelTests {
         #expect(opts.maxParallelJobs == 2)
     }
 
+    @Test func legacyRunOptionsDecodeWithoutConnectivityPolicy() throws {
+        let data = Data(
+            """
+            {
+              "extractMode": "rc",
+              "includeCouplingCaps": true,
+              "maxParallelJobs": 2,
+              "emitRawArtifacts": true,
+              "emitIRJSON": true,
+              "strictValidation": false
+            }
+            """.utf8
+        )
+
+        let decoded = try JSONDecoder().decode(PEXRunOptions.self, from: data)
+
+        #expect(decoded.extractMode == .rc)
+        #expect(decoded.sourceConnectivityPolicy == .disabled)
+    }
+
     @Test func extractionRulesDefault() {
         let rules = ExtractionRules.default
         #expect(rules.reductionPolicy == .none)

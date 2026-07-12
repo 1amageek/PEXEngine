@@ -125,11 +125,41 @@ public struct PEXParseDiagnostic: Codable, Sendable, Equatable {
             self.elementID = elementID
             self.nodeName = nil
             self.netName = nil
+        case .duplicateNetName(let netName):
+            self.code = "duplicate_net_name"
+            self.message = "Net \(netName) appears more than once."
+            self.elementID = nil
+            self.nodeName = nil
+            self.netName = netName
+        case .duplicateNode(let netName, let nodeName):
+            self.code = "duplicate_node"
+            self.message = "Node \(nodeName) appears more than once on net \(netName)."
+            self.elementID = nil
+            self.nodeName = nodeName
+            self.netName = netName
+        case .emptyElementID:
+            self.code = "empty_element_id"
+            self.message = "An element has an empty ID."
+            self.elementID = nil
+            self.nodeName = nil
+            self.netName = nil
         case .invalidValue(let elementID, let value, let reason):
             self.code = "invalid_value"
             self.message = "Element \(elementID) has invalid value \(value): \(reason)."
             self.elementID = elementID
             self.nodeName = nil
+            self.netName = nil
+        case .invalidNetValue(let netName, let metric, let value, let reason):
+            self.code = "invalid_net_value"
+            self.message = "Net \(netName) has invalid \(metric) \(value): \(reason)."
+            self.elementID = nil
+            self.nodeName = nil
+            self.netName = netName
+        case .invalidCoordinate(let nodeName, let x, let y):
+            self.code = "invalid_coordinate"
+            self.message = "Node \(nodeName) has non-finite coordinate (\(x), \(y))."
+            self.elementID = nil
+            self.nodeName = nodeName
             self.netName = nil
         case .inconsistentNetMembership(let node, let claimedNet, let actualNet):
             self.code = "inconsistent_net_membership"

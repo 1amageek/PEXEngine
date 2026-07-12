@@ -80,6 +80,15 @@ struct SPEFParserTests {
         #expect(tree.nets[0].inductors.isEmpty)
     }
 
+    @Test func loweringPreservesInstancePathFromInstanceConnections() throws {
+        var lexer = SPEFLexer(source: sampleSPEF)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        let ir = try SPEFLowering().lower(tree, cornerID: "tt")
+        let vdd = try #require(ir.nets.first { $0.name == NetName("VDD") })
+        let instancePaths = Set(vdd.nodes.compactMap { $0.instancePath?.value })
+        #expect(instancePaths == ["top"])
+    }
+
     @Test func parserLowersInductorsToCanonicalIR() throws {
         let spef = """
         *SPEF "IEEE 1481-1998"

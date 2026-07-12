@@ -104,6 +104,11 @@ public struct PEXArtifactResolver: Sendable {
         } catch {
             throw PEXError.persistenceFailed("Failed to read IR artifact \(record.id)", underlying: error)
         }
+        let integrityIssues = availableArtifactIssues(for: record, artifactURL: url)
+        if !integrityIssues.isEmpty {
+            let message = integrityIssues.map(\.message).joined(separator: "; ")
+            throw PEXError.persistenceFailed("IR artifact integrity check failed: \(message)")
+        }
         return try serializer.decode(from: data)
     }
 
@@ -276,7 +281,7 @@ public struct PEXArtifactResolver: Sendable {
             return []
         }
         let irRecords = records(kind: .parasiticIR, cornerID: corner.cornerID)
-        guard irRecords.allSatisfy({ $0.status != .available && $0.status != .omitted }) else {
+        guard !irRecords.contains(where: { $0.status == .available || $0.status == .omitted }) else {
             return []
         }
         return [

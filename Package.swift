@@ -17,11 +17,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../SignoffToolSupport"),
-        .package(
-            url: "https://github.com/apple/swift-configuration",
-            exact: "1.2.0",
-            traits: [.defaults, "JSON"]
-        ),
     ],
     targets: [
         .target(name: "PEXCore"),
@@ -42,7 +37,6 @@ let package = Package(
         ]),
         .target(name: "PEXCLICore", dependencies: [
             "PEXEngine",
-            .product(name: "Configuration", package: "swift-configuration"),
         ]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 

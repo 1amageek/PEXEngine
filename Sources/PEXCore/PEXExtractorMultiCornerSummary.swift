@@ -1,5 +1,6 @@
 public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
     public let comparisonStatus: PEXExtractorMultiCornerComparisonStatus
+    public let comparisonBasis: PEXExtractorMultiCornerComparisonBasis
     public let cornerCount: Int
     public let successfulCornerCount: Int
     public let failedCornerCount: Int
@@ -19,6 +20,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
 
     public init(
         comparisonStatus: PEXExtractorMultiCornerComparisonStatus,
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
         cornerCount: Int,
         successfulCornerCount: Int,
         failedCornerCount: Int,
@@ -29,6 +31,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
         notes: [String] = []
     ) {
         self.comparisonStatus = comparisonStatus
+        self.comparisonBasis = comparisonBasis
         self.cornerCount = cornerCount
         self.successfulCornerCount = successfulCornerCount
         self.failedCornerCount = failedCornerCount
@@ -39,7 +42,11 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
         self.notes = notes.filter { !$0.isEmpty }
     }
 
-    public init(cornerResults: [PEXExtractorRunResult.CornerSummary]) {
+    public init(
+        cornerResults: [PEXExtractorRunResult.CornerSummary],
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
+        additionalNotes: [String] = []
+    ) {
         let successfulCorners = cornerResults.filter { $0.status == .success }
         let failedCornerIDs = cornerResults
             .filter { $0.status != .success }
@@ -60,7 +67,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
             comparisonStatus = .comparable
         }
 
-        var notes: [String] = []
+        var notes: [String] = additionalNotes
         if !failedCornerIDs.isEmpty {
             notes.append("One or more corners failed before comparable PEX evidence was produced.")
         }
@@ -70,6 +77,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
 
         self.init(
             comparisonStatus: comparisonStatus,
+            comparisonBasis: comparisonBasis,
             cornerCount: cornerResults.count,
             successfulCornerCount: successfulCorners.count,
             failedCornerCount: failedCornerIDs.count,
@@ -87,5 +95,60 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
             ),
             notes: notes
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case comparisonStatus
+        case comparisonBasis
+        case cornerCount
+        case successfulCornerCount
+        case failedCornerCount
+        case comparableCornerCount
+        case failedCornerIDs
+        case totalCapacitance
+        case totalResistance
+        case notes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            comparisonStatus: try container.decode(
+                PEXExtractorMultiCornerComparisonStatus.self,
+                forKey: .comparisonStatus
+            ),
+            comparisonBasis: try container.decodeIfPresent(
+                PEXExtractorMultiCornerComparisonBasis.self,
+                forKey: .comparisonBasis
+            ) ?? .unknown,
+            cornerCount: try container.decode(Int.self, forKey: .cornerCount),
+            successfulCornerCount: try container.decode(Int.self, forKey: .successfulCornerCount),
+            failedCornerCount: try container.decode(Int.self, forKey: .failedCornerCount),
+            comparableCornerCount: try container.decode(Int.self, forKey: .comparableCornerCount),
+            failedCornerIDs: try container.decode([String].self, forKey: .failedCornerIDs),
+            totalCapacitance: try container.decode(
+                PEXExtractorMetricSpreadSummary.self,
+                forKey: .totalCapacitance
+            ),
+            totalResistance: try container.decode(
+                PEXExtractorMetricSpreadSummary.self,
+                forKey: .totalResistance
+            ),
+            notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(comparisonStatus, forKey: .comparisonStatus)
+        try container.encode(comparisonBasis, forKey: .comparisonBasis)
+        try container.encode(cornerCount, forKey: .cornerCount)
+        try container.encode(successfulCornerCount, forKey: .successfulCornerCount)
+        try container.encode(failedCornerCount, forKey: .failedCornerCount)
+        try container.encode(comparableCornerCount, forKey: .comparableCornerCount)
+        try container.encode(failedCornerIDs, forKey: .failedCornerIDs)
+        try container.encode(totalCapacitance, forKey: .totalCapacitance)
+        try container.encode(totalResistance, forKey: .totalResistance)
+        try container.encode(notes, forKey: .notes)
     }
 }

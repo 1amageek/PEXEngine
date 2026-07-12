@@ -14,6 +14,8 @@ public struct PEXExtractorRunResult: Sendable, Codable, Hashable {
         public let rawOutputArtifactIDs: [String]
         public let parasiticIRArtifactID: String?
         public let spefRoundTripArtifactID: String?
+        public let spiceBackannotationArtifactID: String?
+        public let sourceConnectivityArtifactID: String?
         public let failureStage: PEXStage?
         public let failureMessage: String?
 
@@ -32,6 +34,8 @@ public struct PEXExtractorRunResult: Sendable, Codable, Hashable {
             rawOutputArtifactIDs: [String] = [],
             parasiticIRArtifactID: String? = nil,
             spefRoundTripArtifactID: String? = nil,
+            spiceBackannotationArtifactID: String? = nil,
+            sourceConnectivityArtifactID: String? = nil,
             failureStage: PEXStage? = nil,
             failureMessage: String? = nil
         ) {
@@ -49,6 +53,8 @@ public struct PEXExtractorRunResult: Sendable, Codable, Hashable {
             self.rawOutputArtifactIDs = Array(Set(rawOutputArtifactIDs.filter { !$0.isEmpty })).sorted()
             self.parasiticIRArtifactID = parasiticIRArtifactID
             self.spefRoundTripArtifactID = spefRoundTripArtifactID
+            self.spiceBackannotationArtifactID = spiceBackannotationArtifactID
+            self.sourceConnectivityArtifactID = sourceConnectivityArtifactID
             self.failureStage = failureStage
             self.failureMessage = failureMessage
         }

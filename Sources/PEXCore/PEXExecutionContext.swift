@@ -7,8 +7,10 @@ public struct PEXExecutionContext: Sendable {
     public let corner: PEXCorner
     public let layoutURL: URL
     public let sourceNetlistURL: URL
+    public let sourceNetlistFormat: NetlistFormat
     public let topCell: String
     public let technology: TechnologyIR
+    public let processProfile: PEXProcessProfileReference?
     public let backendSelection: PEXBackendSelection
     public let options: PEXRunOptions
     public let workingDirectory: URL
@@ -20,8 +22,10 @@ public struct PEXExecutionContext: Sendable {
         corner: PEXCorner,
         layoutURL: URL,
         sourceNetlistURL: URL,
+        sourceNetlistFormat: NetlistFormat = .spice,
         topCell: String,
         technology: TechnologyIR,
+        processProfile: PEXProcessProfileReference? = nil,
         backendSelection: PEXBackendSelection = PEXBackendSelection(backendID: "unspecified"),
         options: PEXRunOptions,
         workingDirectory: URL,
@@ -32,8 +36,10 @@ public struct PEXExecutionContext: Sendable {
         self.corner = corner
         self.layoutURL = layoutURL
         self.sourceNetlistURL = sourceNetlistURL
+        self.sourceNetlistFormat = sourceNetlistFormat
         self.topCell = topCell
         self.technology = technology
+        self.processProfile = processProfile
         self.backendSelection = backendSelection
         self.options = options
         self.workingDirectory = workingDirectory

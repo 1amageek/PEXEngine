@@ -33,6 +33,13 @@ public struct MockPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
         )
     }
 
+    public func supportsCornerSweep(
+        corners: [PEXCorner],
+        processProfile: PEXProcessProfileReference?
+    ) -> Bool {
+        capabilities.supportsCornerSweep
+    }
+
     public func prepare(_ context: PEXExecutionContext) async throws {
         let fm = FileManager.default
         if !fm.fileExists(atPath: context.rawOutputDirectory.path(percentEncoded: false)) {

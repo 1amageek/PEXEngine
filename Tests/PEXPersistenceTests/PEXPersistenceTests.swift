@@ -78,6 +78,112 @@ struct PEXPersistenceTests {
         #expect(layout.provenance?.sourcePath == inputs.layoutURL.path(percentEncoded: false))
     }
 
+    @Test func storeReconstructsRunnableRequestFromCapturedInputs() throws {
+        let tempDir = makeTemporaryDirectory("pex_load_request")
+        defer { removeTemporaryItem(tempDir) }
+
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: PEXRunID())
+        try workspace.createDirectories(corners: ["tt"])
+        let inputs = try makeInputFiles(in: tempDir.appending(path: "external"))
+        let deckURL = tempDir.appending(path: "external/process.magicrc")
+        try Data("magic deck".utf8).write(to: deckURL)
+        let baseRequest = makeRequest(inputs: inputs, workspace: tempDir)
+        let request = PEXRunRequest(
+            layoutURL: baseRequest.layoutURL,
+            layoutFormat: baseRequest.layoutFormat,
+            sourceNetlistURL: baseRequest.sourceNetlistURL,
+            sourceNetlistFormat: baseRequest.sourceNetlistFormat,
+            topCell: baseRequest.topCell,
+            corners: baseRequest.corners,
+            technology: baseRequest.technology,
+            processProfile: PEXProcessProfileReference(
+                profileID: "test.profile",
+                primaryDeckPath: deckURL.path(percentEncoded: false)
+            ),
+            backendSelection: baseRequest.backendSelection,
+            options: baseRequest.options,
+            workingDirectory: baseRequest.workingDirectory
+        )
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let layout = try recorder.captureInput(url: request.layoutURL, kind: .layoutInput)
+        let netlist = try recorder.captureInput(url: request.sourceNetlistURL, kind: .netlistInput)
+        let deck = try recorder.captureProcessProfileDeck(
+            path: deckURL.path(percentEncoded: false),
+            identifier: "primary"
+        )
+        let technology = try recorder.captureInlineTechnology(TechnologyIR(
+            processName: "test",
+            stack: [],
+            logicalToPhysicalLayerMap: [:],
+            vias: [],
+            defaultExtractionRules: .default,
+            backendHints: [:]
+        ))
+        let requestRecord = try recorder.recordRequest(
+            request,
+            inputArtifacts: [layout, netlist, technology, deck]
+        )
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveIR(makeTestIR(), for: "tt")
+        let irRecord = try recorder.recordExistingArtifact(
+            url: workspace.cornerIRURL("tt"),
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: "tt",
+            id: "ir-tt"
+        )
+        try store.saveManifest(PEXArtifactManifest(
+            runID: workspace.runID,
+            requestHash: PEXRequestHash("load-request"),
+            backendID: request.backendSelection.backendID,
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
+            artifacts: [layout, netlist, technology, deck, requestRecord, irRecord],
+            warnings: []
+        ))
+
+        let restored = try store.loadRequest()
+        #expect(restored.layoutFormat == request.layoutFormat)
+        #expect(restored.sourceNetlistFormat == request.sourceNetlistFormat)
+        #expect(restored.topCell == request.topCell)
+        #expect(restored.corners == request.corners)
+        #expect(restored.backendSelection == request.backendSelection)
+        #expect(restored.technology == request.technology)
+        #expect(restored.processProfile?.profileID == "test.profile")
+        #expect(restored.processProfile?.primaryDeckPath != deckURL.path(percentEncoded: false))
+        #expect(FileManager.default.fileExists(atPath: restored.processProfile?.primaryDeckPath ?? ""))
+        #expect(restored.layoutURL != request.layoutURL)
+        #expect(restored.sourceNetlistURL != request.sourceNetlistURL)
+        #expect(restored.workingDirectory == tempDir)
+        #expect(FileManager.default.fileExists(atPath: restored.layoutURL.path(percentEncoded: false)))
+        #expect(FileManager.default.fileExists(atPath: restored.sourceNetlistURL.path(percentEncoded: false)))
+    }
+
+    @Test func recorderCapturesProcessProfileDeckWithStableIdentifierAndFilename() throws {
+        let tempDir = makeTemporaryDirectory("pex_profile_deck_capture")
+        defer { removeTemporaryItem(tempDir) }
+
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: PEXRunID())
+        try workspace.createDirectories(corners: ["tt"])
+        let deckURL = tempDir.appending(path: "external").appending(path: "sky130 tt.magicrc")
+        try FileManager.default.createDirectory(at: deckURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("deck-content".utf8).write(to: deckURL)
+
+        let record = try PEXArtifactRecorder(workspace: workspace).captureProcessProfileDeck(
+            path: deckURL.path(percentEncoded: false),
+            identifier: "corner/tt"
+        )
+        let capturedURL = workspace.runDirectory.appending(path: record.relativePath.value)
+
+        #expect(record.id == "input-process-profile-deck-corner-tt")
+        #expect(record.kind == .processProfileDeckInput)
+        #expect(record.relativePath.value == "inputs/process-profile-decks/corner-tt-sky130_tt.magicrc")
+        #expect(String(data: try Data(contentsOf: capturedURL), encoding: .utf8) == "deck-content")
+        #expect(record.provenance?.sourcePath == deckURL.path(percentEncoded: false))
+    }
+
     @Test func requestHashIgnoresExternalAbsoluteInputPaths() throws {
         let firstDir = makeTemporaryDirectory("pex_hash_first")
         let secondDir = makeTemporaryDirectory("pex_hash_second")
@@ -260,6 +366,44 @@ struct PEXPersistenceTests {
         let ir = try resolver.loadIR(cornerID: "tt")
         #expect(ir.cornerID == "tt")
         #expect(resolver.completenessReport().status == .complete)
+    }
+
+    @Test func resolverRejectsTamperedIRBeforeDecode() throws {
+        let tempDir = makeTemporaryDirectory("pex_resolver_integrity")
+        defer { removeTemporaryItem(tempDir) }
+
+        let runID = PEXRunID()
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
+        try workspace.createDirectories(corners: ["tt"])
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveIR(makeTestIR(), for: "tt")
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let irRecord = try recorder.recordExistingArtifact(
+            url: workspace.cornerIRURL("tt"),
+            kind: .parasiticIR,
+            stage: .persistence,
+            cornerID: "tt",
+            id: "ir-tt"
+        )
+        let manifest = PEXArtifactManifest(
+            runID: runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
+            artifacts: [irRecord],
+            warnings: []
+        )
+        try store.saveManifest(manifest)
+        try Data("tampered".utf8).write(to: workspace.cornerIRURL("tt"))
+
+        let resolver = try PEXArtifactResolver(workspace: workspace)
+        #expect(throws: PEXError.self) {
+            _ = try resolver.loadIR(cornerID: "tt")
+        }
+        #expect(resolver.completenessReport().status == .invalid)
     }
 
     @Test func runSummaryBuilderLoadsMultiCornerTopNets() throws {
@@ -563,6 +707,39 @@ struct PEXPersistenceTests {
         let report = try PEXArtifactResolver(workspace: workspace).completenessReport()
         #expect(report.status == .invalid)
         #expect(report.issues.contains { $0.kind == .invalidHash })
+    }
+
+    @Test func loadResultRejectsTamperedRawArtifact() throws {
+        let tempDir = makeTemporaryDirectory("pex_load_tampered_raw")
+        defer { removeTemporaryItem(tempDir) }
+        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: PEXRunID())
+        try workspace.createDirectories(corners: ["tt"])
+        let rawURL = workspace.cornerRawDirectory("tt").appending(path: "tt.spef")
+        try Data("original".utf8).write(to: rawURL)
+        let record = try PEXArtifactRecorder(workspace: workspace).recordExistingArtifact(
+            url: rawURL,
+            kind: .rawOutput,
+            stage: .backendExecution,
+            cornerID: "tt"
+        )
+        let manifest = PEXArtifactManifest(
+            runID: workspace.runID,
+            requestHash: PEXRequestHash("hash"),
+            backendID: "mock",
+            status: .success,
+            startedAt: Date(),
+            finishedAt: Date(),
+            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [record.id])],
+            artifacts: [record],
+            warnings: []
+        )
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveManifest(manifest)
+        try Data("tampered".utf8).write(to: rawURL)
+
+        #expect(throws: PEXError.self) {
+            _ = try store.loadResult()
+        }
     }
 
     @Test func completenessReportRejectsAvailableArtifactsMissingIntegrityMetadata() throws {

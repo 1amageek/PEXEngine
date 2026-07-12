@@ -9,8 +9,9 @@
       "pex.coupling-cap",
       "pex.resistance",
       "pex.standard-cell",
+      "pex.rc-network",
       "pex.multi-corner",
-      "pex.rc-network"
+      "pex.corner-technology"
     ]
   },
   "cases": [
@@ -18,6 +19,15 @@
       "caseID": "sky130-plate-magic-pex",
       "layoutPath": "../pex_plate.gds",
       "topCell": "pex_plate",
+      "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
+      "technology": {
+        "processName": "sky130A",
+        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "logicalToPhysicalLayerMap": {"met1": "met1"},
+        "vias": [],
+        "defaultExtractionRules": {"reductionPolicy": "none"},
+        "backendHints": {"magic": {"deckRole": "extraction"}}
+      },
       "corner": "tt",
       "expectedGroundCapF": 4.2008e-15,
       "expectedTotalCapacitanceF": 4.2008e-15,
@@ -30,10 +40,35 @@
       ]
     },
     {
-      "caseID": "sky130-plate-magic-pex-ss",
+      "caseID": "sky130-process-corner-magic-pex",
       "layoutPath": "../pex_plate.gds",
       "topCell": "pex_plate",
-      "corner": "ss",
+      "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
+      "technology": {
+        "processName": "sky130A",
+        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "logicalToPhysicalLayerMap": {"met1": "met1"},
+        "vias": [],
+        "defaultExtractionRules": {"reductionPolicy": "none"},
+        "backendHints": {"magic": {"deckRole": "extraction"}}
+      },
+      "technologyByCorner": {
+        "ss": {
+          "processName": "sky130B",
+          "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+          "logicalToPhysicalLayerMap": {"met1": "met1"},
+          "vias": [],
+          "defaultExtractionRules": {"reductionPolicy": "none"},
+          "backendHints": {"magic": {"deckRole": "extraction"}}
+        }
+      },
+      "corner": "tt",
+      "corners": ["tt", "ss"],
+      "cornerDeckPaths": {
+        "tt": "${SKY130_PDK_ROOT}/sky130A/libs.tech/magic/sky130A.magicrc",
+        "ss": "${SKY130_PDK_ROOT}/sky130B/libs.tech/magic/sky130B.magicrc"
+      },
+      "requireDistinctCornerDecks": true,
       "expectedGroundCapF": 4.2008e-15,
       "expectedTotalCapacitanceF": 4.2008e-15,
       "toleranceF": 2e-16,
@@ -42,13 +77,47 @@
         "pex.ground-cap",
         "pex.total-capacitance",
         "pex.physical-value",
-        "pex.multi-corner"
+        "pex.multi-corner",
+        "pex.corner-technology"
+      ]
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "layoutPath": "../pex_plate.gds",
+      "topCell": "pex_plate",
+      "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
+      "technology": {
+        "processName": "sky130A",
+        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "logicalToPhysicalLayerMap": {"met1": "met1"},
+        "vias": [],
+        "defaultExtractionRules": {"reductionPolicy": "none"},
+        "backendHints": {"magic": {"deckRole": "extraction"}}
+      },
+      "corner": "ss",
+      "expectedGroundCapF": 4.2008e-15,
+      "expectedTotalCapacitanceF": 4.2008e-15,
+      "toleranceF": 2e-16,
+      "coverageTags": [
+        "pex.magic",
+        "pex.ground-cap",
+        "pex.total-capacitance",
+        "pex.physical-value"
       ]
     },
     {
       "caseID": "sky130-inverter-magic-pex",
       "layoutPath": "../../../PEXAdaptersTests/Fixtures/inv1.gds",
       "topCell": "sky130_fd_sc_hd__inv_1",
+      "sourceNetlist": ".subckt sky130_fd_sc_hd__inv_1 VPWR VGND A Y\n.ends sky130_fd_sc_hd__inv_1\n",
+      "technology": {
+        "processName": "sky130A",
+        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "logicalToPhysicalLayerMap": {"met1": "met1"},
+        "vias": [],
+        "defaultExtractionRules": {"reductionPolicy": "none"},
+        "backendHints": {"magic": {"deckRole": "extraction"}}
+      },
       "corner": "tt",
       "expectedCouplingCapF": 2.65293e-15,
       "expectedTotalCapacitanceF": 2.65293e-15,
@@ -70,6 +139,15 @@
       "caseID": "sky130-inverter-magic-pex-ss",
       "layoutPath": "../../../PEXAdaptersTests/Fixtures/inv1.gds",
       "topCell": "sky130_fd_sc_hd__inv_1",
+      "sourceNetlist": ".subckt sky130_fd_sc_hd__inv_1 VPWR VGND A Y\n.ends sky130_fd_sc_hd__inv_1\n",
+      "technology": {
+        "processName": "sky130A",
+        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "logicalToPhysicalLayerMap": {"met1": "met1"},
+        "vias": [],
+        "defaultExtractionRules": {"reductionPolicy": "none"},
+        "backendHints": {"magic": {"deckRole": "extraction"}}
+      },
       "corner": "ss",
       "expectedCouplingCapF": 2.65293e-15,
       "expectedTotalCapacitanceF": 2.65293e-15,
@@ -84,7 +162,6 @@
         "pex.resistance",
         "pex.physical-value",
         "pex.standard-cell",
-        "pex.multi-corner",
         "pex.rc-network"
       ]
     }

@@ -92,6 +92,84 @@ struct ParasiticIRValidatorTests {
         #expect(result.isValid)
     }
 
+    @Test func invalidNetTotalsAndCoordinatesAreRejected() {
+        let net = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [
+                ParasiticNode(
+                    name: NodeName("n1"),
+                    kind: .internal,
+                    instancePath: nil,
+                    coordinate: Point2D(x: .infinity, y: 0)
+                ),
+            ],
+            totalGroundCapF: -.ulpOfOne,
+            totalCouplingCapF: .nan,
+            totalResistanceOhm: 0
+        )
+        let ir = ParasiticIR(
+            version: "1.0",
+            cornerID: "tt",
+            units: .canonical,
+            nets: [net],
+            elements: [],
+            metadata: [:]
+        )
+
+        let result = validator.validate(ir)
+
+        #expect(!result.isValid)
+        #expect(result.errors.contains(where: {
+            if case .invalidNetValue("net1", "totalGroundCapF", _, _) = $0 { return true }
+            return false
+        }))
+        #expect(result.errors.contains(where: {
+            if case .invalidNetValue("net1", "totalCouplingCapF", _, _) = $0 { return true }
+            return false
+        }))
+        #expect(result.errors.contains(where: {
+            if case .invalidCoordinate("n1", _, _) = $0 { return true }
+            return false
+        }))
+    }
+
+    @Test func duplicateNetAndNodeNamesAreRejected() {
+        let duplicateNode = ParasiticNode(name: NodeName("n1"), kind: .internal, instancePath: nil, coordinate: nil)
+        let first = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [duplicateNode, duplicateNode],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 0
+        )
+        let second = ParasiticNet(
+            name: NetName("net1"),
+            nodes: [ParasiticNode(name: NodeName("n2"), kind: .internal, instancePath: nil, coordinate: nil)],
+            totalGroundCapF: 0,
+            totalCouplingCapF: 0,
+            totalResistanceOhm: 0
+        )
+
+        let result = validator.validate(ParasiticIR(
+            version: "1.0",
+            cornerID: "tt",
+            units: .canonical,
+            nets: [first, second],
+            elements: [],
+            metadata: [:]
+        ))
+
+        #expect(!result.isValid)
+        #expect(result.errors.contains(where: {
+            if case .duplicateNetName("net1") = $0 { return true }
+            return false
+        }))
+        #expect(result.errors.contains(where: {
+            if case .duplicateNode("net1", "n1") = $0 { return true }
+            return false
+        }))
+    }
+
     @Test func nodeReferenceMustUseClaimedNet() {
         let net = ParasiticNet(
             name: NetName("net1"),

@@ -38,7 +38,11 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
         let fileURL = try selectedFile(from: raw, context: context)
         let source = try readSource(from: fileURL, context: context)
         let records = try parseRecords(source: source, context: context)
-        return buildIR(records: records, sourceFileName: fileURL.lastPathComponent, context: context)
+        return buildIR(
+            records: records,
+            sourceFileName: fileURL.lastPathComponent,
+            context: context
+        )
     }
 
     private func validateFormat(_ rawFormat: PEXOutputFormat, context: PEXParseContext) throws {
@@ -228,16 +232,21 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
             )
         }
 
+        var metadata = [
+            "sourceFormat": "magic-spice",
+            "sourceFile": sourceFileName,
+        ]
+        if let topCell = context.topCell,
+           !topCell.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            metadata["topCell"] = topCell
+        }
         return ParasiticIR(
             version: ParasiticIR.currentVersion,
             cornerID: context.cornerID,
             units: .canonical,
             nets: nets,
             elements: elements,
-            metadata: [
-                "sourceFormat": "magic-spice",
-                "sourceFile": sourceFileName,
-            ]
+            metadata: metadata
         )
     }
 
@@ -295,16 +304,25 @@ public struct MagicSPICEParasiticParser: PEXParserProtocol {
         let suffix = String(s[end...]).lowercased()
         if suffix.isEmpty { return mantissa }
         let multiplier: Double
-        if suffix.hasPrefix("meg") { multiplier = 1e6 }
-        else if suffix.hasPrefix("f") { multiplier = 1e-15 }
-        else if suffix.hasPrefix("p") { multiplier = 1e-12 }
-        else if suffix.hasPrefix("n") { multiplier = 1e-9 }
-        else if suffix.hasPrefix("u") { multiplier = 1e-6 }
-        else if suffix.hasPrefix("m") { multiplier = 1e-3 }
-        else if suffix.hasPrefix("k") { multiplier = 1e3 }
-        else if suffix.hasPrefix("g") { multiplier = 1e9 }
-        else if suffix.hasPrefix("t") { multiplier = 1e12 }
-        else { return nil }
+        switch suffix {
+        case "meg": multiplier = 1e6
+        case "t": multiplier = 1e12
+        case "g": multiplier = 1e9
+        case "k": multiplier = 1e3
+        case "m": multiplier = 1e-3
+        case "u": multiplier = 1e-6
+        case "n": multiplier = 1e-9
+        case "p": multiplier = 1e-12
+        case "f": multiplier = 1e-15
+        case "tf": multiplier = 1e12
+        case "gf": multiplier = 1e9
+        case "mf": multiplier = 1e-3
+        case "uf": multiplier = 1e-6
+        case "nf": multiplier = 1e-9
+        case "pf": multiplier = 1e-12
+        case "ff": multiplier = 1e-15
+        default: return nil
+        }
         return mantissa * multiplier
     }
 }

@@ -28,11 +28,14 @@ public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case layoutInput
     case netlistInput
     case technologyInput
+    case processProfileDeckInput
+    case sourceConnectivityReport
     case request
     case rawOutput
     case log
     case parasiticIR
     case spefRoundTrip
+    case spiceBackannotation
     case report
 }
 
@@ -134,6 +137,7 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
     public let artifacts: [PEXArtifactRecord]
     public let warnings: [PEXWarning]
     public let extractorRun: PEXExtractorRunResult?
+    public let resumedFromRunID: PEXRunID?
 
     public init(
         version: Int = PEXArtifactManifest.currentVersion,
@@ -146,7 +150,8 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         corners: [PEXArtifactCorner],
         artifacts: [PEXArtifactRecord],
         warnings: [PEXWarning],
-        extractorRun: PEXExtractorRunResult? = nil
+        extractorRun: PEXExtractorRunResult? = nil,
+        resumedFromRunID: PEXRunID? = nil
     ) {
         self.version = version
         self.runID = runID
@@ -159,6 +164,7 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         self.artifacts = artifacts
         self.warnings = warnings
         self.extractorRun = extractorRun
+        self.resumedFromRunID = resumedFromRunID
     }
 
     public func artifact(id: String) -> PEXArtifactRecord? {

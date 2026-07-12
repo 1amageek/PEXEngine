@@ -7,11 +7,30 @@ public struct ParasiticIRValidator: Sendable {
 
         var knownNodeRefs: Set<NodeRef> = []
         var nodeNameOwners: [String: Set<String>] = [:]
+        var seenNetNames: Set<NetName> = []
         for net in ir.nets {
+            if !seenNetNames.insert(net.name).inserted {
+                errors.append(.duplicateNetName(net.name.value))
+            }
             if net.nodes.isEmpty {
                 warnings.append(.emptyNet(netName: net.name.value))
             }
+            validateNetValue(net.totalGroundCapF, netName: net.name, metric: "totalGroundCapF", errors: &errors)
+            validateNetValue(net.totalCouplingCapF, netName: net.name, metric: "totalCouplingCapF", errors: &errors)
+            validateNetValue(net.totalResistanceOhm, netName: net.name, metric: "totalResistanceOhm", errors: &errors)
+            var seenNodeNames: Set<NodeName> = []
             for node in net.nodes {
+                if !seenNodeNames.insert(node.name).inserted {
+                    errors.append(.duplicateNode(netName: net.name.value, nodeName: node.name.value))
+                }
+                if let coordinate = node.coordinate,
+                   !coordinate.x.isFinite || !coordinate.y.isFinite {
+                    errors.append(.invalidCoordinate(
+                        nodeName: node.name.value,
+                        x: coordinate.x,
+                        y: coordinate.y
+                    ))
+                }
                 knownNodeRefs.insert(NodeRef(netName: net.name, nodeName: node.name))
                 nodeNameOwners[node.name.value, default: []].insert(net.name.value)
             }
@@ -20,6 +39,9 @@ public struct ParasiticIRValidator: Sendable {
         // Check elements
         var seenElementIDs: Set<String> = []
         for element in ir.elements {
+            if element.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                errors.append(.emptyElementID)
+            }
             // Duplicate ID check
             if !seenElementIDs.insert(element.id).inserted {
                 errors.append(.duplicateElementID(element.id))
@@ -64,6 +86,23 @@ public struct ParasiticIRValidator: Sendable {
         }
 
         return ParasiticIRValidationResult(errors: errors, warnings: warnings)
+    }
+
+    private func validateNetValue(
+        _ value: Double,
+        netName: NetName,
+        metric: String,
+        errors: inout [ParasiticIRValidationError]
+    ) {
+        guard value.isFinite, value >= 0 else {
+            errors.append(.invalidNetValue(
+                netName: netName.value,
+                metric: metric,
+                value: value,
+                reason: value.isFinite ? "Value is negative" : "Value is not finite"
+            ))
+            return
+        }
     }
 
     private func validateNodeRef(

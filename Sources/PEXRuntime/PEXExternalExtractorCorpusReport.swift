@@ -1,3 +1,5 @@
+import PEXCore
+
 public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
     public let schemaVersion: Int
     public let corpusSpec: String
@@ -142,9 +144,14 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
         public let status: String
         public let topCell: String?
         public let corner: String?
+        public let corners: [String]?
         public let layoutPath: String?
         public let sourceNetlistPath: String?
         public let technologyPath: String?
+        public let technologyByCornerPaths: [String: String]?
+        public let cornerDeckPaths: [String: String]?
+        public let cornerDeckHashes: [String: String]?
+        public let multiCorner: PEXExtractorMultiCornerSummary?
         public let outputDirectory: String?
         public let manifestPath: String?
         public let irPath: String?
@@ -176,9 +183,14 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             status: String,
             topCell: String? = nil,
             corner: String? = nil,
+            corners: [String]? = nil,
             layoutPath: String? = nil,
             sourceNetlistPath: String? = nil,
             technologyPath: String? = nil,
+            technologyByCornerPaths: [String: String]? = nil,
+            cornerDeckPaths: [String: String]? = nil,
+            cornerDeckHashes: [String: String]? = nil,
+            multiCorner: PEXExtractorMultiCornerSummary? = nil,
             outputDirectory: String? = nil,
             manifestPath: String? = nil,
             irPath: String? = nil,
@@ -209,9 +221,14 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             self.status = status
             self.topCell = topCell
             self.corner = corner
+            self.corners = corners
             self.layoutPath = layoutPath
             self.sourceNetlistPath = sourceNetlistPath
             self.technologyPath = technologyPath
+            self.technologyByCornerPaths = technologyByCornerPaths
+            self.cornerDeckPaths = cornerDeckPaths
+            self.cornerDeckHashes = cornerDeckHashes
+            self.multiCorner = multiCorner
             self.outputDirectory = outputDirectory
             self.manifestPath = manifestPath
             self.irPath = irPath
@@ -242,6 +259,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
 
     public struct CaseFailure: Sendable, Hashable, Codable {
         public let code: String
+        public let corner: String?
         public let metric: String?
         public let expected: Double?
         public let observed: Double?
@@ -253,6 +271,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
 
         public init(
             code: String,
+            corner: String? = nil,
             metric: String? = nil,
             expected: Double? = nil,
             observed: Double? = nil,
@@ -263,6 +282,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             toleranceKeys: [String]? = nil
         ) {
             self.code = code
+            self.corner = corner
             self.metric = metric
             self.expected = expected
             self.observed = observed

@@ -224,6 +224,54 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(packet.confidence.uncertainties.contains("The external extractor corpus qualification did not pass."))
     }
 
+    @Test("External extractor evidence packet preserves multi-corner comparison basis")
+    func evidencePacketPreservesMultiCornerComparisonBasis() throws {
+        let corners = [
+            PEXExtractorRunResult.CornerSummary(
+                cornerID: "tt",
+                status: .success,
+                netCount: 1,
+                elementCount: 1,
+                rawOutputCount: 1,
+                warningCount: 0,
+                totalCapacitanceF: 1e-15,
+                totalResistanceOhm: 1
+            ),
+            PEXExtractorRunResult.CornerSummary(
+                cornerID: "ss",
+                status: .success,
+                netCount: 1,
+                elementCount: 1,
+                rawOutputCount: 1,
+                warningCount: 0,
+                totalCapacitanceF: 2e-15,
+                totalResistanceOhm: 2
+            ),
+        ]
+        let report = makeExternalExtractorReport(cases: [
+            PEXExternalExtractorCorpusReport.CaseResult(
+                caseID: "process-corners",
+                status: "passed",
+                corners: ["tt", "ss"],
+                multiCorner: PEXExtractorMultiCornerSummary(
+                    cornerResults: corners,
+                    comparisonBasis: .perCornerTechnology
+                ),
+                coverageTags: ["pex.magic", "pex.multi-corner"],
+                totalCapacitanceF: 3e-15,
+                totalResistanceOhm: 3
+            ),
+        ])
+
+        let packet = PEXExternalExtractorEvidencePacketBuilder().build(report: report)
+        let normalizedView = try #require(packet.normalizedViews.first {
+            $0.viewID == "external-extractor-physical-summary"
+        })
+
+        #expect(normalizedView.summaryAttributes["multiCornerComparisonBasis"] == "perCornerTechnology")
+        #expect(normalizedView.summaryAttributes["multiCornerComparisonBasisValues"] == "perCornerTechnology")
+    }
+
     @Test("External extractor evidence packet exposes failure taxonomy for Agent decisions")
     func evidencePacketExposesFailureTaxonomyForAgentDecisions() throws {
         let report = PEXExternalExtractorCorpusReport(
@@ -788,7 +836,6 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
             "pex.coupling-cap",
             "pex.total-capacitance",
             "pex.resistance",
-            "pex.multi-corner",
             "pex.rc-network",
         ]))
         #expect(spec.cases.count >= 4)

@@ -39,7 +39,15 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
             intent: PEXEvidenceIntent(
                 summary: "Expose retained real-extractor PEX observations as decision material.",
                 designContext: "External extractor corpus with physical capacitance and resistance bounds.",
-                cornerIDs: report.cases.compactMap(\.corner),
+                cornerIDs: Array(Set(report.cases.flatMap { caseResult -> [String] in
+                    if let corners = caseResult.corners {
+                        return corners
+                    }
+                    if let corner = caseResult.corner {
+                        return [corner]
+                    }
+                    return []
+                })).sorted(),
                 targetNets: [],
                 requestedObservations: [
                     "extractor-readiness",
@@ -405,10 +413,24 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
             "physicalBoundEvaluatedCount": physicalBounds.evaluatedCount,
             "physicalBoundPassedCount": physicalBounds.passedCount,
             "physicalBoundFailedCount": physicalBounds.failedCount,
-            "physicalBoundMissingObservationCount": physicalBounds.missingObservationCount,
-            "physicalBoundMissingExpectationCount": physicalBounds.missingExpectationCount,
+                    "physicalBoundMissingObservationCount": physicalBounds.missingObservationCount,
+                    "physicalBoundMissingExpectationCount": physicalBounds.missingExpectationCount,
         ]
         summaryCounts.merge(classificationCounts) { current, _ in current }
+        let comparisonBases = Set(
+            report.cases.compactMap { $0.multiCorner?.comparisonBasis.rawValue }
+        ).sorted()
+        let summaryAttributes: [String: String]
+        if comparisonBases.isEmpty {
+            summaryAttributes = [:]
+        } else {
+            summaryAttributes = [
+                "multiCornerComparisonBasis": comparisonBases.count == 1
+                    ? comparisonBases[0]
+                    : "mixed",
+                "multiCornerComparisonBasisValues": comparisonBases.joined(separator: ","),
+            ]
+        }
         return [
             PEXEvidenceNormalizedView(
                 viewID: "external-extractor-physical-summary",
@@ -425,6 +447,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
                     "physicalBoundEvaluationRate": physicalBounds.evaluationRate,
                 ],
                 summaryCounts: summaryCounts,
+                summaryAttributes: summaryAttributes,
                 sourceArtifactIDs: artifactRefs.filter { $0.kind == "parasitic-ir" }.map(\.artifactID)
             )
         ]

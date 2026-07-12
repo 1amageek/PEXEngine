@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import PEXCore
 
 /// Real parasitic-extraction adapter driven by Magic against a profile-declared PDK.
@@ -10,13 +11,10 @@ import PEXCore
 public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
 
     public let backendID = "magic"
-    // supportsCornerSweep is false on purpose: Magic's base `ext2spice` extracts
-    // from a single capacitance table (the open Sky130 PDK ships only sky130A.tech,
-    // no per-corner cap tech), so a "corner sweep" would emit identical parasitics
-    // for every corner. Genuine multi-corner extraction needs per-corner cap data
-    // that this tool/PDK does not provide; declaring true here (e.g. via a linear
-    // cap scale) would be a silent approximation, so it stays false until real
-    // corner tables are available.
+    // The default Magic/Sky130 profile exposes one physical extraction table,
+    // so the static capability remains false. A request can opt into a true
+    // sweep by providing distinct, existing cornerDeckPaths; the runtime gate
+    // and execution plan validate and select those decks explicitly.
     public let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
         supportsCornerSweep: false,
@@ -64,6 +62,13 @@ public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
         }
 
         let profile = processProfile ?? toolchain.processProfileReference
+        if let processProfile,
+           let validationMessage = profileValidationMessage(processProfile) {
+            return blockedReadiness(
+                profile: processProfile,
+                message: validationMessage
+            )
+        }
         return PEXExtractorToolReadiness(
             backendID: backendID,
             status: .ready,
@@ -74,6 +79,35 @@ public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
             diagnostics: [],
             suggestedActions: []
         )
+    }
+
+    public func supportsCornerSweep(
+        corners: [PEXCorner],
+        processProfile: PEXProcessProfileReference?
+    ) -> Bool {
+        guard corners.count > 1, let processProfile else { return false }
+        let paths = corners.compactMap { processProfile.cornerDeckPaths[$0.id.value] }
+        guard paths.count == corners.count,
+              Set(paths).count == corners.count else {
+            return false
+        }
+        guard paths.allSatisfy({ isRegularFile(atPath: $0) }) else {
+            return false
+        }
+
+        var fingerprints: [String] = []
+        for path in paths {
+            do {
+                let data = try Data(contentsOf: URL(filePath: path))
+                let digest = SHA256.hash(data: data)
+                    .map { String(format: "%02x", $0) }
+                    .joined()
+                fingerprints.append(digest)
+            } catch {
+                return false
+            }
+        }
+        return Set(fingerprints).count == fingerprints.count
     }
 
     public func prepare(_ context: PEXExecutionContext) async throws {
@@ -129,31 +163,115 @@ public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
                 underlyingDescription: nil
             )
         }
-        guard let executablePath = trimmedOverride(context.backendSelection.executablePath) else {
-            return toolchain
-        }
-        guard FileManager.default.isExecutableFile(atPath: executablePath) else {
+        let profile = context.processProfile
+        if let profile,
+           let validationMessage = profileValidationMessage(profile) {
             throw PEXError(
                 kind: .adapterUnavailable,
                 stage: .backendExecution,
                 cornerID: context.corner.id,
                 backendID: backendID,
-                message: "Selected Magic executable is not executable: \(executablePath)",
+                message: validationMessage,
+                underlyingDescription: nil
+            )
+        }
+        let executablePath = trimmedOverride(context.backendSelection.executablePath)
+        let selectedExecutable = executablePath ?? toolchain.magicExecutableURL.path(percentEncoded: false)
+        let selectedDeck = profile?.cornerDeckPaths[context.corner.id.value]
+            ?? profile?.primaryDeckPath
+            ?? toolchain.rcFileURL.path(percentEncoded: false)
+        let selectedPDKRoot = profile?.pdkRoot
+            ?? context.backendSelection.environmentOverrides["PDK_ROOT"]
+            ?? toolchain.pdkRoot
+        if profile != nil, !isRegularFile(atPath: selectedDeck) {
+            throw PEXError(
+                kind: .adapterUnavailable,
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                backendID: backendID,
+                message: "Selected Magic extraction deck is not a regular file: \(selectedDeck)",
+                underlyingDescription: nil
+            )
+        }
+        guard FileManager.default.isExecutableFile(atPath: selectedExecutable) else {
+            throw PEXError(
+                kind: .adapterUnavailable,
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                backendID: backendID,
+                message: "Selected Magic executable is not executable: \(selectedExecutable)",
                 underlyingDescription: nil
             )
         }
         return MagicToolchain(
-            magicExecutableURL: URL(filePath: executablePath),
-            rcFileURL: toolchain.rcFileURL,
-            pdkRoot: context.backendSelection.environmentOverrides["PDK_ROOT"] ?? toolchain.pdkRoot,
-            profileID: toolchain.profileID,
-            pdkID: toolchain.pdkID,
-            requirementID: toolchain.requirementID
+            magicExecutableURL: URL(filePath: selectedExecutable),
+            rcFileURL: URL(filePath: selectedDeck),
+            pdkRoot: selectedPDKRoot,
+            profileID: profile?.profileID ?? toolchain.profileID,
+            pdkID: profile?.pdkID ?? toolchain.pdkID,
+            requirementID: profile?.requirementID ?? toolchain.requirementID
         )
     }
 
+    private func profileValidationMessage(_ profile: PEXProcessProfileReference) -> String? {
+        var deckPaths = Set(profile.cornerDeckPaths.values)
+        if let primaryDeckPath = profile.primaryDeckPath {
+            deckPaths.insert(primaryDeckPath)
+        }
+        guard !deckPaths.isEmpty else {
+            return "Magic process profile must name an existing extraction deck"
+        }
+        if let invalidDeck = deckPaths.first(where: { !isRegularFile(atPath: $0) }) {
+            return "Magic process profile extraction deck is not a regular file: \(invalidDeck)"
+        }
+        if let pdkRoot = profile.pdkRoot,
+           !isDirectory(atPath: pdkRoot) {
+            return "Magic process profile PDK root is not an existing directory: \(pdkRoot)"
+        }
+        return nil
+    }
+
+    private func blockedReadiness(
+        profile: PEXProcessProfileReference,
+        message: String
+    ) -> PEXExtractorToolReadiness {
+        PEXExtractorToolReadiness(
+            backendID: backendID,
+            status: .blocked,
+            reason: message,
+            processProfile: profile,
+            capabilities: capabilities,
+            diagnostics: [
+                PEXExtractorDiagnostic(
+                    diagnosticID: "magic-process-profile:invalid",
+                    code: "process_profile_invalid",
+                    severity: .blocked,
+                    message: message,
+                    suggestedActions: ["inspect_process_profile", "run_pex_doctor"]
+                ),
+            ],
+            suggestedActions: ["inspect_process_profile", "run_pex_doctor"]
+        )
+    }
+
+    private func isRegularFile(atPath path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        return exists && !isDirectory.boolValue
+    }
+
+    private func isDirectory(atPath path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        return exists && isDirectory.boolValue
+    }
+
     private func writeExtractionDriver(_ context: PEXExecutionContext) throws -> URL {
-        let driverURL = context.workingDirectory.appending(path: "pex_extract.tcl")
+        // Magic writes intermediate .ext/.res.ext files using the current
+        // working directory and derives their names from the top cell. Keep
+        // that directory corner-local so parallel corners cannot overwrite
+        // one another's extraction state.
+        let driverURL = context.rawOutputDirectory.appending(path: "pex_extract.tcl")
         do {
             try Data(MagicToolchain.extractionDriver.utf8).write(to: driverURL)
             return driverURL
@@ -205,7 +323,7 @@ public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
                     plan.driverURL.path(percentEncoded: false),
                 ],
                 environment: plan.environment,
-                workingDirectory: context.workingDirectory,
+                workingDirectory: context.rawOutputDirectory,
                 cancellationCheck: context.cancellationCheck
             )
         } catch let error as PEXError where error.kind == .cancelled {

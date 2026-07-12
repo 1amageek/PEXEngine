@@ -13,6 +13,15 @@ public enum CLIRouter {
             case "extract":
                 let cmd = try ExtractCommand(arguments: Array(arguments.dropFirst()))
                 try await cmd.run()
+            case "retry":
+                let cmd = try RetryCommand(arguments: Array(arguments.dropFirst()))
+                try await cmd.run()
+            case "backannotate":
+                let cmd = try BackannotateCommand(arguments: Array(arguments.dropFirst()))
+                try await cmd.run()
+            case "lineage":
+                let cmd = try LineageCommand(arguments: Array(arguments.dropFirst()))
+                try await cmd.run()
             case "parse":
                 let cmd = try ParseCommand(arguments: Array(arguments.dropFirst()))
                 try await cmd.run()
@@ -58,6 +67,9 @@ public enum CLIRouter {
             case "summarize":
                 let cmd = try SummarizeCommand(arguments: Array(arguments.dropFirst()))
                 try await cmd.run()
+            case "query":
+                let cmd = try QueryCommand(arguments: Array(arguments.dropFirst()))
+                try await cmd.run()
             case "doctor":
                 let cmd = try DoctorCommand(arguments: Array(arguments.dropFirst()))
                 try await cmd.run()
@@ -99,6 +111,8 @@ public enum CLIRouter {
             --netlist <path>      Netlist file path (direct mode)
             --top-cell <name>     Top cell name (direct mode)
             --technology <path>   Technology file path (direct mode)
+            --corner-technology <id>=<path>
+                                  Corner-specific technology file (repeatable)
             --backend <id>        Backend ID (required in direct mode)
             --corner <id>         Corner ID (repeatable)
             --max-jobs <n>        Max parallel jobs
@@ -106,11 +120,35 @@ public enum CLIRouter {
             --min-cap-f <val>     Minimum capacitance threshold (F)
             --min-res-ohm <val>   Minimum resistance threshold (Ohm)
             --out <path>          Output workspace path
+            --process-profile-id <id>
+                                  Process profile identifier (direct mode)
+            --pdk-id <id>         PDK identifier (direct mode)
+            --pdk-root <path>     PDK root directory (direct mode)
+            --primary-deck <path> Primary extraction deck (direct mode)
+            --corner-deck <id>=<path>
+                                  Corner-specific extraction deck (repeatable)
             --strict              Enable strict validation (default)
             --non-strict          Report IR validation errors as warnings
+            --source-connectivity <policy>
+                                  Source-netlist pin check: disabled, warn, or strict
             --summary             Include post-extraction net summary
             --summary-top-nets <n> Summary top nets per corner (default: 10)
             --json                Output results as JSON
+
+          retry           Retry failed corners from a persisted run
+            --run <path>          Path to the parent run manifest.json
+            --json                Output results as JSON
+
+          backannotate    Compose a ParasiticIR JSON artifact into a SPICE deck
+            --netlist <path>      Source SPICE netlist path
+            --ir <path>           ParasiticIR JSON artifact path
+            --output <path>       Output backannotated netlist path
+            --top-cell <name>     Insert the PEX instance inside this subcircuit
+            --json                Output a machine-readable report
+
+          lineage         Report effective parent/child retry lineage
+            --run <path>          Path to a leaf run manifest.json
+            --json                Output a machine-readable report
 
           parse           Parse a SPEF file
             --input <path>    Path to SPEF file
@@ -207,6 +245,15 @@ public enum CLIRouter {
             --top-nets <n>        Show top N nets (default: 10)
             --corner <id>         Filter by corner
             --json                Output as JSON
+
+          query           Query retained ParasiticIR through the typed service API
+            --run <path>          Path to run directory or manifest.json
+            --net <name>          Query one net (requires --corner)
+            --module <path>       Query a module hierarchy (requires --corner)
+            --corner <id>         Corner for --net or --module
+            --base-corner <id>    Base corner for a corner-delta query
+            --target-corner <id>  Target corner for a corner-delta query
+            --json                Output a machine-readable envelope
 
           doctor          Diagnose environment and configuration
             --json                Output as JSON

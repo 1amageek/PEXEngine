@@ -65,6 +65,7 @@ public struct SummarizeCommand: Sendable {
             print("Status: \(summary.status)")
             print("Backend: \(summary.backendID)")
             print("Corners: \(summary.corners.count)")
+            print("Comparison basis: \(summary.multiCorner.comparisonBasis.rawValue)")
             print("Successful corners: \(summary.multiCorner.successfulCornerCount)")
             print("Failed corners: \(summary.multiCorner.failedCornerCount)")
             if !summary.multiCorner.failedCornerIDs.isEmpty {
@@ -90,6 +91,9 @@ public struct SummarizeCommand: Sendable {
                 }
                 if let spefArtifactID = cs.spefRoundTripArtifactID {
                     print("  SPEF round-trip: \(spefArtifactID)")
+                }
+                if let spiceArtifactID = cs.spiceBackannotationArtifactID {
+                    print("  SPICE backannotation: \(spiceArtifactID)")
                 }
                 if !cs.topNets.isEmpty {
                     print("  Top \(cs.topNets.count) nets by capacitance:")
