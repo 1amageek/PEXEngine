@@ -1,4 +1,7 @@
-public protocol PEXEngineProtocol: Sendable {
+import CircuiteFoundation
+
+public protocol PEXEngineProtocol: Engine
+where Request == PEXRunRequest, Output == PEXRunResult {
     func run(_ request: PEXRunRequest) async throws -> PEXRunResult
 
     /// Re-executes only failed corners from a prior partial/failed run and

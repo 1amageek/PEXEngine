@@ -1,5 +1,26 @@
 # PEXEngine
 
+## CircuiteFoundation boundary
+
+PEXEngine remains an independent parasitic-extraction engine. It owns backend
+execution, SPEF/DSPF/SPICE parsing, canonical `ParasiticIR`, multi-corner
+orchestration, and artifact persistence. `CircuiteFoundation` supplies the
+shared engine, artifact, evidence, provenance, diagnostics, and design-object
+contracts.
+
+```mermaid
+flowchart LR
+    Request["PEXRunRequest"] --> Engine["PEXEngineProtocol"]
+    Engine --> Result["PEXRunResult"]
+    Result --> Domain["ParasiticIR + PEX manifest"]
+    Result --> Boundary["PEXFoundationEvidence"]
+    Boundary --> Foundation["EvidenceManifest + DesignDiagnostic"]
+```
+
+`PEXFoundationEvidence` emits only available artifacts with validated SHA-256
+and byte-count metadata. Missing integrity data is a typed boundary error; it
+is never replaced by a guessed digest.
+
 A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngine orchestrates extraction backends, parses their outputs, and normalizes results into a tool-agnostic canonical IR.
 
 ## Features

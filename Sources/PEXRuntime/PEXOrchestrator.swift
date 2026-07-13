@@ -251,6 +251,15 @@ public actor PEXOrchestrator {
         adapter: any PEXAdapter,
         readiness: PEXExtractorToolReadiness
     ) throws {
+        if let executablePath = request.backendSelection.executablePath,
+           !FileManager.default.isExecutableFile(atPath: executablePath) {
+            throw PEXError(
+                kind: .adapterUnavailable,
+                stage: .adapterPreparation,
+                backendID: adapter.backendID,
+                message: "Selected backend executable is not executable: \(executablePath)"
+            )
+        }
         if readiness.status == .blocked {
             throw PEXError(
                 kind: .adapterUnavailable,

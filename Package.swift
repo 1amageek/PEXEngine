@@ -16,10 +16,16 @@ let package = Package(
         .executable(name: "pexengine", targets: ["PEXCLI"]),
     ],
     dependencies: [
+        .package(path: "../CircuiteFoundation"),
         .package(path: "../SignoffToolSupport"),
     ],
     targets: [
-        .target(name: "PEXCore"),
+        .target(
+            name: "PEXCore",
+            dependencies: [
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            ]
+        ),
         .target(
             name: "PEXAdapters",
             dependencies: [
@@ -31,6 +37,7 @@ let package = Package(
         .target(name: "PEXPersistence", dependencies: ["PEXCore"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
         ]),
         .target(name: "PEXEngine", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence", "PEXRuntime",
@@ -40,7 +47,13 @@ let package = Package(
         ]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 
-        .testTarget(name: "PEXCoreTests", dependencies: ["PEXCore"]),
+        .testTarget(
+            name: "PEXCoreTests",
+            dependencies: [
+                "PEXCore",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            ]
+        ),
         .testTarget(
             name: "PEXAdaptersTests",
             dependencies: [
