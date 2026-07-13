@@ -9,7 +9,9 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 - **SPEF, DSPF, and Magic SPICE parsers** -- Standard parasitic output lowering with unit normalization, SPEF `*INDUC` and DSPF / extracted-SPICE `L*` inductor support, and consistent `PEXRunOptions` filtering
 - **Deterministic SPICE backannotation** -- Each successful corner emits a standalone `.cir` subcircuit with all canonical R/C/coupling/L elements and explicit node-map comments; source netlists are not silently rewritten
 - **Multi-corner extraction** -- Parallel corner processing with configurable job limits and `extractorRun.multiCorner` worst/spread summaries
+- **Real Magic extraction backend** -- Profile-declared Magic/PDK execution produces extracted SPICE and never fabricates parasitics when the toolchain is unavailable
 - **Immutable artifact persistence** -- Manifest, raw outputs, normalized IR, and summary reports
+- **Typed failure provenance** -- Failed corner manifests retain `PEXErrorKind`, so host flow gates can distinguish unavailable infrastructure from extraction, parsing, validation, and persistence failures
 - **Selective retry/resume contract** -- Failed corners can be retried as a new run with `resumedFromRunID` provenance
 - **Artifact-only retry CLI** -- `pexengine retry --run <manifest.json>` reconstructs the request from captured inputs and retries failed corners without the original source paths
 - **Run lineage view** -- `PEXArtifactStore.loadLineage()` overlays child retry corners on immutable parent results for a complete effective-corner view, including source run IDs and artifact provenance per selected corner
@@ -82,7 +84,7 @@ PEXRunResult
 | Module | Responsibility |
 |---|---|
 | **PEXCore** | Domain models, IR types, protocols, typed errors, registries, validation |
-| **PEXAdapters** | Backend adapters (MockPEXAdapter, ProcessRunner) |
+| **PEXAdapters** | Backend adapters (MagicPEXAdapter, MockPEXAdapter, ProcessRunner) |
 | **PEXParsers** | SPEF lexer / parser / lowering pipeline including `*INDUC`, DSPF lowering including `L*` elements, Magic SPICE parasitic lowering including `L*` elements, and deterministic SPICE backannotation writing |
 | **PEXPersistence** | Manifest, workspace layout, IR serializer, artifact store, report generator, run summary builder |
 | **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, engine |

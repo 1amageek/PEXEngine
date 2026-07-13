@@ -94,11 +94,25 @@ public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
 
 public struct PEXArtifactFailure: Sendable, Codable, Hashable {
     public let stage: PEXStage
+    public let failureKind: PEXErrorKind?
     public let message: String
     public let suggestedActions: [String]
 
     public init(stage: PEXStage, message: String, suggestedActions: [String] = []) {
+        self.failureKind = nil
         self.stage = stage
+        self.message = message
+        self.suggestedActions = suggestedActions
+    }
+
+    public init(
+        stage: PEXStage,
+        failureKind: PEXErrorKind?,
+        message: String,
+        suggestedActions: [String] = []
+    ) {
+        self.stage = stage
+        self.failureKind = failureKind
         self.message = message
         self.suggestedActions = suggestedActions
     }

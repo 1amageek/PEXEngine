@@ -884,6 +884,7 @@ public actor PEXOrchestrator {
             artifacts: artifacts,
             failure: PEXArtifactFailure(
                 stage: stage,
+                failureKind: (error as? PEXError)?.kind,
                 message: message,
                 suggestedActions: suggestedActions(for: stage)
             )

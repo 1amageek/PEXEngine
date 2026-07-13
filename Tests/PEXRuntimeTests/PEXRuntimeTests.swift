@@ -580,6 +580,29 @@ struct PEXRuntimeTests {
         #expect(!report.issues.contains { $0.kind == .failedCornerWithoutEvidence })
     }
 
+    @Test func typedAdapterFailureKindIsPersistedInManifest() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_typed_adapter_failure_\(UUID().uuidString)")
+        defer { removeTemporaryItem(tempDir) }
+        let inputs = try makeInputFiles(in: tempDir)
+        let engine = makeEngine(adapter: CornerUnavailablePEXAdapter())
+        let result = try await engine.run(PEXRunRequest(
+            layoutURL: inputs.layoutURL,
+            layoutFormat: .gds,
+            sourceNetlistURL: inputs.netlistURL,
+            sourceNetlistFormat: .spice,
+            topCell: "TESTCELL",
+            corners: [PEXCorner(id: "tt")],
+            technology: .inline(makeTestTech()),
+            backendSelection: PEXBackendSelection(backendID: "corner-unavailable"),
+            options: .default,
+            workingDirectory: tempDir
+        ))
+
+        let manifestCorner = try #require(result.artifacts.corners.first)
+        #expect(result.status == .failed)
+        #expect(manifestCorner.failure?.failureKind == .adapterUnavailable)
+    }
+
     @Test func parseFailurePreservesRawEvidenceAndMissingIRRecord() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_parse_failure_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
@@ -1148,6 +1171,25 @@ private struct PartialFailurePEXAdapter: PEXAdapter {
                 PEXGeneratedArtifact(kind: .rawOutput, stage: .backendExecution, cornerID: context.corner.id, url: rawURL),
                 PEXGeneratedArtifact(kind: .log, stage: .backendExecution, cornerID: context.corner.id, url: logURL),
             ]
+        )
+    }
+
+    func cleanup(_ context: PEXExecutionContext) async {}
+}
+
+private struct CornerUnavailablePEXAdapter: PEXAdapter {
+    let backendID = "corner-unavailable"
+    let capabilities = MockPEXAdapter().capabilities
+
+    func prepare(_ context: PEXExecutionContext) async throws {}
+
+    func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        throw PEXError(
+            kind: .adapterUnavailable,
+            stage: .backendExecution,
+            cornerID: context.corner.id,
+            backendID: backendID,
+            message: "Corner extractor is unavailable."
         )
     }
 
