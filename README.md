@@ -21,6 +21,15 @@ flowchart LR
 and byte-count metadata. Missing integrity data is a typed boundary error; it
 is never replaced by a guessed digest.
 
+## Xcircuite integration
+
+[`Xcircuite`](https://github.com/1amageek/Xcircuite) is the umbrella runtime
+that invokes PEXEngine through a PEX flow stage and persists manifests, raw
+outputs, canonical `ParasiticIR`, summaries, diagnostics, and retry lineage in
+the shared `.xcircuite` run ledger. PEXEngine remains independently usable
+through its typed API and `pexengine` CLI; it owns extraction semantics rather
+than project orchestration or GUI state.
+
 A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngine orchestrates extraction backends, parses their outputs, and normalizes results into a tool-agnostic canonical IR.
 
 ## Features
