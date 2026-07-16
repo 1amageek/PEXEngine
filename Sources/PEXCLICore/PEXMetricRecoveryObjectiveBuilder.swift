@@ -220,7 +220,7 @@ public struct PEXMetricRecoveryObjectiveBuilder: Sendable {
             )
         }
 
-        let inputRefs = try buildInputRefs(
+        let inputArtifacts = try buildInputArtifacts(
             summaryPath: summaryPath,
             comparisonPath: comparison == nil ? nil : comparisonPath,
             metricReportPath: metricReport == nil ? nil : metricReportPath,
@@ -235,7 +235,7 @@ public struct PEXMetricRecoveryObjectiveBuilder: Sendable {
         return PEXMetricRecoveryPlanningProblem(
             problemID: problemID ?? "\(summary.summary.runID)-pex-metric-recovery",
             status: status,
-            inputRefs: inputRefs,
+            inputArtifacts: inputArtifacts,
             summary: PEXMetricRecoverySummary(
                 objectiveCount: objectives.count,
                 hotspotCount: hotspots.count,
@@ -577,77 +577,92 @@ public struct PEXMetricRecoveryObjectiveBuilder: Sendable {
         )
     }
 
-    private func buildInputRefs(
+    private func buildInputArtifacts(
         summaryPath: String,
         comparisonPath: String?,
         metricReportPath: String?,
         layoutPath: String?,
         sourceNetlistPath: String?,
         technologyPath: String?
-    ) throws -> [PEXMetricRecoveryInputReference] {
-        var refs: [PEXMetricRecoveryInputReference] = []
-        try refs.append(inputRef(refID: "pex-summary", kind: "pex-summary", path: summaryPath, required: true))
+    ) throws -> [ArtifactReference] {
+        var references: [ArtifactReference] = []
+        if let reference = try inputArtifact(id: "pex-summary", kind: "pex-summary", path: summaryPath, required: true) {
+            references.append(reference)
+        }
         if let comparisonPath {
-            try refs.append(inputRef(
-                refID: "pex-ir-comparison-report",
+            if let reference = try inputArtifact(
+                id: "pex-ir-comparison-report",
                 kind: "pex-ir-comparison-report",
                 path: comparisonPath,
                 required: true
-            ))
+            ) { references.append(reference) }
         }
         if let metricReportPath {
-            try refs.append(inputRef(
-                refID: "post-layout-metric-report",
+            if let reference = try inputArtifact(
+                id: "post-layout-metric-report",
                 kind: "post-layout-metric-report",
                 path: metricReportPath,
                 required: true
-            ))
+            ) { references.append(reference) }
         }
         if let layoutPath {
-            try refs.append(inputRef(refID: "layout-ref", kind: "layout", path: layoutPath, required: false))
+            if let reference = try inputArtifact(id: "layout-ref", kind: "layout", path: layoutPath, required: false) {
+                references.append(reference)
+            }
         }
         if let sourceNetlistPath {
-            try refs.append(inputRef(
-                refID: "source-netlist-ref",
+            if let reference = try inputArtifact(
+                id: "source-netlist-ref",
                 kind: "source-netlist",
                 path: sourceNetlistPath,
                 required: false
-            ))
+            ) { references.append(reference) }
         }
         if let technologyPath {
-            try refs.append(inputRef(refID: "technology-ref", kind: "technology", path: technologyPath, required: false))
+            if let reference = try inputArtifact(id: "technology-ref", kind: "technology", path: technologyPath, required: false) {
+                references.append(reference)
+            }
         }
-        return refs
+        return references
     }
 
-    private func inputRef(
-        refID: String,
+    private func inputArtifact(
+        id: String,
         kind: String,
         path: String,
         required: Bool
-    ) throws -> PEXMetricRecoveryInputReference {
+    ) throws -> ArtifactReference? {
         let url = URL(filePath: path)
         do {
             let data = try Data(contentsOf: url)
             let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-            return PEXMetricRecoveryInputReference(
-                refID: refID,
-                kind: kind,
-                path: path,
-                sha256: hash,
-                byteCount: data.count,
-                readable: true
+            return ArtifactReference(
+                id: try ArtifactID(rawValue: id),
+                locator: ArtifactLocator(
+                    location: try ArtifactLocation(fileURL: url),
+                    role: .input,
+                    kind: try ArtifactKind(rawValue: kind),
+                    format: try ArtifactFormat(rawValue: inputArtifactFormat(path: path))
+                ),
+                digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: hash),
+                byteCount: UInt64(data.count)
             )
         } catch {
             if required {
                 throw PEXError.persistenceFailed("Failed to read required input \(path)", underlying: error)
             }
-            return PEXMetricRecoveryInputReference(
-                refID: refID,
-                kind: kind,
-                path: path,
-                readable: false
-            )
+            return nil
+        }
+    }
+
+    private func inputArtifactFormat(path: String) -> String {
+        switch URL(filePath: path).pathExtension.lowercased() {
+        case "gds", "gdsii": ArtifactFormat.gdsii.rawValue
+        case "oas", "oasis": ArtifactFormat.oasis.rawValue
+        case "sp", "cir", "spice", "net": ArtifactFormat.spice.rawValue
+        case "spef": ArtifactFormat.spef.rawValue
+        case "txt", "log": ArtifactFormat.text.rawValue
+        default: ArtifactFormat.json.rawValue
         }
     }
 

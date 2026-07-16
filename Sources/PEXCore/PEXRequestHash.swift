@@ -21,17 +21,8 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         inputArtifacts: [PEXArtifactRecord]
     ) throws -> PEXRequestHash {
         let canonicalArtifacts = inputArtifacts
-            .sorted { $0.id < $1.id }
-            .map { record in
-                PEXCanonicalInputArtifact(
-                    id: record.id,
-                    kind: record.kind,
-                    relativePath: record.relativePath.value,
-                    sha256: record.sha256,
-                    byteCount: record.byteCount,
-                    status: record.status
-                )
-            }
+            .sorted { $0.id.rawValue < $1.id.rawValue }
+            .map(\.payload)
         let snapshot = PEXCanonicalRequestHashInput(
             topCell: request.topCell,
             layoutFormat: request.layoutFormat,
@@ -90,7 +81,7 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
     let processProfileDeckSHA256: [String: String]
     let backendSelection: PEXCanonicalBackendSelection
     let options: PEXRunOptions
-    let inputArtifacts: [PEXCanonicalInputArtifact]
+    let inputArtifacts: [PEXArtifactPayload]
 }
 
 private struct PEXCanonicalTechnologyInput: Sendable, Codable, Hashable {
@@ -122,13 +113,4 @@ private struct PEXCanonicalBackendSelection: Sendable, Codable, Hashable {
         self.executableName = selection.executablePath.map { URL(filePath: $0).lastPathComponent }
         self.environmentOverrides = selection.environmentOverrides
     }
-}
-
-private struct PEXCanonicalInputArtifact: Sendable, Codable, Hashable {
-    let id: String
-    let kind: PEXArtifactKind
-    let relativePath: String
-    let sha256: String?
-    let byteCount: Int?
-    let status: PEXArtifactStatus
 }

@@ -34,10 +34,10 @@ struct SPEFCorpusEvidencePacketBuilderTests {
             allowedArtifactRootPath: root.path(percentEncoded: false)
         )
 
-        #expect(packet.inputs.contains { $0.artifactID == "corpus-manifest" })
-        #expect(packet.inputs.contains { $0.artifactID == "corpus-input-1" })
-        #expect(!packet.inputs.contains { $0.artifactID == "corpus-input-2" })
-        #expect(!packet.inputs.contains { $0.artifactID == "corpus-input-3" })
+        #expect(packet.inputs.contains { $0.reference.artifactID == "corpus-manifest" })
+        #expect(packet.inputs.contains { $0.reference.artifactID == "corpus-input-1" })
+        #expect(!packet.inputs.contains { $0.reference.artifactID == "corpus-input-2" })
+        #expect(!packet.inputs.contains { $0.reference.artifactID == "corpus-input-3" })
         #expect(packet.artifacts.isEmpty)
 
         #expect(throws: (any Error).self) {
@@ -133,6 +133,7 @@ private func makeArtifactReferences(
     fixtures: [SPEFCorpus.Fixture]
 ) throws -> [ArtifactReference] {
     var references = [ArtifactReference(
+        id: try ArtifactID(rawValue: "corpus-manifest"),
         locator: ArtifactLocator(
             location: try ArtifactLocation(fileURL: root.appending(path: "fixture-manifest.json")),
             role: .input,
@@ -148,6 +149,7 @@ private func makeArtifactReferences(
             ? try ArtifactLocation(fileURL: URL(filePath: fixture.sourcePath))
             : try ArtifactLocation(fileURL: root.appending(path: fixture.fileName))
         references.append(ArtifactReference(
+            id: try ArtifactID(rawValue: "corpus-input-\(index + 1)"),
             locator: ArtifactLocator(
                 location: location,
                 role: .input,

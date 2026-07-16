@@ -10,9 +10,9 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
         allowedArtifactRootPath: String? = nil
     ) -> PEXEvidencePacket {
         let contexts = caseContexts(report.caseResults)
-        let inputBuild = artifactRefs(from: report.sourceArtifacts, allowedArtifactRootPath: allowedArtifactRootPath)
+        let inputBuild = artifactEvidence(from: report.sourceArtifacts, allowedArtifactRootPath: allowedArtifactRootPath)
         let inputRefs = inputBuild.refs
-        let manifestArtifactID = inputRefs.first { $0.artifactID == "corpus-manifest" }?.artifactID
+        let manifestArtifactID = inputRefs.first?.reference.id.rawValue
         let diagnostics = inputBuild.diagnostics
             + contexts.flatMap(\.diagnostics)
             + diagnostics(
@@ -70,7 +70,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     }
 
     private struct ArtifactRefBuildResult: Sendable {
-        var refs: [PEXEvidenceArtifactRef] = []
+        var refs: [PEXEvidenceArtifact] = []
         var diagnostics: [PEXEvidenceDiagnostic] = []
     }
 
@@ -117,17 +117,14 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
         }
     }
 
-    private func artifactRefs(
+    private func artifactEvidence(
         from refs: [ArtifactReference],
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
         var result = ArtifactRefBuildResult()
-        for (index, ref) in refs.enumerated() {
-            let artifactID = index == 0 ? "corpus-manifest" : "corpus-input-\(index)"
+        for ref in refs {
             let built = artifactRef(
                 from: ref,
-                artifactID: artifactID,
-                role: index == 0 ? "intent" : "input",
                 allowedArtifactRootPath: allowedArtifactRootPath
             )
             result.refs += built.refs
@@ -138,27 +135,17 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
 
     private func artifactRef(
         from ref: ArtifactReference,
-        artifactID: String,
-        role: String,
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
         var result = ArtifactRefBuildResult()
         if let reason = artifactPathValidationFailure(ref.path, allowedArtifactRootPath: allowedArtifactRootPath) {
             result.diagnostics.append(artifactPathDiagnostic(
-                artifactID: artifactID,
+                artifactID: ref.id.rawValue,
                 rawPath: ref.path,
                 reason: reason
             ))
         } else {
-            result.refs.append(PEXEvidenceArtifactRef(
-                artifactID: artifactID,
-                path: ref.path,
-                role: role,
-                kind: ref.kind.rawValue,
-                format: ref.format.rawValue,
-                sha256: ref.sha256,
-                byteCount: Int(exactly: ref.byteCount)
-            ))
+            result.refs.append(PEXEvidenceArtifact(reference: ref))
         }
         return result
     }
@@ -257,15 +244,18 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
 
     private func diagnostics(
         from report: SPEFCorpus.Report,
-        inputRefs: [PEXEvidenceArtifactRef],
+        inputRefs: [PEXEvidenceArtifact],
         contexts: [EvidenceCaseContext]
     ) -> [PEXEvidenceDiagnostic] {
         var diagnostics: [PEXEvidenceDiagnostic] = []
 
         for (caseResult, context) in zip(report.caseResults, contexts) {
             let artifactIDs = inputRefs
-                .filter { $0.path == caseResult.fileName || $0.path.hasSuffix("/\(caseResult.fileName)") }
-                .map(\.artifactID)
+                .filter {
+                    $0.reference.path == caseResult.fileName
+                        || $0.reference.path.hasSuffix("/\(caseResult.fileName)")
+                }
+                .map { $0.reference.id.rawValue }
             for (index, failure) in caseResult.failures.enumerated() {
                 diagnostics.append(PEXEvidenceDiagnostic(
                     diagnosticID: "case:\(context.caseKey):\(sanitizedIdentifierToken(failure.code)):\(index)",

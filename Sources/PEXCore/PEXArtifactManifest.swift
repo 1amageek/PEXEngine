@@ -1,28 +1,5 @@
 import Foundation
-
-public struct PEXArtifactPath: Sendable, Codable, Hashable, CustomStringConvertible {
-    public let value: String
-
-    public init(_ value: String) throws {
-        guard !value.isEmpty else {
-            throw PEXError.invalidInput("Artifact path must not be empty")
-        }
-        guard !value.hasPrefix("/") else {
-            throw PEXError.invalidInput("Artifact path must be relative to the run directory")
-        }
-        let components = value.split(separator: "/", omittingEmptySubsequences: false)
-        guard !components.contains("..") else {
-            throw PEXError.invalidInput("Artifact path must not escape the run directory")
-        }
-        self.value = value
-    }
-
-    public init(validated value: String) {
-        self.value = value
-    }
-
-    public var description: String { value }
-}
+@_exported import CircuiteFoundation
 
 public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case layoutInput
@@ -39,10 +16,53 @@ public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case report
 }
 
-public enum PEXArtifactStatus: String, Sendable, Codable, Hashable {
+public enum PEXArtifactAvailability: String, Sendable, Codable, Hashable {
     case available
     case missing
     case omitted
+}
+
+public struct PEXArtifactDeclaration: Sendable, Codable, Hashable, Identifiable {
+    public let id: ArtifactID
+    public let locator: ArtifactLocator
+
+    public init(id: ArtifactID, locator: ArtifactLocator) {
+        self.id = id
+        self.locator = locator
+    }
+}
+
+public enum PEXArtifactPayload: Sendable, Codable, Hashable {
+    case available(ArtifactReference)
+    case missing(PEXArtifactDeclaration)
+    case omitted(PEXArtifactDeclaration)
+
+    public var id: ArtifactID {
+        switch self {
+        case .available(let reference): reference.id
+        case .missing(let declaration), .omitted(let declaration): declaration.id
+        }
+    }
+
+    public var locator: ArtifactLocator {
+        switch self {
+        case .available(let reference): reference.locator
+        case .missing(let declaration), .omitted(let declaration): declaration.locator
+        }
+    }
+
+    public var availability: PEXArtifactAvailability {
+        switch self {
+        case .available: .available
+        case .missing: .missing
+        case .omitted: .omitted
+        }
+    }
+
+    public var reference: ArtifactReference? {
+        guard case .available(let reference) = self else { return nil }
+        return reference
+    }
 }
 
 public struct PEXArtifactProvenance: Sendable, Codable, Hashable {
@@ -56,40 +76,38 @@ public struct PEXArtifactProvenance: Sendable, Codable, Hashable {
 }
 
 public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
-    public let id: String
-    public let kind: PEXArtifactKind
+    public let payload: PEXArtifactPayload
     public let stage: PEXStage
     public let cornerID: PEXCornerID?
-    public let relativePath: PEXArtifactPath
-    public let sha256: String?
-    public let byteCount: Int?
     public let createdAt: Date
-    public let status: PEXArtifactStatus
     public let provenance: PEXArtifactProvenance?
 
+    public var id: ArtifactID { payload.id }
+    public var locator: ArtifactLocator { payload.locator }
+    public var availability: PEXArtifactAvailability { payload.availability }
+    public var reference: ArtifactReference? { payload.reference }
+
     public init(
-        id: String,
-        kind: PEXArtifactKind,
+        payload: PEXArtifactPayload,
         stage: PEXStage,
         cornerID: PEXCornerID? = nil,
-        relativePath: PEXArtifactPath,
-        sha256: String? = nil,
-        byteCount: Int? = nil,
         createdAt: Date = Date(),
-        status: PEXArtifactStatus,
         provenance: PEXArtifactProvenance? = nil
     ) {
-        self.id = id
-        self.kind = kind
+        self.payload = payload
         self.stage = stage
         self.cornerID = cornerID
-        self.relativePath = relativePath
-        self.sha256 = sha256
-        self.byteCount = byteCount
         self.createdAt = createdAt
-        self.status = status
         self.provenance = provenance
     }
+
+    public func matches(kind: PEXArtifactKind) -> Bool {
+        locator.kind.rawValue == kind.foundationRawValue
+    }
+}
+
+extension PEXArtifactKind {
+    public var foundationRawValue: String { "pex.\(rawValue)" }
 }
 
 public struct PEXArtifactFailure: Sendable, Codable, Hashable {
@@ -135,10 +153,24 @@ public struct PEXArtifactCorner: Sendable, Codable, Hashable {
         self.artifactIDs = artifactIDs
         self.failure = failure
     }
+
+    public init<IDs: Sequence>(
+        cornerID: PEXCornerID,
+        status: PEXRunStatus,
+        artifactIDs: IDs,
+        failure: PEXArtifactFailure? = nil
+    ) where IDs.Element == ArtifactID {
+        self.init(
+            cornerID: cornerID,
+            status: status,
+            artifactIDs: artifactIDs.map(\.rawValue),
+            failure: failure
+        )
+    }
 }
 
 public struct PEXArtifactManifest: Sendable, Codable, Hashable {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public let version: Int
     public let runID: PEXRunID
@@ -181,13 +213,13 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         self.resumedFromRunID = resumedFromRunID
     }
 
-    public func artifact(id: String) -> PEXArtifactRecord? {
+    public func artifact(id: ArtifactID) -> PEXArtifactRecord? {
         artifacts.first { $0.id == id }
     }
 
     public func artifacts(kind: PEXArtifactKind, cornerID: PEXCornerID? = nil) -> [PEXArtifactRecord] {
         artifacts.filter { record in
-            record.kind == kind && (cornerID == nil || record.cornerID == cornerID)
+            record.matches(kind: kind) && (cornerID == nil || record.cornerID == cornerID)
         }
     }
 }
@@ -202,8 +234,6 @@ public enum PEXArtifactCompletenessIssueKind: String, Sendable, Codable, Hashabl
     case duplicateArtifactID
     case missingArtifact
     case invalidHash
-    case missingHash
-    case missingByteCount
     case missingIR
     case missingCornerArtifactReference
     case missingFailure
@@ -216,20 +246,20 @@ public struct PEXArtifactCompletenessIssue: Sendable, Codable, Hashable {
     public let kind: PEXArtifactCompletenessIssueKind
     public let artifactID: String?
     public let cornerID: PEXCornerID?
-    public let path: PEXArtifactPath?
+    public let location: ArtifactLocation?
     public let message: String
 
     public init(
         kind: PEXArtifactCompletenessIssueKind,
         artifactID: String? = nil,
         cornerID: PEXCornerID? = nil,
-        path: PEXArtifactPath? = nil,
+        location: ArtifactLocation? = nil,
         message: String
     ) {
         self.kind = kind
         self.artifactID = artifactID
         self.cornerID = cornerID
-        self.path = path
+        self.location = location
         self.message = message
     }
 }

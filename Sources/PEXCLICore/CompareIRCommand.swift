@@ -29,8 +29,8 @@ public struct CompareIRCommand: Sendable {
             print(String(decoding: data, as: UTF8.self))
         } else {
             print("PEX IR comparison: \(report.status)")
-            print("Baseline: \(report.baseline.path)")
-            print("Candidate: \(report.candidate.path)")
+            print("Baseline: \(report.baseline.artifact.path)")
+            print("Candidate: \(report.candidate.artifact.path)")
             print("Matched nets: \(report.summary.matchedNetCount)")
             print("Added nets: \(report.summary.addedNetCount)")
             print("Removed nets: \(report.summary.removedNetCount)")
@@ -53,7 +53,7 @@ public struct CompareIRCommand: Sendable {
         try validateIR(candidate.ir)
         let netComparison = buildNetComparison(baselineIR: baseline.ir, candidateIR: candidate.ir)
         let semanticViolations = makeSemanticViolationsIfNeeded(baselineIR: baseline.ir, candidateIR: candidate.ir)
-        let report = makeReport(
+        let report = try makeReport(
             baselineURL: baselineURL,
             baselineData: baseline.data,
             baselineIR: baseline.ir,
@@ -107,9 +107,9 @@ public struct CompareIRCommand: Sendable {
         candidateIR: ParasiticIR,
         netComparison: PEXIRNetComparisonAccumulator,
         semanticViolations: [PEXIRComparisonViolation]
-    ) -> PEXIRComparisonReport {
-        let baselineInput = makeInput(url: baselineURL, data: baselineData, ir: baselineIR)
-        let candidateInput = makeInput(url: candidateURL, data: candidateData, ir: candidateIR)
+    ) throws -> PEXIRComparisonReport {
+        let baselineInput = try makeInput(url: baselineURL, data: baselineData, ir: baselineIR)
+        let candidateInput = try makeInput(url: candidateURL, data: candidateData, ir: candidateIR)
         let violations = netComparison.violations + semanticViolations
         return PEXIRComparisonReport(
             status: violations.isEmpty ? "passed" : "failed",
@@ -127,11 +127,21 @@ public struct CompareIRCommand: Sendable {
         )
     }
 
-    private func makeInput(url: URL, data: Data, ir: ParasiticIR) -> PEXIRComparisonInput {
+    private func makeInput(url: URL, data: Data, ir: ParasiticIR) throws -> PEXIRComparisonInput {
         PEXIRComparisonInput(
-            path: url.path(percentEncoded: false),
-            sha256: Self.sha256Hex(data),
-            byteCount: data.count,
+            artifact: ArtifactReference(
+                locator: ArtifactLocator(
+                    location: try ArtifactLocation(fileURL: url),
+                    role: .input,
+                    kind: .parasitics,
+                    format: .json
+                ),
+                digest: try ContentDigest(
+                    algorithm: .sha256,
+                    hexadecimalValue: Self.sha256Hex(data)
+                ),
+                byteCount: UInt64(data.count)
+            ),
             ir: ir
         )
     }

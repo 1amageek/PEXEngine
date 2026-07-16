@@ -1,14 +1,14 @@
 public struct PEXEvidencePacket: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let packetID: String
     public let domain: String
     public let subject: PEXEvidenceSubject
     public let intent: PEXEvidenceIntent
-    public let inputs: [PEXEvidenceArtifactRef]
+    public let inputs: [PEXEvidenceArtifact]
     public let readiness: [PEXEvidenceReadiness]
-    public let artifacts: [PEXEvidenceArtifactRef]
+    public let artifacts: [PEXEvidenceArtifact]
     public let normalizedViews: [PEXEvidenceNormalizedView]
     public let metrics: [PEXEvidenceMetric]
     public let diagnostics: [PEXEvidenceDiagnostic]
@@ -24,9 +24,9 @@ public struct PEXEvidencePacket: Sendable, Hashable, Codable {
         domain: String,
         subject: PEXEvidenceSubject,
         intent: PEXEvidenceIntent,
-        inputs: [PEXEvidenceArtifactRef] = [],
+        inputs: [PEXEvidenceArtifact] = [],
         readiness: [PEXEvidenceReadiness] = [],
-        artifacts: [PEXEvidenceArtifactRef] = [],
+        artifacts: [PEXEvidenceArtifact] = [],
         normalizedViews: [PEXEvidenceNormalizedView] = [],
         metrics: [PEXEvidenceMetric] = [],
         diagnostics: [PEXEvidenceDiagnostic] = [],
@@ -93,9 +93,9 @@ public struct PEXEvidencePacket: Sendable, Hashable, Codable {
             domain: try container.decode(String.self, forKey: .domain),
             subject: try container.decode(PEXEvidenceSubject.self, forKey: .subject),
             intent: try container.decode(PEXEvidenceIntent.self, forKey: .intent),
-            inputs: try container.decode([PEXEvidenceArtifactRef].self, forKey: .inputs),
+            inputs: try container.decode([PEXEvidenceArtifact].self, forKey: .inputs),
             readiness: try container.decode([PEXEvidenceReadiness].self, forKey: .readiness),
-            artifacts: try container.decode([PEXEvidenceArtifactRef].self, forKey: .artifacts),
+            artifacts: try container.decode([PEXEvidenceArtifact].self, forKey: .artifacts),
             normalizedViews: try container.decode(
                 [PEXEvidenceNormalizedView].self,
                 forKey: .normalizedViews
@@ -196,33 +196,15 @@ public struct PEXEvidenceIntent: Sendable, Hashable, Codable {
     }
 }
 
-public struct PEXEvidenceArtifactRef: Sendable, Hashable, Codable {
-    public let artifactID: String
-    public let path: String
-    public let role: String
-    public let kind: String
-    public let format: String
-    public let sha256: String?
-    public let byteCount: Int?
+public struct PEXEvidenceArtifact: Sendable, Hashable, Codable {
+    public let reference: ArtifactReference
     public let cornerID: String?
 
     public init(
-        artifactID: String,
-        path: String,
-        role: String,
-        kind: String,
-        format: String,
-        sha256: String? = nil,
-        byteCount: Int? = nil,
+        reference: ArtifactReference,
         cornerID: String? = nil
     ) {
-        self.artifactID = artifactID
-        self.path = path
-        self.role = role
-        self.kind = kind
-        self.format = format
-        self.sha256 = sha256
-        self.byteCount = byteCount
+        self.reference = reference
         self.cornerID = cornerID
     }
 }

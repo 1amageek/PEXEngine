@@ -9,15 +9,25 @@ struct PEXFoundationBoundaryTests {
     func preservesDomainArtifactIdentifier() throws {
         let now = Date(timeIntervalSince1970: 1)
         let runID = PEXRunID()
+        let reference = ArtifactReference(
+            id: try ArtifactID(rawValue: "plate:raw-spef"),
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(workspaceRelativePath: "reports/output.spef"),
+                role: .output,
+                kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
+                format: .spef
+            ),
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: String(repeating: "a", count: 64)
+            ),
+            byteCount: 1
+        )
         let artifact = PEXArtifactRecord(
-            id: "plate:raw-spef",
-            kind: .rawOutput,
+            payload: .available(reference),
             stage: .reporting,
-            relativePath: try PEXArtifactPath("reports/output.spef"),
-            sha256: String(repeating: "a", count: 64),
-            byteCount: 1,
             createdAt: now,
-            status: .available
+            provenance: nil
         )
         let manifest = PEXArtifactManifest(
             runID: runID,

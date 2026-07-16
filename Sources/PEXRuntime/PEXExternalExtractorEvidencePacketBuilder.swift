@@ -16,7 +16,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         let artifacts = outputsBuild.refs
         let integrityDiagnostics = contexts.flatMap(\.diagnostics) + inputsBuild.diagnostics + outputsBuild.diagnostics
         let readiness = readiness(report, integrityDiagnostics: integrityDiagnostics)
-        let diagnostics = diagnostics(report: report, contexts: contexts, artifactRefs: inputs + artifacts)
+        let diagnostics = diagnostics(report: report, contexts: contexts, artifactEvidence: inputs + artifacts)
             + integrityDiagnostics
         let rawFailureClassifications = PEXExternalExtractorFailureDiagnosticClassifier().classify(
             report: report,
@@ -26,7 +26,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         let failureClassifications = sanitizeFailureClassifications(
             rawFailureClassifications,
             contexts: contexts,
-            retainedArtifactIDs: Set((inputs + artifacts).map(\.artifactID))
+            retainedArtifactIDs: Set((inputs + artifacts).map { $0.reference.id.rawValue })
         )
         return PEXEvidencePacket(
             packetID: packetID ?? defaultPacketID(report),
@@ -62,7 +62,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
             artifacts: artifacts,
             normalizedViews: normalizedViews(
                 report: report,
-                artifactRefs: artifacts,
+                artifactEvidence: artifacts,
                 failureClassifications: failureClassifications
             ),
             metrics: metrics(report, contexts: contexts),
@@ -87,7 +87,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
     }
 
     private struct ArtifactRefBuildResult {
-        var refs: [PEXEvidenceArtifactRef]
+        var refs: [PEXEvidenceArtifact]
         var diagnostics: [PEXEvidenceDiagnostic]
     }
 
@@ -158,50 +158,12 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         contexts: [EvidenceCaseContext],
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
-        var result = ArtifactRefBuildResult(refs: [
-            PEXEvidenceArtifactRef(
-                artifactID: "external-corpus-manifest",
-                path: report.corpusSpec,
-                role: "intent",
-                kind: "external-extractor-corpus",
-                format: "JSON"
-            )
-        ], diagnostics: [])
+        var result = ArtifactRefBuildResult(refs: [], diagnostics: [])
         for context in contexts {
             appendDeclaredCaseRefs(
                 &result,
                 context: context,
                 roles: ["input"],
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
-            appendCaseRef(
-                &result,
-                path: context.result.layoutPath,
-                context: context,
-                role: "input",
-                kind: "layout",
-                format: "GDS",
-                sourceField: "layoutPath",
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
-            appendCaseRef(
-                &result,
-                path: context.result.sourceNetlistPath,
-                context: context,
-                role: "input",
-                kind: "source-netlist",
-                format: "SPICE",
-                sourceField: "sourceNetlistPath",
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
-            appendCaseRef(
-                &result,
-                path: context.result.technologyPath,
-                context: context,
-                role: "input",
-                kind: "technology",
-                format: "JSON",
-                sourceField: "technologyPath",
                 allowedArtifactRootPath: allowedArtifactRootPath
             )
         }
@@ -222,36 +184,6 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
                 roles: ["run-artifact", "normalized", "output"],
                 allowedArtifactRootPath: allowedArtifactRootPath
             )
-            appendCaseRef(
-                &result,
-                path: context.result.manifestPath,
-                context: context,
-                role: "run-artifact",
-                kind: "pex-artifact-manifest",
-                format: "JSON",
-                sourceField: "manifestPath",
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
-            appendCaseRef(
-                &result,
-                path: context.result.irPath,
-                context: context,
-                role: "normalized",
-                kind: "parasitic-ir",
-                format: "JSON",
-                sourceField: "irPath",
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
-            appendCaseRef(
-                &result,
-                path: context.result.outputDirectory,
-                context: context,
-                role: "run-artifact",
-                kind: "pex-run-directory",
-                format: "directory",
-                sourceField: "outputDirectory",
-                allowedArtifactRootPath: allowedArtifactRootPath
-            )
         }
         result.refs = deduplicated(result.refs)
         return result
@@ -263,84 +195,45 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         roles: Set<String>,
         allowedArtifactRootPath: String?
     ) {
-        for artifact in context.result.artifactRefs ?? [] where roles.contains(artifact.role) {
+        for artifact in context.result.artifacts ?? []
+        where roles.contains(artifact.reference.locator.role.rawValue) {
             let sourceField = sanitizedSourceField(artifact)
             guard !sourceField.isEmpty else {
                 result.diagnostics.append(artifactPathDiagnostic(
                     caseKey: context.caseKey,
                     sourceField: "declaredArtifact",
-                    rawPath: artifact.path,
+                    rawPath: artifact.reference.path,
                     reason: "declared artifact has no stable source field or artifact ID"
                 ))
                 continue
             }
             if let reason = artifactPathValidationFailure(
-                artifact.path,
+                artifact.reference.path,
                 allowedArtifactRootPath: allowedArtifactRootPath
             ) {
                 result.diagnostics.append(artifactPathDiagnostic(
                     caseKey: context.caseKey,
                     sourceField: sourceField,
-                    rawPath: artifact.path,
+                    rawPath: artifact.reference.path,
                     reason: reason
                 ))
                 continue
             }
-            result.refs.append(PEXEvidenceArtifactRef(
-                artifactID: "\(context.caseKey):\(sourceField)",
-                path: artifact.path,
-                role: artifact.role,
-                kind: artifact.kind,
-                format: artifact.format,
-                sha256: artifact.sha256,
-                byteCount: artifact.byteCount,
+            result.refs.append(PEXEvidenceArtifact(
+                reference: artifact.reference,
                 cornerID: context.result.corner
             ))
         }
     }
 
-    private func appendCaseRef(
-        _ result: inout ArtifactRefBuildResult,
-        path: String?,
-        context: EvidenceCaseContext,
-        role: String,
-        kind: String,
-        format: String,
-        sourceField: String,
-        allowedArtifactRootPath: String?
-    ) {
-        guard let path, !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        if let reason = artifactPathValidationFailure(path, allowedArtifactRootPath: allowedArtifactRootPath) {
-            result.diagnostics.append(artifactPathDiagnostic(
-                caseKey: context.caseKey,
-                sourceField: sourceField,
-                rawPath: path,
-                reason: reason
-            ))
-            return
-        }
-        result.refs.append(PEXEvidenceArtifactRef(
-            artifactID: "\(context.caseKey):\(sourceField)",
-            path: path,
-            role: role,
-            kind: kind,
-            format: format,
-            cornerID: context.result.corner
-        ))
-    }
-
-    private func deduplicated(_ refs: [PEXEvidenceArtifactRef]) -> [PEXEvidenceArtifactRef] {
-        var byID: [String: PEXEvidenceArtifactRef] = [:]
+    private func deduplicated(_ refs: [PEXEvidenceArtifact]) -> [PEXEvidenceArtifact] {
+        var byID: [ArtifactID: PEXEvidenceArtifact] = [:]
         for ref in refs {
-            if let existing = byID[ref.artifactID] {
-                if existing.sha256 == nil && ref.sha256 != nil {
-                    byID[ref.artifactID] = ref
-                }
-            } else {
-                byID[ref.artifactID] = ref
-            }
+            byID[ref.reference.id] = ref
         }
-        return byID.values.sorted { $0.artifactID < $1.artifactID }
+        return byID.values.sorted {
+            $0.reference.id.rawValue < $1.reference.id.rawValue
+        }
     }
 
     private func readiness(
@@ -396,7 +289,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
 
     private func normalizedViews(
         report: PEXExternalExtractorCorpusReport,
-        artifactRefs: [PEXEvidenceArtifactRef],
+        artifactEvidence: [PEXEvidenceArtifact],
         failureClassifications: [PEXFailureDiagnosticClassification]
     ) -> [PEXEvidenceNormalizedView] {
         let physicalBounds = physicalBoundSummary(report)
@@ -448,7 +341,9 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
                 ],
                 summaryCounts: summaryCounts,
                 summaryAttributes: summaryAttributes,
-                sourceArtifactIDs: artifactRefs.filter { $0.kind == "parasitic-ir" }.map(\.artifactID)
+                sourceArtifactIDs: artifactEvidence
+                    .filter { $0.reference.kind.rawValue == "parasitic-ir" }
+                    .map { $0.reference.id.rawValue }
             )
         ]
     }
@@ -576,15 +471,18 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
     private func diagnostics(
         report: PEXExternalExtractorCorpusReport,
         contexts: [EvidenceCaseContext],
-        artifactRefs: [PEXEvidenceArtifactRef]
+        artifactEvidence: [PEXEvidenceArtifact]
     ) -> [PEXEvidenceDiagnostic] {
         var diagnostics: [PEXEvidenceDiagnostic] = []
         let contextsByRawCaseID = Dictionary(contexts.map { ($0.rawCaseID, $0) }, uniquingKeysWith: { first, _ in first })
         for context in contexts {
             let caseResult = context.result
-            let artifactIDs = artifactRefs
-                .filter { $0.artifactID.hasPrefix("\(context.caseKey):") }
-                .map(\.artifactID)
+            let caseArtifactIDs = Set(
+                (context.result.artifacts ?? []).map { $0.reference.id.rawValue }
+            )
+            let artifactIDs = artifactEvidence
+                .map { $0.reference.id.rawValue }
+                .filter(caseArtifactIDs.contains)
             for (index, failure) in caseResult.failures.enumerated() {
                 diagnostics.append(PEXEvidenceDiagnostic(
                     diagnosticID: "external-case:\(context.caseKey):\(failure.code):\(index)",
@@ -894,13 +792,13 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
     }
 
     private func sanitizedSourceField(
-        _ artifact: PEXExternalExtractorCorpusReport.CaseResult.ArtifactRef
+        _ artifact: PEXExternalExtractorCorpusReport.CaseResult.Artifact
     ) -> String {
         let sourceField = artifact.sourceField?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let sourceField, !sourceField.isEmpty {
             return sanitizedIdentifierToken(sourceField)
         }
-        return sanitizedIdentifierToken(artifact.artifactID)
+        return sanitizedIdentifierToken(artifact.reference.id.rawValue)
     }
 
     private func artifactIntegritySuggestedActions() -> [String] {

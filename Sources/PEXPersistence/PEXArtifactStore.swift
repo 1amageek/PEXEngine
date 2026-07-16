@@ -102,7 +102,7 @@ public struct PEXArtifactStore: Sendable {
             throw PEXError.persistenceFailed("Artifact manifest integrity validation failed: \(details)")
         }
 
-        guard let requestRecord = resolver.records(kind: .request, status: .available).first else {
+        guard let requestRecord = resolver.records(kind: .request, availability: .available).first else {
             throw PEXError.persistenceFailed("Run does not contain a captured request artifact")
         }
         let requestURL = try resolver.validatedURL(for: requestRecord)
@@ -119,19 +119,20 @@ public struct PEXArtifactStore: Sendable {
             throw PEXError.persistenceFailed("Failed to decode captured request artifact", underlying: error)
         }
 
-        let inputRecords = captured.inputArtifactIDs.compactMap { manifest.artifact(id: $0) }
+        let inputArtifactIDs = try captured.inputArtifactIDs.map(ArtifactID.init(rawValue:))
+        let inputRecords = inputArtifactIDs.compactMap { manifest.artifact(id: $0) }
         guard let layoutRecord = inputRecords.first(where: {
-                  $0.kind == .layoutInput && $0.status == .available
+                  $0.matches(kind: .layoutInput) && $0.availability == .available
               }),
               let netlistRecord = inputRecords.first(where: {
-                  $0.kind == .netlistInput && $0.status == .available
+                  $0.matches(kind: .netlistInput) && $0.availability == .available
               }) else {
             throw PEXError.persistenceFailed("Captured request is missing layout or source-netlist inputs")
         }
         let layoutURL = try resolver.validatedURL(for: layoutRecord)
         let netlistURL = try resolver.validatedURL(for: netlistRecord)
         let technologyRecord = inputRecords.first(where: {
-            $0.kind == .technologyInput && $0.status == .available
+            $0.matches(kind: .technologyInput) && $0.availability == .available
         })
 
         let technology: TechnologyInput
@@ -195,8 +196,8 @@ public struct PEXArtifactStore: Sendable {
         case .jsonFile(let capturedURL):
             let normalizedCapturedURL = capturedURL.standardizedFileURL
             guard let record = inputRecords.first(where: { record in
-                guard record.kind == .technologyInput, record.status == .available else { return false }
-                let recordURL = workspace.runDirectory.appending(path: record.relativePath.value)
+                guard record.matches(kind: .technologyInput), record.availability == .available else { return false }
+                let recordURL = workspace.runDirectory.appending(path: record.locator.location.value)
                 return recordURL.standardizedFileURL == normalizedCapturedURL
             }) else {
                 throw PEXError.persistenceFailed(
@@ -218,16 +219,16 @@ public struct PEXArtifactStore: Sendable {
         var cornerResults: [PEXCornerResult] = []
 
         for corner in manifest.corners {
-            let rawOutputURLs = try resolver.records(kind: .rawOutput, cornerID: corner.cornerID, status: .available)
+            let rawOutputURLs = try resolver.records(kind: .rawOutput, cornerID: corner.cornerID, availability: .available)
                 .map { try resolver.validatedURL(for: $0) }
             let logURL: URL?
-            if let logRecord = resolver.records(kind: .log, cornerID: corner.cornerID, status: .available).first {
+            if let logRecord = resolver.records(kind: .log, cornerID: corner.cornerID, availability: .available).first {
                 logURL = try resolver.validatedURL(for: logRecord)
             } else {
                 logURL = nil
             }
             let ir: ParasiticIR?
-            if resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, status: .available).isEmpty {
+            if resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, availability: .available).isEmpty {
                 ir = nil
             } else {
                 ir = try resolver.loadIR(cornerID: corner.cornerID)
@@ -308,8 +309,8 @@ public struct PEXArtifactStore: Sendable {
         func capturedPath(_ originalPath: String?) throws -> String? {
             guard let originalPath else { return nil }
             guard let record = inputRecords.first(where: {
-                $0.kind == .processProfileDeckInput
-                    && $0.status == .available
+                $0.matches(kind: .processProfileDeckInput)
+                    && $0.availability == .available
                     && $0.provenance?.sourcePath == originalPath
             }) else {
                 throw PEXError.persistenceFailed(

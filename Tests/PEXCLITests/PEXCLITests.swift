@@ -864,7 +864,7 @@ struct PEXCLITests {
 
         #expect(decoded.packetID == "packet-write-test")
         #expect(decoded.subject.backendID == "openrcx")
-        #expect(decoded.inputs.contains { $0.artifactID == "corpus-manifest" })
+        #expect(decoded.inputs.contains { $0.reference.artifactID == "corpus-manifest" })
         #expect(decoded.artifacts.isEmpty)
         #expect(decoded.metrics.contains { $0.name == "caseCount" && $0.unit == "count" })
         #expect(decoded.confidence.level == .high)

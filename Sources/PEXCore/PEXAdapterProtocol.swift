@@ -13,7 +13,7 @@ public struct PEXGeneratedArtifact: Sendable, Codable, Hashable {
     public let stage: PEXStage
     public let cornerID: PEXCornerID?
     public let url: URL
-    public let status: PEXArtifactStatus
+    public let availability: PEXArtifactAvailability
     public let provenance: PEXArtifactProvenance?
 
     public init(
@@ -21,14 +21,14 @@ public struct PEXGeneratedArtifact: Sendable, Codable, Hashable {
         stage: PEXStage,
         cornerID: PEXCornerID? = nil,
         url: URL,
-        status: PEXArtifactStatus = .available,
+        availability: PEXArtifactAvailability = .available,
         provenance: PEXArtifactProvenance? = nil
     ) {
         self.kind = kind
         self.stage = stage
         self.cornerID = cornerID
         self.url = url
-        self.status = status
+        self.availability = availability
         self.provenance = provenance
     }
 }

@@ -70,7 +70,7 @@ struct MetricRecoveryObjectiveCommandTests {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(makeSummary()).write(to: summaryURL, options: .atomic)
-        try encoder.encode(makeComparison()).write(to: comparisonURL, options: .atomic)
+        try encoder.encode(try makeComparison()).write(to: comparisonURL, options: .atomic)
         try encoder.encode(makeMetricReport()).write(to: metricURL, options: .atomic)
         try Data("GDSII payload".utf8).write(to: layoutURL, options: .atomic)
         try Data(".subckt top in out\n.ends\n".utf8).write(to: netlistURL, options: .atomic)
@@ -99,8 +99,10 @@ struct MetricRecoveryObjectiveCommandTests {
         #expect(problem.summary.hotspotCount >= 2)
         #expect(problem.summary.comparisonViolationCount == 1)
         #expect(problem.summary.metricFailureCount >= 3)
-        #expect(problem.inputRefs.contains { $0.refID == "pex-summary" && $0.sha256?.count == 64 })
-        #expect(problem.inputRefs.contains { $0.refID == "layout-ref" && $0.readable })
+        #expect(problem.inputArtifacts.contains {
+            $0.id.rawValue == "pex-summary" && $0.digest.hexadecimalValue.count == 64
+        })
+        #expect(problem.inputArtifacts.contains { $0.id.rawValue == "layout-ref" })
         #expect(problem.objectives.contains { $0.target == "resolve-parasitic-ir-regression" })
         #expect(problem.objectives.contains { $0.target == "post-layout-metric-gate-passed" })
         #expect(problem.objectives.contains { $0.target == "simulation-metric-within-tolerance" })
@@ -130,7 +132,7 @@ struct MetricRecoveryObjectiveCommandTests {
         )
 
         let action = try #require(problem.candidateActions.first)
-        #expect(!problem.inputRefs.contains { $0.refID == "post-layout-metric-report" })
+        #expect(!problem.inputArtifacts.contains { $0.id.rawValue == "post-layout-metric-report" })
         #expect(!action.requiredInputRefs.contains("post-layout-metric-report"))
         #expect(!problem.verificationGates.contains("simulation-metric-gate"))
     }
@@ -229,7 +231,7 @@ struct MetricRecoveryObjectiveCommandTests {
         )
     }
 
-    private func makeComparison() -> PEXIRComparisonReport {
+    private func makeComparison() throws -> PEXIRComparisonReport {
         let baseline = ParasiticNet(
             name: NetName("OUT"),
             nodes: [],
@@ -262,8 +264,14 @@ struct MetricRecoveryObjectiveCommandTests {
         )
         return PEXIRComparisonReport(
             status: "failed",
-            baseline: PEXIRComparisonInput(path: "/tmp/base.json", sha256: String(repeating: "a", count: 64), byteCount: 32, ir: baselineIR),
-            candidate: PEXIRComparisonInput(path: "/tmp/candidate.json", sha256: String(repeating: "b", count: 64), byteCount: 32, ir: candidateIR),
+            baseline: PEXIRComparisonInput(
+                artifact: try comparisonArtifact(path: "/tmp/base.json", digest: String(repeating: "a", count: 64)),
+                ir: baselineIR
+            ),
+            candidate: PEXIRComparisonInput(
+                artifact: try comparisonArtifact(path: "/tmp/candidate.json", digest: String(repeating: "b", count: 64)),
+                ir: candidateIR
+            ),
             thresholds: PEXIRComparisonThresholds(maxCapDeltaF: 1e-13),
             summary: PEXIRComparisonSummary(
                 matchedNetCount: 1,
@@ -301,6 +309,19 @@ struct MetricRecoveryObjectiveCommandTests {
                     message: "OUT capacitance regression exceeds limit."
                 ),
             ]
+        )
+    }
+
+    private func comparisonArtifact(path: String, digest: String) throws -> ArtifactReference {
+        ArtifactReference(
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(fileURL: URL(filePath: path)),
+                role: .input,
+                kind: .parasitics,
+                format: .json
+            ),
+            digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: digest),
+            byteCount: 32
         )
     }
 

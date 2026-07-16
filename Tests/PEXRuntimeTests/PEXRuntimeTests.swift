@@ -306,10 +306,10 @@ struct PEXRuntimeTests {
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
-        #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.relativePath.value == "raw/tt/tt.spef")
-        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.relativePath.value == "ir/tt.json")
-        #expect(manifest.artifacts(kind: .spefRoundTrip, cornerID: "tt").first?.relativePath.value == "spef/tt.spef")
-        #expect(manifest.artifacts(kind: .spiceBackannotation, cornerID: "tt").first?.relativePath.value == "spice/tt.cir")
+        #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.locator.location.value == "raw/tt/tt.spef")
+        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.locator.location.value == "ir/tt.json")
+        #expect(manifest.artifacts(kind: .spefRoundTrip, cornerID: "tt").first?.locator.location.value == "spef/tt.spef")
+        #expect(manifest.artifacts(kind: .spiceBackannotation, cornerID: "tt").first?.locator.location.value == "spice/tt.cir")
         #expect(manifestCorner.artifactIDs.contains("ir-tt"))
         #expect(manifestCorner.artifactIDs.contains("spef-roundtrip-tt"))
         #expect(manifestCorner.artifactIDs.contains("spice-backannotation-tt"))
@@ -504,8 +504,8 @@ struct PEXRuntimeTests {
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let deckArtifacts = manifest.artifacts(kind: .processProfileDeckInput)
         #expect(deckArtifacts.count == 2)
-        #expect(deckArtifacts.allSatisfy { $0.status == .available && $0.sha256 != nil && $0.byteCount != nil })
-        #expect(deckArtifacts.allSatisfy { $0.relativePath.value.hasPrefix("inputs/process-profile-decks/") })
+        #expect(deckArtifacts.allSatisfy { $0.availability == .available && $0.reference?.sha256 != nil && $0.reference?.byteCount != nil })
+        #expect(deckArtifacts.allSatisfy { $0.locator.location.value.hasPrefix("inputs/process-profile-decks/") })
     }
 
     @Test func loadRunDoesNotRequireIRWhenIRJSONEmissionIsDisabled() async throws {
@@ -542,7 +542,7 @@ struct PEXRuntimeTests {
         let store = PEXArtifactStore(workspace: workspace)
         let manifest = try store.loadManifest()
         _ = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
-        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.status == .omitted)
+        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.availability == .omitted)
 
         let loaded = try store.loadResult(manifest: manifest)
         #expect(loaded.status == .success)
@@ -630,7 +630,7 @@ struct PEXRuntimeTests {
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.stage == .parsing)
         #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
-        #expect(irRecord.status == .missing)
+        #expect(irRecord.availability == .missing)
         #expect(report.status == .incomplete)
         #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
     }
@@ -662,7 +662,7 @@ struct PEXRuntimeTests {
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.stage == .persistence)
         #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
-        #expect(irRecord.status == .missing)
+        #expect(irRecord.availability == .missing)
         #expect(report.status == .incomplete)
         #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
         #expect(!report.issues.contains { $0.kind == .failedCornerWithoutEvidence })
@@ -1082,27 +1082,27 @@ struct PEXRuntimeTests {
 
     private struct CanonicalArtifactRecord: Hashable {
         let id: String
-        let kind: PEXArtifactKind
+        let kind: String
         let stage: PEXStage
         let cornerID: PEXCornerID?
         let relativePath: String
         let sha256: String?
         let byteCount: Int?
-        let status: PEXArtifactStatus
+        let availability: PEXArtifactAvailability
     }
 
     private func canonicalArtifactGraph(_ manifest: PEXArtifactManifest) -> [CanonicalArtifactRecord] {
         manifest.artifacts.map {
-            let isRunSpecificReport = $0.kind == .report
+            let isRunSpecificReport = $0.matches(kind: .report)
             return CanonicalArtifactRecord(
-                id: $0.id,
-                kind: $0.kind,
+                id: $0.id.rawValue,
+                kind: $0.locator.kind.rawValue,
                 stage: $0.stage,
                 cornerID: $0.cornerID,
-                relativePath: $0.relativePath.value,
-                sha256: isRunSpecificReport ? nil : $0.sha256,
-                byteCount: isRunSpecificReport ? nil : $0.byteCount,
-                status: $0.status
+                relativePath: $0.locator.location.value,
+                sha256: isRunSpecificReport ? nil : $0.reference?.sha256,
+                byteCount: isRunSpecificReport ? nil : $0.reference?.byteCount,
+                availability: $0.availability
             )
         }.sorted { $0.id < $1.id }
     }

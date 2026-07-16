@@ -13,7 +13,7 @@ public struct PEXIRComparisonReport: Codable, Sendable, Equatable {
     public let violations: [PEXIRComparisonViolation]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         status: String,
         comparisonMode: String? = nil,
         baseline: PEXIRComparisonInput,
@@ -36,9 +36,7 @@ public struct PEXIRComparisonReport: Codable, Sendable, Equatable {
 }
 
 public struct PEXIRComparisonInput: Codable, Sendable, Equatable {
-    public let path: String
-    public let sha256: String
-    public let byteCount: Int
+    public let artifact: ArtifactReference
     public let cornerID: String
     public let netCount: Int
     public let elementCount: Int
@@ -47,10 +45,8 @@ public struct PEXIRComparisonInput: Codable, Sendable, Equatable {
     public let totalCapF: Double
     public let totalResistanceOhm: Double
 
-    public init(path: String, sha256: String, byteCount: Int, ir: ParasiticIR) {
-        self.path = path
-        self.sha256 = sha256
-        self.byteCount = byteCount
+    public init(artifact: ArtifactReference, ir: ParasiticIR) {
+        self.artifact = artifact
         self.cornerID = ir.cornerID.value
         self.netCount = ir.nets.count
         self.elementCount = ir.elements.count

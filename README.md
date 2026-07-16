@@ -466,9 +466,10 @@ artifacts, and a comparable multi-corner summary. This proves process-specific
 routing, not PVT equivalence: PVT signoff still requires foundry-qualified corner
 decks and correlation data. Magic still declares `supportsCornerSweep=false` for
 native sweep, so all physical variation is driven by explicit per-corner profiles.
-The report preserves input/output
-`artifactRefs` with SHA-256 and byte counts so downstream planning can verify
-layout, netlist, technology, manifest, and normalized `ParasiticIR` provenance.
+The report preserves input/output `artifacts` as domain annotations around
+CircuiteFoundation `ArtifactReference` values. Locator, role, kind, format,
+SHA-256 digest, byte count, and artifact identity therefore have one canonical
+representation across PEX evidence, while the report adds only the source field.
 
 ### Qualification boundary
 
@@ -487,8 +488,9 @@ Agent-readable planning artifact without depending on a UI or an external flow
 wrapper. It accepts `pex-summary`, optional `pex-ir-comparison-report`, optional
 post-layout metric report JSON, and optional layout / netlist / technology refs.
 The output is `pex-metric-recovery-planning-problem`, a structured artifact with
-input hashes, objectives, parasitic hotspots, candidate action metadata, and
-verification gates.
+Foundation `ArtifactReference` inputs, objectives, parasitic hotspots, candidate
+action metadata, and verification gates. Unreadable optional inputs are emitted
+as diagnostics instead of incomplete artifact references.
 
 ```bash
 pexengine metric-recovery-objective \
@@ -514,7 +516,7 @@ Each extraction run produces immutable artifacts:
 
 ```
 <run-id>/
-  manifest.json          # Run metadata, request hash, timestamps
+  manifest.json          # Run metadata and Foundation artifact payloads
   request.json           # Original request
   inputs/process-profile-decks/ # Immutable copies of declared RC decks
   raw/<corner-id>/       # Backend-native files (SPEF/DSPF/logs)
@@ -525,6 +527,10 @@ Each extraction run produces immutable artifacts:
 ```
 
 Loading a run reconstructs corner results from the manifest rather than assuming default paths. Successful corners retain their IR, raw output files, log file paths, and extractor multi-corner comparison summaries; failed corners retain raw and log evidence even when no IR artifact exists.
+
+Available manifest entries carry an `ArtifactReference`. Missing and omitted
+entries carry an `ArtifactID` plus `ArtifactLocator` declaration, so unavailable
+files never masquerade as integrity-verifiable artifacts.
 
 ## License
 

@@ -71,8 +71,8 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                     groundCapErrorF: 2.8e-15,
                     netCount: 1,
                     elementCount: 1,
-                    artifactRefs: [
-                        PEXExternalExtractorCorpusReport.CaseResult.ArtifactRef(
+                    artifacts: [
+                        try makeExternalArtifact(
                             artifactID: "plate:irPath",
                             path: "runs/plate/ir/tt.json",
                             role: "normalized",
@@ -82,7 +82,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                             byteCount: 2048,
                             sourceField: "irPath"
                         ),
-                        PEXExternalExtractorCorpusReport.CaseResult.ArtifactRef(
+                        try makeExternalArtifact(
                             artifactID: "plate:layoutPath",
                             path: "pex_plate.gds",
                             role: "input",
@@ -135,12 +135,12 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(packet.subject.backendID == "magic")
         #expect(packet.coverageTags == ["pex.ground-cap", "pex.magic", "pex.physical-value"])
         #expect(packet.intent.requestedObservations.contains("failure-diagnostics"))
-        let layoutArtifact = try #require(packet.inputs.first { $0.artifactID == "plate:layoutPath" })
-        #expect(layoutArtifact.sha256 == "816534932c2e27e1df5a4bbfbc3bc00871df209834ca0f3f7162594b35c6ce7c")
-        #expect(layoutArtifact.byteCount == 512)
-        let irArtifact = try #require(packet.artifacts.first { $0.artifactID == "plate:irPath" })
-        #expect(irArtifact.sha256 == "7e0c1f61a8c7ed7f2f1a8e9f2b6631fd61a25d70564be14f6a3ac047e8feab44")
-        #expect(irArtifact.byteCount == 2048)
+        let layoutArtifact = try #require(packet.inputs.first { $0.reference.artifactID == "plate:layoutPath" })
+        #expect(layoutArtifact.reference.sha256 == "816534932c2e27e1df5a4bbfbc3bc00871df209834ca0f3f7162594b35c6ce7c")
+        #expect(layoutArtifact.reference.byteCount == 512)
+        let irArtifact = try #require(packet.artifacts.first { $0.reference.artifactID == "plate:irPath" })
+        #expect(irArtifact.reference.sha256 == "7e0c1f61a8c7ed7f2f1a8e9f2b6631fd61a25d70564be14f6a3ac047e8feab44")
+        #expect(irArtifact.reference.byteCount == 2048)
         #expect(packet.readiness == [
             PEXEvidenceReadiness(
                 component: "external-extractor-execution",
@@ -889,13 +889,13 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
 
         let packet = PEXExternalExtractorEvidencePacketBuilder().build(report: report)
 
-        let input = try #require(packet.inputs.first { $0.artifactID == "sky130-plate-magic-pex:layoutPath" })
-        #expect(input.sha256 == "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062")
-        #expect(input.byteCount == 182)
-        let ir = try #require(packet.artifacts.first { $0.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
-        #expect(ir.sha256 == "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c")
-        #expect(ir.byteCount == 17645)
-        let rcIR = try #require(packet.artifacts.first { $0.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
+        let input = try #require(packet.inputs.first { $0.reference.artifactID == "sky130-plate-magic-pex:layoutPath" })
+        #expect(input.reference.sha256 == "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062")
+        #expect(input.reference.byteCount == 182)
+        let ir = try #require(packet.artifacts.first { $0.reference.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
+        #expect(ir.reference.sha256 == "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c")
+        #expect(ir.reference.byteCount == 17645)
+        let rcIR = try #require(packet.artifacts.first { $0.reference.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
         #expect(rcIR.cornerID == "ss")
         #expect(packet.coverageTags.contains("pex.multi-corner"))
         #expect(packet.coverageTags.contains("pex.rc-network"))
@@ -926,14 +926,16 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 coverageTags: ["pex.magic", "pex.physical-value"],
                 totalGroundCapF: 4.2e-15,
                 totalResistanceOhm: 12,
-                artifactRefs: [
-                    PEXExternalExtractorCorpusReport.CaseResult.ArtifactRef(
-                        artifactID: "plate:raw-spef",
-                        path: "https://example.invalid/plate.spef",
-                        role: "run-artifact",
-                        kind: "raw-spef",
-                        format: "SPEF",
-                        sourceField: "rawSpefPath"
+                artifacts: [
+                    try makeExternalArtifact(
+                        artifactID: "plate:manifestPath",
+                        path: outsideManifest.path(percentEncoded: false),
+                        role: "output",
+                        kind: "pex-artifact-manifest",
+                        format: "JSON",
+                        sha256: String(repeating: "a", count: 64),
+                        byteCount: 1,
+                        sourceField: "manifestPath"
                     ),
                 ]
             ),
@@ -945,15 +947,9 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
             allowedArtifactRootPath: root.path(percentEncoded: false)
         )
 
-        #expect(packet.artifacts.contains { $0.artifactID == "plate:irPath" })
-        #expect(!packet.artifacts.contains { $0.artifactID == "plate:manifestPath" })
-        #expect(!packet.artifacts.contains { $0.artifactID == "plate:rawSpefPath" })
+        #expect(!packet.artifacts.contains { $0.reference.artifactID == "plate:manifestPath" })
         #expect(packet.diagnostics.contains {
             $0.diagnosticID == "external-case:plate:manifestPath-artifact-integrity"
-                && $0.category == "artifact_integrity"
-        })
-        #expect(packet.diagnostics.contains {
-            $0.diagnosticID == "external-case:plate:rawSpefPath-artifact-integrity"
                 && $0.category == "artifact_integrity"
         })
         #expect(packet.readiness.contains {
@@ -1011,9 +1007,9 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let diagnosticIDs = packet.diagnostics.map(\.diagnosticID)
 
         #expect(caseMetricIDs == ["case-one", "case-one-2", "case-one-3"])
-        #expect(packet.artifacts.contains { $0.artifactID == "case-one:irPath" })
-        #expect(packet.artifacts.contains { $0.artifactID == "case-one-2:irPath" })
-        #expect(packet.artifacts.contains { $0.artifactID == "case-one-3:irPath" })
+        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one:irPath" })
+        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one-2:irPath" })
+        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one-3:irPath" })
         #expect(Set(diagnosticIDs).count == diagnosticIDs.count)
         #expect(packet.diagnostics.contains {
             $0.diagnosticID == "external-case:case-one:case-id-unsafe"
@@ -1128,4 +1124,33 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
             return true
         }
     }
+}
+
+private func makeExternalArtifact(
+    artifactID: String,
+    path: String,
+    role: String,
+    kind: String,
+    format: String,
+    sha256: String,
+    byteCount: Int,
+    sourceField: String? = nil
+) throws -> PEXExternalExtractorCorpusReport.CaseResult.Artifact {
+    let location = path.hasPrefix("/")
+        ? try ArtifactLocation(fileURL: URL(filePath: path))
+        : try ArtifactLocation(workspaceRelativePath: path)
+    return PEXExternalExtractorCorpusReport.CaseResult.Artifact(
+        reference: ArtifactReference(
+            id: try ArtifactID(rawValue: artifactID),
+            locator: ArtifactLocator(
+                location: location,
+                role: try ArtifactRole(validatingRawValue: role),
+                kind: try ArtifactKind(rawValue: kind),
+                format: try ArtifactFormat(rawValue: format.lowercased())
+            ),
+            digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: sha256),
+            byteCount: UInt64(byteCount)
+        ),
+        sourceField: sourceField
+    )
 }

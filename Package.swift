@@ -44,6 +44,7 @@ let package = Package(
         ]),
         .target(name: "PEXCLICore", dependencies: [
             "PEXEngine",
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
         ]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 

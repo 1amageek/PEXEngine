@@ -1,11 +1,12 @@
 import Foundation
+import CircuiteFoundation
 
 public struct PEXMetricRecoveryPlanningProblem: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let kind: String
     public let problemID: String
     public let status: String
-    public let inputRefs: [PEXMetricRecoveryInputReference]
+    public let inputArtifacts: [ArtifactReference]
     public let summary: PEXMetricRecoverySummary
     public let objectives: [PEXMetricRecoveryObjective]
     public let hotspots: [PEXMetricRecoveryHotspot]
@@ -14,11 +15,11 @@ public struct PEXMetricRecoveryPlanningProblem: Codable, Sendable, Equatable {
     public let diagnostics: [PEXMetricRecoveryDiagnostic]
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = 2,
         kind: String = "pex-metric-recovery-planning-problem",
         problemID: String,
         status: String,
-        inputRefs: [PEXMetricRecoveryInputReference],
+        inputArtifacts: [ArtifactReference],
         summary: PEXMetricRecoverySummary,
         objectives: [PEXMetricRecoveryObjective],
         hotspots: [PEXMetricRecoveryHotspot],
@@ -30,38 +31,13 @@ public struct PEXMetricRecoveryPlanningProblem: Codable, Sendable, Equatable {
         self.kind = kind
         self.problemID = problemID
         self.status = status
-        self.inputRefs = inputRefs
+        self.inputArtifacts = inputArtifacts
         self.summary = summary
         self.objectives = objectives
         self.hotspots = hotspots
         self.candidateActions = candidateActions
         self.verificationGates = verificationGates
         self.diagnostics = diagnostics
-    }
-}
-
-public struct PEXMetricRecoveryInputReference: Codable, Sendable, Equatable {
-    public let refID: String
-    public let kind: String
-    public let path: String
-    public let sha256: String?
-    public let byteCount: Int?
-    public let readable: Bool
-
-    public init(
-        refID: String,
-        kind: String,
-        path: String,
-        sha256: String? = nil,
-        byteCount: Int? = nil,
-        readable: Bool
-    ) {
-        self.refID = refID
-        self.kind = kind
-        self.path = path
-        self.sha256 = sha256
-        self.byteCount = byteCount
-        self.readable = readable
     }
 }
 

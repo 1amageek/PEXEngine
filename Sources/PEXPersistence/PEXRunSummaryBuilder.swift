@@ -68,10 +68,10 @@ public struct PEXRunSummaryBuilder: Sendable {
         resolver: PEXArtifactResolver,
         topNets: Int
     ) -> PEXCornerParasiticSummary {
-        let rawArtifactIDs = resolver.records(kind: .rawOutput, cornerID: entry.cornerID, status: .available).map(\.id)
-        let irArtifactID = resolver.records(kind: .parasiticIR, cornerID: entry.cornerID, status: .available).first?.id
-        let spefRoundTripArtifactID = resolver.records(kind: .spefRoundTrip, cornerID: entry.cornerID, status: .available).first?.id
-        let spiceBackannotationArtifactID = resolver.records(kind: .spiceBackannotation, cornerID: entry.cornerID, status: .available).first?.id
+        let rawArtifactIDs = resolver.records(kind: .rawOutput, cornerID: entry.cornerID, availability: .available).map { $0.id.rawValue }
+        let irArtifactID = resolver.records(kind: .parasiticIR, cornerID: entry.cornerID, availability: .available).first?.id.rawValue
+        let spefRoundTripArtifactID = resolver.records(kind: .spefRoundTrip, cornerID: entry.cornerID, availability: .available).first?.id.rawValue
+        let spiceBackannotationArtifactID = resolver.records(kind: .spiceBackannotation, cornerID: entry.cornerID, availability: .available).first?.id.rawValue
         guard irArtifactID != nil else {
             return PEXCornerParasiticSummary(
                 cornerID: entry.cornerID.value,

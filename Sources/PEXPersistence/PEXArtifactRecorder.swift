@@ -146,7 +146,7 @@ public struct PEXArtifactRecorder: Sendable {
             extractorRunRequest: PEXExtractorRunRequest(runRequest: capturedRequest),
             backendSelection: request.backendSelection,
             options: request.options,
-            inputArtifactIDs: inputArtifacts.map(\.id)
+            inputArtifactIDs: inputArtifacts.map { $0.id.rawValue }
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -175,13 +175,15 @@ public struct PEXArtifactRecorder: Sendable {
         case .inline(let technology):
             return .inline(technology)
         case .jsonFile:
-            guard let record = inputArtifacts.first(where: { $0.id == artifactID && $0.status == .available }) else {
+            guard let record = inputArtifacts.first(where: {
+                $0.id.rawValue == artifactID && $0.availability == .available
+            }) else {
                 throw PEXError.persistenceFailed(
                     "Captured technology artifact '\(artifactID)' is missing"
                 )
             }
             let path = workspace.runDirectory
-                .appending(path: record.relativePath.value)
+                .appending(path: record.locator.location.value)
                 .path(percentEncoded: false)
             return .jsonFile(URL(filePath: path))
         }
@@ -201,7 +203,7 @@ public struct PEXArtifactRecorder: Sendable {
             stage: stage,
             cornerID: cornerID,
             url: expectedURL,
-            status: .missing,
+            availability: .missing,
             provenance: PEXArtifactProvenance(note: note)
         )
     }
@@ -211,7 +213,7 @@ public struct PEXArtifactRecorder: Sendable {
         id: String? = nil
     ) throws -> PEXArtifactRecord {
         let destination = destinationURL(for: generated)
-        if generated.status == .available {
+        if generated.availability == .available {
             let capturedURL: URL
             if generated.url.standardizedFileURL != destination.standardizedFileURL {
                 capturedURL = try copy(generated.url, to: destination)
@@ -233,7 +235,7 @@ public struct PEXArtifactRecorder: Sendable {
             stage: generated.stage,
             cornerID: generated.cornerID,
             url: destination,
-            status: generated.status,
+            availability: generated.availability,
             provenance: generated.provenance
         )
     }
@@ -270,7 +272,7 @@ public struct PEXArtifactRecorder: Sendable {
             stage: stage,
             cornerID: cornerID,
             url: expectedURL,
-            status: .omitted,
+            availability: .omitted,
             provenance: PEXArtifactProvenance(note: note)
         )
     }
@@ -289,15 +291,20 @@ public struct PEXArtifactRecorder: Sendable {
         } catch {
             throw PEXError.persistenceFailed("Failed to read artifact \(url.path(percentEncoded: false))", underlying: error)
         }
+        let locator = try artifactLocator(kind: kind, url: url)
+        let reference = ArtifactReference(
+            id: try ArtifactID(rawValue: id),
+            locator: locator,
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: Self.sha256(data: data)
+            ),
+            byteCount: UInt64(data.count)
+        )
         return PEXArtifactRecord(
-            id: id,
-            kind: kind,
+            payload: .available(reference),
             stage: stage,
             cornerID: cornerID,
-            relativePath: try relativePath(for: url),
-            sha256: Self.sha256(data: data),
-            byteCount: data.count,
-            status: .available,
             provenance: provenance
         )
     }
@@ -308,16 +315,26 @@ public struct PEXArtifactRecorder: Sendable {
         stage: PEXStage,
         cornerID: PEXCornerID?,
         url: URL,
-        status: PEXArtifactStatus,
+        availability: PEXArtifactAvailability,
         provenance: PEXArtifactProvenance?
     ) throws -> PEXArtifactRecord {
-        PEXArtifactRecord(
-            id: id,
-            kind: kind,
+        let declaration = PEXArtifactDeclaration(
+            id: try ArtifactID(rawValue: id),
+            locator: try artifactLocator(kind: kind, url: url)
+        )
+        let payload: PEXArtifactPayload
+        switch availability {
+        case .available:
+            throw PEXError.invalidInput("Unavailable artifact payload cannot be available")
+        case .missing:
+            payload = .missing(declaration)
+        case .omitted:
+            payload = .omitted(declaration)
+        }
+        return PEXArtifactRecord(
+            payload: payload,
             stage: stage,
             cornerID: cornerID,
-            relativePath: try relativePath(for: url),
-            status: status,
             provenance: provenance
         )
     }
@@ -445,7 +462,47 @@ public struct PEXArtifactRecorder: Sendable {
         }
     }
 
-    private func relativePath(for url: URL) throws -> PEXArtifactPath {
+    private func artifactLocator(kind: PEXArtifactKind, url: URL) throws -> ArtifactLocator {
+        ArtifactLocator(
+            location: try relativeLocation(for: url),
+            role: artifactRole(for: kind),
+            kind: try ArtifactKind(rawValue: kind.foundationRawValue),
+            format: try ArtifactFormat(rawValue: artifactFormatValue(kind: kind, url: url))
+        )
+    }
+
+    private func artifactRole(for kind: PEXArtifactKind) -> ArtifactRole {
+        switch kind {
+        case .layoutInput, .netlistInput, .technologyInput, .processProfileDeckInput, .request:
+            .input
+        case .sourceConnectivityReport, .rawOutput, .log, .parasiticIR,
+             .spefRoundTrip, .spiceBackannotation, .report:
+            .output
+        }
+    }
+
+    private func artifactFormatValue(kind: PEXArtifactKind, url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "gds", "gdsii": ArtifactFormat.gdsii.rawValue
+        case "oas", "oasis": ArtifactFormat.oasis.rawValue
+        case "lef": ArtifactFormat.lef.rawValue
+        case "def": ArtifactFormat.def.rawValue
+        case "spef": ArtifactFormat.spef.rawValue
+        case "dspf": ArtifactFormat.dspf.rawValue
+        case "sp", "cir", "spice": ArtifactFormat.spice.rawValue
+        case "log", "txt": ArtifactFormat.text.rawValue
+        default:
+            switch kind {
+            case .spefRoundTrip: ArtifactFormat.spef.rawValue
+            case .spiceBackannotation, .netlistInput: ArtifactFormat.spice.rawValue
+            case .layoutInput: ArtifactFormat.gdsii.rawValue
+            case .log: ArtifactFormat.text.rawValue
+            default: ArtifactFormat.json.rawValue
+            }
+        }
+    }
+
+    private func relativeLocation(for url: URL) throws -> ArtifactLocation {
         let rawRunPath = workspace.runDirectory.path(percentEncoded: false)
         let rawArtifactPath = url.path(percentEncoded: false)
         if FileManager.default.fileExists(atPath: rawArtifactPath) {
@@ -453,26 +510,26 @@ public struct PEXArtifactRecorder: Sendable {
                !pathContainsSymlinkComponent(rawArtifactPath: rawArtifactPath, rawRunPath: rawRunPath)
             {
                 let relative = rawArtifactPath == rawRunPath ? "." : String(rawArtifactPath.dropFirst(rawRunPath.count + 1))
-                return try PEXArtifactPath(relative)
+                return try ArtifactLocation(workspaceRelativePath: relative)
             }
             return try resolvedRelativePath(for: url, rawArtifactPath: rawArtifactPath)
         }
         if isRawPathInsideRunDirectory(rawArtifactPath, rawRunPath: rawRunPath) {
             let relative = rawArtifactPath == rawRunPath ? "." : String(rawArtifactPath.dropFirst(rawRunPath.count + 1))
-            return try PEXArtifactPath(relative)
+            return try ArtifactLocation(workspaceRelativePath: relative)
         }
 
         return try resolvedRelativePath(for: url, rawArtifactPath: rawArtifactPath)
     }
 
-    private func resolvedRelativePath(for url: URL, rawArtifactPath: String) throws -> PEXArtifactPath {
+    private func resolvedRelativePath(for url: URL, rawArtifactPath: String) throws -> ArtifactLocation {
         let runPath = normalizedPath(workspace.runDirectory)
         let artifactPath = normalizedPath(url)
         guard artifactPath == runPath || artifactPath.hasPrefix(runPath + "/") else {
             throw PEXError.persistenceFailed("Artifact is outside the run directory: \(rawArtifactPath)")
         }
         let relative = artifactPath == runPath ? "." : String(artifactPath.dropFirst(runPath.count + 1))
-        return try PEXArtifactPath(relative)
+        return try ArtifactLocation(workspaceRelativePath: relative)
     }
 
     private func isInsideRunDirectory(_ url: URL) -> Bool {

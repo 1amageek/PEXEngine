@@ -101,38 +101,46 @@ struct PEXCoreModelTests {
     }
 
     @Test func artifactRecordUsesRunRelativePathAndHashMetadata() throws {
+        let reference = ArtifactReference(
+            id: try ArtifactID(rawValue: "raw-tt"),
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef"),
+                role: .output,
+                kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
+                format: .spef
+            ),
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: String(repeating: "a", count: 64)
+            ),
+            byteCount: 5
+        )
         let record = PEXArtifactRecord(
-            id: "raw-tt",
-            kind: .rawOutput,
+            payload: .available(reference),
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try PEXArtifactPath("raw/tt/tt.spef"),
-            sha256: String(repeating: "a", count: 64),
-            byteCount: 5,
-            status: .available
+            provenance: nil
         )
-        #expect(record.relativePath.value == "raw/tt/tt.spef")
-        #expect(record.status == .available)
-        #expect(record.sha256 != nil)
-        #expect(record.byteCount == 5)
+        #expect(record.locator.location.value == "raw/tt/tt.spef")
+        #expect(record.availability == .available)
+        #expect(record.reference?.digest.hexadecimalValue == String(repeating: "a", count: 64))
+        #expect(record.reference?.byteCount == 5)
     }
 
     @Test func artifactPathRejectsAbsoluteOrEscapingPaths() {
         do {
-            _ = try PEXArtifactPath("/tmp/raw.spef")
+            _ = try ArtifactLocation(workspaceRelativePath: "/tmp/raw.spef")
             #expect(Bool(false), "Should reject absolute paths")
-        } catch let error as PEXError {
-            #expect(error.kind == .invalidInput)
-            #expect(error.message.contains("relative"))
+        } catch let error as ArtifactLocationError {
+            #expect(error == .invalidWorkspaceRelativePath("/tmp/raw.spef"))
         } catch {
             Issue.record("Unexpected artifact path error: \(error)")
         }
         do {
-            _ = try PEXArtifactPath("../raw.spef")
+            _ = try ArtifactLocation(workspaceRelativePath: "../raw.spef")
             #expect(Bool(false), "Should reject escaping paths")
-        } catch let error as PEXError {
-            #expect(error.kind == .invalidInput)
-            #expect(error.message.contains("escape"))
+        } catch let error as ArtifactLocationError {
+            #expect(error == .invalidWorkspaceRelativePath("../raw.spef"))
         } catch {
             Issue.record("Unexpected artifact path error: \(error)")
         }

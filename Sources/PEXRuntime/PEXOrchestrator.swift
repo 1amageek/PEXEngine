@@ -160,7 +160,7 @@ public actor PEXOrchestrator {
             readiness: extractorReadiness,
             status: status,
             cornerOutcomes: cornerOutcomes,
-            artifactIDs: allArtifacts.map(\.id)
+            artifactIDs: allArtifacts.map { $0.id.rawValue }
         )
         let manifest = PEXArtifactManifest(
             runID: runID,
@@ -173,7 +173,7 @@ public actor PEXOrchestrator {
                 PEXArtifactCorner(
                     cornerID: outcome.result.cornerID,
                     status: outcome.result.status,
-                    artifactIDs: outcome.artifacts.map(\.id),
+                    artifactIDs: outcome.artifacts.map { $0.id.rawValue },
                     failure: outcome.failure
                 )
             },
@@ -291,20 +291,20 @@ public actor PEXOrchestrator {
     ) -> PEXExtractorRunResult {
         let cornerSummaries = cornerOutcomes.map { outcome in
             let rawArtifactIDs = outcome.artifacts
-                .filter { $0.kind == .rawOutput && $0.status == .available }
-                .map(\.id)
+                .filter { $0.matches(kind: .rawOutput) && $0.availability == .available }
+                .map { $0.id.rawValue }
             let irArtifactID = outcome.artifacts.first {
-                $0.kind == .parasiticIR && $0.status == .available
-            }?.id
+                $0.matches(kind: .parasiticIR) && $0.availability == .available
+            }?.id.rawValue
             let spefRoundTripArtifactID = outcome.artifacts.first {
-                $0.kind == .spefRoundTrip && $0.status == .available
-            }?.id
+                $0.matches(kind: .spefRoundTrip) && $0.availability == .available
+            }?.id.rawValue
             let spiceBackannotationArtifactID = outcome.artifacts.first {
-                $0.kind == .spiceBackannotation && $0.status == .available
-            }?.id
+                $0.matches(kind: .spiceBackannotation) && $0.availability == .available
+            }?.id.rawValue
             let connectivityArtifactID = outcome.artifacts.first {
-                $0.kind == .sourceConnectivityReport && $0.status == .available
-            }?.id
+                $0.matches(kind: .sourceConnectivityReport) && $0.availability == .available
+            }?.id.rawValue
             let totals = parasiticTotals(outcome.result.ir)
             return PEXExtractorRunResult.CornerSummary(
                 cornerID: outcome.result.cornerID,
@@ -441,14 +441,14 @@ public actor PEXOrchestrator {
                     path: entry.path,
                     identifier: entry.identifier
                 )
-                if !capturedDeckIDs.insert(deckArtifact.id).inserted {
+                if !capturedDeckIDs.insert(deckArtifact.id.rawValue).inserted {
                     let collisionSeed = Data("\(entry.identifier)\n\(entry.path)".utf8)
                     let suffix = String(PEXRequestHash.compute(from: collisionSeed).value.prefix(10))
                     deckArtifact = try recorder.captureProcessProfileDeck(
                         path: entry.path,
                         identifier: "\(entry.identifier)-\(suffix)"
                     )
-                    guard capturedDeckIDs.insert(deckArtifact.id).inserted else {
+                    guard capturedDeckIDs.insert(deckArtifact.id.rawValue).inserted else {
                         throw PEXError.internalInvariantViolation(
                             "Process profile deck artifact identifiers are not unique"
                         )
@@ -683,7 +683,7 @@ public actor PEXOrchestrator {
         for generated in execution.generatedArtifacts {
             artifacts.append(try recorder.recordGeneratedArtifact(generated))
         }
-        if artifacts.filter({ $0.kind == .rawOutput && $0.cornerID == cornerID }).isEmpty {
+        if artifacts.filter({ $0.matches(kind: .rawOutput) && $0.cornerID == cornerID }).isEmpty {
             for url in rawOutput.fileURLs {
                 artifacts.append(try recorder.recordExistingArtifact(
                     url: url,
@@ -694,7 +694,7 @@ public actor PEXOrchestrator {
             }
         }
         if let logURL = rawOutput.logURL,
-           artifacts.filter({ $0.kind == .log && $0.cornerID == cornerID }).isEmpty {
+           artifacts.filter({ $0.matches(kind: .log) && $0.cornerID == cornerID }).isEmpty {
             artifacts.append(try recorder.recordExistingArtifact(
                 url: logURL,
                 kind: .log,
@@ -964,8 +964,8 @@ public actor PEXOrchestrator {
         context: PEXExecutionContext
     ) -> [URL] {
         artifacts
-            .filter { $0.kind == kind && $0.status == .available }
-            .map { context.workingDirectory.appending(path: $0.relativePath.value) }
+            .filter { $0.matches(kind: kind) && $0.availability == .available }
+            .map { context.workingDirectory.appending(path: $0.locator.location.value) }
     }
 
     private func failureStage(for error: any Error) -> PEXStage {

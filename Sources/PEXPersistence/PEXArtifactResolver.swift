@@ -68,33 +68,33 @@ public struct PEXArtifactResolver: Sendable {
     public func records(
         kind: PEXArtifactKind,
         cornerID: PEXCornerID? = nil,
-        status: PEXArtifactStatus? = nil
+        availability: PEXArtifactAvailability? = nil
     ) -> [PEXArtifactRecord] {
         manifest.artifacts.filter { record in
-            record.kind == kind
+            record.matches(kind: kind)
                 && (cornerID == nil || record.cornerID == cornerID)
-                && (status == nil || record.status == status)
+                && (availability == nil || record.availability == availability)
         }
     }
 
     public func url(for record: PEXArtifactRecord) -> URL {
-        runDirectory.appending(path: record.relativePath.value)
+        runDirectory.appending(path: record.locator.location.value)
     }
 
     public func validatedURL(for record: PEXArtifactRecord) throws -> URL {
-        if pathEscapesRunDirectory(record.relativePath) {
-            throw PEXError.persistenceFailed("Artifact path escapes the run directory: \(record.relativePath.value)")
+        if pathEscapesRunDirectory(record.locator.location) {
+            throw PEXError.persistenceFailed("Artifact path escapes the run directory: \(record.locator.location.value)")
         }
 
         let artifactURL = url(for: record)
         if artifactTargetEscapesRunDirectory(artifactURL) {
-            throw PEXError.persistenceFailed("Artifact target escapes the run directory: \(record.relativePath.value)")
+            throw PEXError.persistenceFailed("Artifact target escapes the run directory: \(record.locator.location.value)")
         }
         return artifactURL
     }
 
     public func loadIR(cornerID: PEXCornerID) throws -> ParasiticIR {
-        guard let record = records(kind: .parasiticIR, cornerID: cornerID, status: .available).first else {
+        guard let record = records(kind: .parasiticIR, cornerID: cornerID, availability: .available).first else {
             throw PEXError.persistenceFailed("No available ParasiticIR artifact for corner \(cornerID.value)")
         }
         let url = try validatedURL(for: record)
@@ -102,7 +102,7 @@ public struct PEXArtifactResolver: Sendable {
         do {
             data = try Data(contentsOf: url)
         } catch {
-            throw PEXError.persistenceFailed("Failed to read IR artifact \(record.id)", underlying: error)
+            throw PEXError.persistenceFailed("Failed to read IR artifact \(record.id.rawValue)", underlying: error)
         }
         let integrityIssues = availableArtifactIssues(for: record, artifactURL: url)
         if !integrityIssues.isEmpty {
@@ -113,7 +113,7 @@ public struct PEXArtifactResolver: Sendable {
     }
 
     public func completenessReport() -> PEXArtifactCompletenessReport {
-        let artifactIDSet = Set(manifest.artifacts.map(\.id))
+        let artifactIDSet = Set(manifest.artifacts.map { $0.id.rawValue })
         let issues = duplicateArtifactIDIssues()
             + manifest.artifacts.flatMap(artifactCompletenessIssues(for:))
             + manifest.corners.flatMap { cornerCompletenessIssues(for: $0, artifactIDSet: artifactIDSet) }
@@ -126,11 +126,11 @@ public struct PEXArtifactResolver: Sendable {
         return artifactIDCounts
             .filter { $0.value > 1 }
             .keys
-            .sorted()
+            .sorted { $0.rawValue < $1.rawValue }
             .map { artifactID in
                 PEXArtifactCompletenessIssue(
                     kind: .duplicateArtifactID,
-                    artifactID: artifactID,
+                    artifactID: artifactID.rawValue,
                     message: "Artifact id is duplicated in manifest"
                 )
             }
@@ -144,15 +144,15 @@ public struct PEXArtifactResolver: Sendable {
             return [
                 PEXArtifactCompletenessIssue(
                     kind: .pathEscapesRunDirectory,
-                    artifactID: record.id,
+                    artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    path: record.relativePath,
+                    location: record.locator.location,
                     message: "Artifact path escapes the run directory"
                 ),
             ]
         }
 
-        guard record.status == .available else {
+        guard record.availability == .available else {
             return []
         }
 
@@ -168,52 +168,30 @@ public struct PEXArtifactResolver: Sendable {
             return [
                 PEXArtifactCompletenessIssue(
                     kind: .missingArtifact,
-                    artifactID: record.id,
+                    artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    path: record.relativePath,
+                    location: record.locator.location,
                     message: "Artifact file is missing"
                 ),
             ]
         }
 
-        guard let expectedHash = record.sha256 else {
-            return [
-                PEXArtifactCompletenessIssue(
-                    kind: .missingHash,
-                    artifactID: record.id,
-                    cornerID: record.cornerID,
-                    path: record.relativePath,
-                    message: "Available artifact is missing a sha256 hash"
-                ),
-            ]
-        }
-
-        guard let expectedByteCount = record.byteCount else {
-            return [
-                PEXArtifactCompletenessIssue(
-                    kind: .missingByteCount,
-                    artifactID: record.id,
-                    cornerID: record.cornerID,
-                    path: record.relativePath,
-                    message: "Available artifact is missing a byte count"
-                ),
-            ]
-        }
+        guard let reference = record.reference else { return [] }
 
         do {
             return try integrityIssues(
                 for: record,
                 artifactURL: artifactURL,
-                expectedHash: expectedHash,
-                expectedByteCount: expectedByteCount
+                expectedDigest: reference.digest,
+                expectedByteCount: reference.byteCount
             )
         } catch {
             return [
                 PEXArtifactCompletenessIssue(
                     kind: .missingArtifact,
-                    artifactID: record.id,
+                    artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    path: record.relativePath,
+                    location: record.locator.location,
                     message: "Artifact file could not be read"
                 ),
             ]
@@ -223,20 +201,20 @@ public struct PEXArtifactResolver: Sendable {
     private func integrityIssues(
         for record: PEXArtifactRecord,
         artifactURL: URL,
-        expectedHash: String,
-        expectedByteCount: Int
+        expectedDigest: ContentDigest,
+        expectedByteCount: UInt64
     ) throws -> [PEXArtifactCompletenessIssue] {
         let data = try Data(contentsOf: artifactURL)
         let actualHash = Self.sha256(data: data)
-        if actualHash == expectedHash && expectedByteCount == data.count {
+        if actualHash == expectedDigest.hexadecimalValue && expectedByteCount == UInt64(data.count) {
             return []
         }
         return [
             PEXArtifactCompletenessIssue(
                 kind: .invalidHash,
-                artifactID: record.id,
+                artifactID: record.id.rawValue,
                 cornerID: record.cornerID,
-                path: record.relativePath,
+                location: record.locator.location,
                 message: "Artifact hash or byte count does not match manifest"
             ),
         ]
@@ -264,12 +242,13 @@ public struct PEXArtifactResolver: Sendable {
                 message: "Corner references an artifact id that is not present in manifest artifacts"
             ))
         }
-        for record in manifest.artifacts where record.cornerID == corner.cornerID && !corner.artifactIDs.contains(record.id) {
+        for record in manifest.artifacts where record.cornerID == corner.cornerID
+        && !corner.artifactIDs.contains(record.id.rawValue) {
             issues.append(PEXArtifactCompletenessIssue(
                 kind: .missingCornerArtifactReference,
-                artifactID: record.id,
+                artifactID: record.id.rawValue,
                 cornerID: corner.cornerID,
-                path: record.relativePath,
+                location: record.locator.location,
                 message: "Corner-scoped artifact is not referenced by the corner artifact graph"
             ))
         }
@@ -281,7 +260,9 @@ public struct PEXArtifactResolver: Sendable {
             return []
         }
         let irRecords = records(kind: .parasiticIR, cornerID: corner.cornerID)
-        guard !irRecords.contains(where: { $0.status == .available || $0.status == .omitted }) else {
+        guard !irRecords.contains(where: {
+            $0.availability == .available || $0.availability == .omitted
+        }) else {
             return []
         }
         return [
@@ -328,8 +309,8 @@ public struct PEXArtifactResolver: Sendable {
     }
 
     private func failedCornerEvidenceCount(cornerID: PEXCornerID) -> Int {
-        records(kind: .rawOutput, cornerID: cornerID, status: .available).count
-            + records(kind: .log, cornerID: cornerID, status: .available).count
+        records(kind: .rawOutput, cornerID: cornerID, availability: .available).count
+            + records(kind: .log, cornerID: cornerID, availability: .available).count
     }
 
     private func completenessStatus(for issues: [PEXArtifactCompletenessIssue]) -> PEXArtifactCompletenessStatus {
@@ -344,7 +325,7 @@ public struct PEXArtifactResolver: Sendable {
 
     private func isInvalidCompletenessIssue(_ issue: PEXArtifactCompletenessIssue) -> Bool {
         switch issue.kind {
-        case .invalidHash, .missingHash, .missingByteCount, .pathEscapesRunDirectory,
+        case .invalidHash, .pathEscapesRunDirectory,
              .duplicateArtifactID, .missingCornerArtifactReference:
             return true
         case .missingArtifact, .missingIR, .missingFailure, .failedCorner, .failedCornerWithoutEvidence:
@@ -356,8 +337,10 @@ public struct PEXArtifactResolver: Sendable {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 
-    private func pathEscapesRunDirectory(_ path: PEXArtifactPath) -> Bool {
-        path.value.hasPrefix("/") || path.value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+    private func pathEscapesRunDirectory(_ location: ArtifactLocation) -> Bool {
+        guard location.storage == .workspaceRelative else { return true }
+        return location.value.hasPrefix("/")
+            || location.value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }
 
     private func artifactTargetEscapesRunDirectory(_ artifactURL: URL) -> Bool {

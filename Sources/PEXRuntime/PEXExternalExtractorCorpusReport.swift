@@ -2,7 +2,7 @@ import Foundation
 import PEXCore
 
 public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public let schemaVersion: Int
     public let corpusSpec: String
@@ -126,33 +126,15 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
     }
 
     public struct CaseResult: Sendable, Hashable, Codable {
-        public struct ArtifactRef: Sendable, Hashable, Codable {
-            public let artifactID: String
-            public let path: String
-            public let role: String
-            public let kind: String
-            public let format: String
-            public let sha256: String?
-            public let byteCount: Int?
+        public struct Artifact: Sendable, Hashable, Codable {
+            public let reference: ArtifactReference
             public let sourceField: String?
 
             public init(
-                artifactID: String,
-                path: String,
-                role: String,
-                kind: String,
-                format: String,
-                sha256: String? = nil,
-                byteCount: Int? = nil,
+                reference: ArtifactReference,
                 sourceField: String? = nil
             ) {
-                self.artifactID = artifactID
-                self.path = path
-                self.role = role
-                self.kind = kind
-                self.format = format
-                self.sha256 = sha256
-                self.byteCount = byteCount
+                self.reference = reference
                 self.sourceField = sourceField
             }
         }
@@ -192,7 +174,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
         public let resistanceErrorOhm: Double?
         public let netCount: Int?
         public let elementCount: Int?
-        public let artifactRefs: [ArtifactRef]?
+        public let artifacts: [Artifact]?
         public let failures: [CaseFailure]
 
         public init(
@@ -231,7 +213,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             resistanceErrorOhm: Double? = nil,
             netCount: Int? = nil,
             elementCount: Int? = nil,
-            artifactRefs: [ArtifactRef]? = nil,
+            artifacts: [Artifact]? = nil,
             failures: [CaseFailure] = []
         ) {
             self.caseID = caseID
@@ -269,7 +251,9 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             self.resistanceErrorOhm = resistanceErrorOhm
             self.netCount = netCount
             self.elementCount = elementCount
-            self.artifactRefs = artifactRefs?.sorted { $0.artifactID < $1.artifactID }
+            self.artifacts = artifacts?.sorted {
+                $0.reference.id.rawValue < $1.reference.id.rawValue
+            }
             self.failures = failures
         }
     }
