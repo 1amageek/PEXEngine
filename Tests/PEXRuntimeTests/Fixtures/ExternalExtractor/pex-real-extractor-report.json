@@ -1010,8 +1010,8 @@
     }
   ],
   "corpusSpec": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json",
-  "oracleBackendID": "magic",
-  "qualification": {
+  "extractorBackendID": "magic",
+  "evaluation": {
     "failures": [],
     "policy": {
       "minimumPassRate": 1,
@@ -1026,8 +1026,7 @@
         "pex.multi-corner",
         "pex.rc-network"
       ]
-    },
-    "qualified": true
+    }
   },
   "schemaVersion": 1,
   "status": "passed",

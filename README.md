@@ -49,8 +49,8 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 - **Hierarchy-aware SPICE composition** -- `pexengine backannotate` inserts a retained ParasiticIR fragment into a source deck, validates source ports, and preserves the selected `.subckt` boundary
 - **Structured source connectivity** -- SPICE/CDL continuation lines and Verilog module ports/basic instance connections are compared against extracted pin nodes with explicit warning states for malformed syntax
 - **CLI tool** -- `pexengine` commands for extraction, parsing, validation, diagnostics, summaries, and typed ParasiticIR queries
-- **Parser corpus qualification** -- OpenROAD OpenRCX SPEF fixtures emit structured qualification evidence
-- **ToolEvidence export** -- Saved parser-corpus reports can be converted into flow-compatible evidence JSON
+- **Parser corpus observations** -- OpenROAD OpenRCX SPEF fixtures emit structured, reproducible measurements
+- **Observation export** -- Saved parser-corpus reports can be converted into a canonical artifact-backed observation record
 - **Configuration via Foundation JSON** -- JSON config with deterministic provider hierarchy (file > defaults)
 - **Real-data validation** -- OpenROAD OpenRCX SPEF fixtures and Sky130 back-annotation gates
 
@@ -273,8 +273,8 @@ pexengine parse-corpus \
     --out /tmp/pex-spef-corpus-report.json \
     --json
 
-# Convert a saved parser-corpus report into ToolEvidence-compatible JSON
-pexengine evidence-from-corpus-report \
+# Convert a saved parser-corpus report into an artifact-backed observation record
+pexengine observation-from-corpus-report \
     --report /tmp/pex-spef-corpus-report.json \
     --json
 
@@ -426,11 +426,11 @@ lowering regressions are caught without network access.
 | Corpus | Source | Gate |
 |---|---|---|
 | OpenROAD OpenRCX SPEF | `Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json` | `SPEFParserTests/openROADRCXFixturesParseAndLowerToExpectedSummaries` |
-| OpenROAD OpenRCX SPEF qualification | `Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json` | `pexengine parse-corpus --manifest ... --out ...` |
-| OpenROAD OpenRCX SPEF evidence export | Saved parser-corpus report | `pexengine evidence-from-corpus-report --report ... --json` |
+| OpenROAD OpenRCX SPEF corpus observations | `Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json` | `pexengine parse-corpus --manifest ... --out ...` |
+| OpenROAD OpenRCX SPEF observation export | Saved parser-corpus report | `pexengine observation-from-corpus-report --report ... --json` |
 | OpenROAD OpenRCX PEX evidence packet | Saved parser-corpus report | `pexengine evidence-packet-from-corpus-report --report ... --json` |
 | Sky130 Magic extraction | `Tests/PEXRuntimeTests/Fixtures/pex_plate.gds` | `validation/pex-backannotation.sh` and gated Magic adapter tests |
-| Sky130 Magic real-extractor qualification lane | `Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json` | `scripts/run-signoff-qualification.py --external-pex-corpus ...` from the LSI workspace root |
+| Sky130 Magic real-extractor regression lane | `Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json` | `scripts/run-signoff-qualification.py --external-pex-corpus ...` from the LSI workspace root |
 | Sky130 Magic real-extractor evidence packet | Saved `pex-real-extractor-report.json` | `pexengine evidence-packet-from-extractor-report --report ... --json` |
 
 Each OpenROAD fixture records source path, pinned commit, Git blob SHA, SHA-256,
@@ -441,16 +441,16 @@ hundred-net GCD extractions. It carries the required `pex.extract.openrcx` and
 `pex.physical-value` coverage tags, so OpenRCX real-output SPEF remains retained
 physical-value evidence instead of a parser-only smoke fixture. The
 `parse-corpus` command turns that same corpus into an Agent-readable
-qualification report with case pass counts, coverage tag counts, required
+observation report with case pass counts, coverage tag counts, required
 coverage checks, observed ParasiticIR totals, failure occurrence and kind counts,
-structured per-case failures, and `toolEvidence` qualification metrics. Failed
+structured per-case failures, and raw evaluation measurements. Failed
 cases preserve diagnostic categories such as `parse_failure` and
 `physical_bound_mismatch` with observed/expected values and suggested actions,
 so an Agent can distinguish syntax problems from physical-value bound drift.
-The `evidence-from-corpus-report` command turns that immutable report into
-ToolEvidence-compatible JSON with a checked timestamp, report SHA-256,
-qualification metrics, observed counts, and failure codes so flow runtimes and
-signoff dashboards can consume the evidence without reparsing prose logs. The
+The `observation-from-corpus-report` command turns that immutable report into
+an `ArtifactReference`-backed JSON record with an observation timestamp,
+report SHA-256, measured counts, and finding codes. `ToolQualification` consumes
+these raw observations and owns every trust decision. The
 `evidence-packet-from-corpus-report` command emits `PEXEvidencePacket`, which
 keeps inputs, readiness, normalized views, metrics, diagnostics, confidence, and
 decision hints together as Agent-readable decision material without prescribing
@@ -458,7 +458,7 @@ the repair flow. `evidence-packet-from-extractor-report` emits the same packet
 shape from retained Magic/OpenRCX-style real-extractor reports, separating
 extractor readiness from physical-bound mismatch diagnostics so an Agent can
 decide whether to inspect the toolchain, the raw artifacts, or the design impact.
-The retained Magic extractor lane includes independent `tt` and `ss` case evidence,
+The retained Magic extractor lane includes separate `tt` and `ss` case evidence,
 RC-network resistance coverage, and a two-corner Sky130 process case. The latter
 uses distinct `sky130A`/`sky130B` decks together with explicit
 `technologyByCorner` references; the report records deck hashes, technology
@@ -469,6 +469,16 @@ native sweep, so all physical variation is driven by explicit per-corner profile
 The report preserves input/output
 `artifactRefs` with SHA-256 and byte counts so downstream planning can verify
 layout, netlist, technology, manifest, and normalized `ParasiticIR` provenance.
+
+### Qualification boundary
+
+An external-extractor corpus report proves regression coverage for the backend
+identified by `extractorBackendID`. It is not an independent oracle record by
+itself. In particular, a Magic run compared with another Magic run remains a
+regression lane and cannot decide production eligibility. PEXEngine emits
+artifact-backed reports, physical measurements, implementation identity, and
+correlation observations. `ToolQualification` verifies those records and owns
+trust decisions; `DesignFlowKernel` owns approval and flow policy.
 
 ## Metric Recovery Objective
 

@@ -5,7 +5,7 @@ public enum PEXFailureDiagnosticClass: String, Sendable, Hashable, Codable {
     case unitMismatch = "unit_mismatch"
     case physicalBoundMismatch = "physical_bound_mismatch"
     case perCornerFailure = "per_corner_failure"
-    case qualificationFailure = "qualification_failure"
+    case evaluationFailure = "evaluation_failure"
     case externalExtractorFailure = "external_extractor_failure"
 }
 

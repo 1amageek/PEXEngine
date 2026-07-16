@@ -34,7 +34,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
             subject: PEXEvidenceSubject(
                 kind: "external-extractor-corpus",
                 identifier: report.corpusSpec,
-                backendID: report.oracleBackendID
+                backendID: report.extractorBackendID
             ),
             intent: PEXEvidenceIntent(
                 summary: "Expose retained real-extractor PEX observations as decision material.",
@@ -71,12 +71,12 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
             confidence: confidence(report: report, diagnostics: diagnostics),
             decisionHints: decisionHints(report: report, contexts: contexts, diagnostics: diagnostics),
             coverageTags: report.summary.coverageTagCounts.keys.sorted(),
-            relatedEvidenceIDs: ["pex-external-extractor:\(report.oracleBackendID)"]
+            relatedEvidenceIDs: ["pex-external-extractor:\(report.extractorBackendID)"]
         )
     }
 
     private func defaultPacketID(_ report: PEXExternalExtractorCorpusReport) -> String {
-        "pex-evidence-packet:external:\(report.oracleBackendID):\(URL(filePath: report.corpusSpec).deletingPathExtension().lastPathComponent)"
+        "pex-evidence-packet:external:\(report.extractorBackendID):\(URL(filePath: report.corpusSpec).deletingPathExtension().lastPathComponent)"
     }
 
     private struct EvidenceCaseContext {
@@ -603,16 +603,16 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
                 ))
             }
         }
-        for (index, failure) in report.qualification.failures.enumerated() {
+        for (index, failure) in report.evaluation.failures.enumerated() {
             let context = contextsByRawCaseID[failure.caseID]
             let diagnosticCaseID = context?.caseKey ?? failure.caseID
             diagnostics.append(PEXEvidenceDiagnostic(
-                diagnosticID: context.map { "external-qualification:\($0.caseKey):\(failure.code):\(index)" }
-                    ?? "external-qualification:\(failure.code):\(index)",
+                diagnosticID: context.map { "external-evaluation:\($0.caseKey):\(failure.code):\(index)" }
+                    ?? "external-evaluation:\(failure.code):\(index)",
                 code: failure.failureCode ?? failure.code,
-                category: "qualification",
+                category: "evaluation",
                 severity: .error,
-                message: "External PEX corpus qualification did not pass.",
+                message: "External PEX corpus evaluation did not pass.",
                 caseID: diagnosticCaseID,
                 observedText: failure.missingTags?.joined(separator: ","),
                 suggestedActions: ["inspect_external_pex_case_failures"]
@@ -702,10 +702,10 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         var uncertainties = [
             "The packet exposes decision material and does not choose a repair action.",
         ]
-        if report.qualification.qualified {
-            strengths.append("The external extractor corpus qualification passed.")
+        if report.evaluation.passed {
+            strengths.append("The external extractor corpus evaluation passed.")
         } else {
-            uncertainties.append("The external extractor corpus qualification did not pass.")
+            uncertainties.append("The external extractor corpus evaluation did not pass.")
         }
         if report.summary.coverageTagCounts["pex.physical-value"] != nil {
             strengths.append("Physical-value coverage is represented in the retained external extractor corpus.")
@@ -724,7 +724,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         let level: PEXEvidenceConfidenceLevel
         if diagnostics.contains(where: { $0.category == "artifact_integrity" }) {
             level = .low
-        } else if report.qualification.qualified && diagnostics.isEmpty {
+        } else if report.evaluation.passed && diagnostics.isEmpty {
             level = .high
         } else if producedEvidenceCount > 0 {
             level = .medium
@@ -733,7 +733,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         }
         return PEXEvidenceConfidence(
             level: level,
-            rationale: "Confidence reflects retained external execution, physical coverage, qualification result, and unresolved diagnostics.",
+            rationale: "Confidence reflects retained external execution, physical coverage, evaluation result, and unresolved diagnostics.",
             strengths: strengths,
             uncertainties: uncertainties
         )

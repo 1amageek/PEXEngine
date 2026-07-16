@@ -714,7 +714,7 @@ struct PEXCLITests {
         #expect(cmd.jsonOutput == true)
     }
 
-    @Test func parseCorpusCommandBuildsOpenROADQualificationReport() throws {
+    @Test func parseCorpusCommandBuildsOpenROADEvaluationReport() throws {
         let fixtureDirectory = openROADFixtureDirectoryURL()
         let manifestURL = fixtureDirectory.appending(path: "fixture-manifest.json")
         let cmd = try ParseCorpusCommand(arguments: [
@@ -729,32 +729,32 @@ struct PEXCLITests {
         #expect(report.status == "passed")
         #expect(report.summary.caseCount == 7)
         #expect(report.summary.failedCaseCount == 0)
-        #expect(report.qualification.qualified)
+        #expect(report.evaluation.passed)
         #expect(report.summary.coverageTagCounts["pex.spef.openroad"] == 7)
         #expect(report.summary.coverageTagCounts["pex.extract.openrcx"] == 7)
         #expect(report.summary.coverageTagCounts["pex.physical-value"] == 7)
-        #expect(report.toolEvidence.kind == "corpus")
+        #expect(report.observationSummary.passed)
     }
 
-    @Test func evidenceFromCorpusReportCommandArguments() throws {
-        let checkedAt = "2026-06-19T00:00:00Z"
-        let cmd = try EvidenceFromCorpusReportCommand(arguments: [
+    @Test func observationFromCorpusReportCommandArguments() throws {
+        let observedAt = "2026-06-19T00:00:00Z"
+        let cmd = try ObservationFromCorpusReportCommand(arguments: [
             "--report",
             "/tmp/pex-spef-corpus-report.json",
-            "--evidence-id",
+            "--record-id",
             "pex-corpus-1",
-            "--checked-at",
-            checkedAt,
+            "--observed-at",
+            observedAt,
             "--json",
         ])
 
         #expect(cmd.reportURL.path(percentEncoded: false) == "/tmp/pex-spef-corpus-report.json")
-        #expect(cmd.evidenceID == "pex-corpus-1")
-        #expect(cmd.checkedAt == Date(timeIntervalSince1970: 1_781_827_200))
+        #expect(cmd.recordID == "pex-corpus-1")
+        #expect(cmd.observedAt == Date(timeIntervalSince1970: 1_781_827_200))
         #expect(cmd.jsonOutput == true)
     }
 
-    @Test func evidenceFromCorpusReportBuildsToolEvidenceCompatibleExport() throws {
+    @Test func observationFromCorpusReportBuildsRawObservationExport() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appending(path: "pex-evidence-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -767,35 +767,34 @@ struct PEXCLITests {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(report).write(to: reportURL)
 
-        let cmd = try EvidenceFromCorpusReportCommand(
+        let cmd = try ObservationFromCorpusReportCommand(
             arguments: [
                 "--report",
                 reportURL.path(percentEncoded: false),
-                "--evidence-id",
+                "--record-id",
                 "pex-spef-corpus-test",
-                "--checked-at",
+                "--observed-at",
                 "2026-06-19T00:00:00Z",
             ]
         )
 
         let export = try cmd.buildExport()
         #expect(export.status == "passed")
-        #expect(export.reportSHA256?.count == 64)
-        #expect(export.toolEvidence.evidenceID == "pex-spef-corpus-test")
-        #expect(export.toolEvidence.kind == "corpus")
-        #expect(export.toolEvidence.artifact.kind == "report")
-        #expect(export.toolEvidence.artifact.format == "JSON")
-        #expect(export.toolEvidence.artifact.sha256 == export.reportSHA256)
-        #expect(export.toolEvidence.checkedAt == "2026-06-19T00:00:00.000Z")
-        #expect(export.toolEvidence.qualification.qualified)
-        #expect(export.toolEvidence.qualification.observedCounts["caseCount"] == 7)
-        #expect(export.toolEvidence.qualification.observedCounts["failureOccurrenceCount"] == 0)
-        #expect(export.toolEvidence.qualification.observedCounts["failureCodeCount"] == 0)
-        #expect(export.toolEvidence.qualification.observedCounts["failureCodeKindCount"] == 0)
-        #expect(export.toolEvidence.qualification.observedCounts["failureCategoryCount"] == 0)
-        #expect(export.toolEvidence.qualification.observedCounts["failureCategoryKindCount"] == 0)
-        #expect(export.toolEvidence.qualification.observedCounts["requiredCoverageTagCount"] == 14)
-        #expect(export.toolEvidence.qualification.observedCounts["coveredRequiredCoverageTagCount"] == 14)
+        #expect(export.reportSHA256.count == 64)
+        #expect(export.observationRecord.recordID == "pex-spef-corpus-test")
+        #expect(export.reportArtifact.kind == .report)
+        #expect(export.reportArtifact.format == .json)
+        #expect(export.reportArtifact.sha256 == export.reportSHA256)
+        #expect(export.observationRecord.observedAt == "2026-06-19T00:00:00.000Z")
+        #expect(export.observationRecord.observations.passed)
+        #expect(export.observationRecord.observations.observedCounts["caseCount"] == 7)
+        #expect(export.observationRecord.observations.observedCounts["failureOccurrenceCount"] == 0)
+        #expect(export.observationRecord.observations.observedCounts["failureCodeCount"] == 0)
+        #expect(export.observationRecord.observations.observedCounts["failureCodeKindCount"] == 0)
+        #expect(export.observationRecord.observations.observedCounts["failureCategoryCount"] == 0)
+        #expect(export.observationRecord.observations.observedCounts["failureCategoryKindCount"] == 0)
+        #expect(export.observationRecord.observations.observedCounts["requiredCoverageTagCount"] == 14)
+        #expect(export.observationRecord.observations.observedCounts["coveredRequiredCoverageTagCount"] == 14)
     }
 
     @Test func evidencePacketFromCorpusReportBuildsDecisionMaterialPacket() throws {
@@ -866,7 +865,7 @@ struct PEXCLITests {
         #expect(decoded.packetID == "packet-write-test")
         #expect(decoded.subject.backendID == "openrcx")
         #expect(decoded.inputs.contains { $0.artifactID == "corpus-manifest" })
-        #expect(decoded.artifacts.contains { $0.artifactID == "tool-evidence" })
+        #expect(decoded.artifacts.isEmpty)
         #expect(decoded.metrics.contains { $0.name == "caseCount" && $0.unit == "count" })
         #expect(decoded.confidence.level == .high)
     }
@@ -880,7 +879,7 @@ struct PEXCLITests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 1,
@@ -899,14 +898,13 @@ struct PEXCLITests {
                 totalNetCount: 1,
                 totalElementCount: 1
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: false,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
                 ),
                 failures: [
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "case_failure",
                         caseID: "plate",
                         failureCode: "ground_cap_out_of_tolerance"
@@ -982,7 +980,7 @@ struct PEXCLITests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 1,
@@ -997,19 +995,18 @@ struct PEXCLITests {
                 totalNetCount: 0,
                 totalElementCount: 0
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: false,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
                 ),
                 failures: [
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "case_failure",
                         caseID: "plate",
                         failureCode: "extract_command_failed"
                     ),
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "required_coverage_missing",
                         missingTags: ["pex.physical-value"]
                     ),
@@ -1088,7 +1085,7 @@ struct PEXCLITests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "passed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 1,
@@ -1108,8 +1105,7 @@ struct PEXCLITests {
                 totalNetCount: 1,
                 totalElementCount: 2
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: true,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
@@ -1629,7 +1625,7 @@ private func makePhysicalBoundsCLIReport(
     return PEXExternalExtractorCorpusReport(
         schemaVersion: 1,
         corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-        oracleBackendID: "magic",
+        extractorBackendID: "magic",
         status: failedCaseCount == 0 ? "passed" : "failed",
         summary: PEXExternalExtractorCorpusReport.Summary(
             caseCount: cases.count,
@@ -1644,8 +1640,7 @@ private func makePhysicalBoundsCLIReport(
             totalNetCount: cases.compactMap(\.netCount).reduce(0, +),
             totalElementCount: cases.compactMap(\.elementCount).reduce(0, +)
         ),
-        qualification: PEXExternalExtractorCorpusReport.Qualification(
-            qualified: failedCaseCount == 0,
+        evaluation: PEXExternalExtractorCorpusReport.Evaluation(
             policy: PEXExternalExtractorCorpusReport.Policy(
                 requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                 minimumPassRate: 1

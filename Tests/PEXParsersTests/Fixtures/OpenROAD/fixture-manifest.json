@@ -4,7 +4,7 @@
   "pinnedCommit": "5ff1293e2e81fe162f836073ae51f2534febca8f",
   "sourceDirectory": "src/rcx/test",
   "license": "BSD-3-Clause",
-  "qualificationPolicy": {
+  "evaluationPolicy": {
     "requiredCoverageTags": [
       "pex.spef.connections",
       "pex.spef.coordinates",

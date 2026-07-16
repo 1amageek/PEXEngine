@@ -77,6 +77,7 @@ let package = Package(
             name: "PEXRuntimeTests",
             dependencies: [
                 "PEXRuntime", "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             ],
             resources: [
                 .copy("Fixtures/ExternalExtractor"),

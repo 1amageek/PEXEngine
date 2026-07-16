@@ -34,14 +34,14 @@ public struct ParseCorpusCommand: Sendable {
             if let outputURL {
                 print("Report: \(outputURL.path(percentEncoded: false))")
             }
-            if !report.qualification.failures.isEmpty {
+            if !report.evaluation.failures.isEmpty {
                 print("Failures:")
-                for failure in report.qualification.failures {
+                for failure in report.evaluation.failures {
                     print("  \(failure.code): \(failure.message)")
                 }
             }
         }
-        return report.qualification.qualified
+        return report.evaluation.passed
     }
 
     public func buildReport() throws -> SPEFCorpus.Report {

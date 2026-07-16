@@ -10,7 +10,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 2,
@@ -29,19 +29,18 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 totalNetCount: 1,
                 totalElementCount: 1
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: false,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
                 ),
                 failures: [
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "case_failure",
                         caseID: "plate",
                         failureCode: "ground_cap_out_of_tolerance"
                     ),
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "case_failure",
                         caseID: "broken-normalization",
                         failureCode: "ir_read_failed"
@@ -221,7 +220,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 && $0.artifactIDs.contains("broken-normalization:manifestPath")
         })
         #expect(packet.confidence.level == .medium)
-        #expect(packet.confidence.uncertainties.contains("The external extractor corpus qualification did not pass."))
+        #expect(packet.confidence.uncertainties.contains("The external extractor corpus evaluation did not pass."))
     }
 
     @Test("External extractor evidence packet preserves multi-corner comparison basis")
@@ -277,7 +276,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-negative-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 5,
@@ -296,14 +295,13 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 totalNetCount: 2,
                 totalElementCount: 3
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: false,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
                 ),
                 failures: [
-                    PEXExternalExtractorCorpusReport.QualificationFailure(
+                    PEXExternalExtractorCorpusReport.EvaluationFailure(
                         code: "case_failure",
                         caseID: "unit-scale",
                         failureCode: "unit_mismatch"
@@ -416,7 +414,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
             .unitMismatch,
             .physicalBoundMismatch,
             .perCornerFailure,
-            .qualificationFailure,
+            .evaluationFailure,
         ]))
 
         let readiness = try classification(.missingExtractorReadiness, in: packet)
@@ -460,10 +458,10 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(Set(perCorner.cornerIDs) == ["ff", "ss", "tt"])
         #expect(perCorner.suggestedActions.contains("rerun_failed_corners"))
 
-        let qualification = try classification(.qualificationFailure, in: packet)
-        #expect(qualification.caseIDs.contains("unit-scale"))
-        #expect(qualification.reasonCodes.contains("unit_mismatch"))
-        #expect(qualification.suggestedActions.contains("review_qualification_policy"))
+        let evaluation = try classification(.evaluationFailure, in: packet)
+        #expect(evaluation.caseIDs.contains("unit-scale"))
+        #expect(evaluation.reasonCodes.contains("unit_mismatch"))
+        #expect(evaluation.suggestedActions.contains("review_evaluation_policy"))
 
         let normalizedView = try #require(packet.normalizedViews.first {
             $0.viewID == "external-extractor-physical-summary"
@@ -474,7 +472,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(normalizedView.summaryCounts["failureClass:unit_mismatch"] == 1)
         #expect(normalizedView.summaryCounts["failureClass:physical_bound_mismatch"] == 1)
         #expect(normalizedView.summaryCounts["failureClass:per_corner_failure"] == 1)
-        #expect(normalizedView.summaryCounts["failureClass:qualification_failure"] == 1)
+        #expect(normalizedView.summaryCounts["failureClass:evaluation_failure"] == 1)
 
         let encoded = try JSONEncoder().encode(packet)
         let decoded = try JSONDecoder().decode(PEXEvidencePacket.self, from: encoded)
@@ -486,7 +484,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let report = PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: 3,
@@ -507,8 +505,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 totalNetCount: 3,
                 totalElementCount: 5
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: false,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
@@ -829,7 +826,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
             from: Data(contentsOf: fixtureURL)
         )
 
-        #expect(Set(spec.qualificationPolicy.requiredCoverageTags).isSuperset(of: [
+        #expect(Set(spec.evaluationPolicy.requiredCoverageTags).isSuperset(of: [
             "pex.magic",
             "pex.physical-value",
             "pex.ground-cap",
@@ -1060,7 +1057,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         return PEXExternalExtractorCorpusReport(
             schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
-            oracleBackendID: "magic",
+            extractorBackendID: "magic",
             status: failedCaseCount == 0 ? "passed" : "failed",
             summary: PEXExternalExtractorCorpusReport.Summary(
                 caseCount: cases.count,
@@ -1075,8 +1072,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
                 totalNetCount: cases.compactMap(\.netCount).reduce(0, +),
                 totalElementCount: cases.compactMap(\.elementCount).reduce(0, +)
             ),
-            qualification: PEXExternalExtractorCorpusReport.Qualification(
-                qualified: failedCaseCount == 0,
+            evaluation: PEXExternalExtractorCorpusReport.Evaluation(
                 policy: PEXExternalExtractorCorpusReport.Policy(
                     requiredCoverageTags: ["pex.magic", "pex.physical-value"],
                     minimumPassRate: 1
@@ -1088,11 +1084,11 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
     }
 
     private struct ExternalExtractorCorpusSpec: Decodable {
-        let qualificationPolicy: QualificationPolicy
+        let evaluationPolicy: EvaluationPolicy
         let cases: [CaseSpec]
     }
 
-    private struct QualificationPolicy: Decodable {
+    private struct EvaluationPolicy: Decodable {
         let requiredCoverageTags: [String]
     }
 

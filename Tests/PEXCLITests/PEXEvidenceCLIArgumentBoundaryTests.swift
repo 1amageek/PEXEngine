@@ -26,31 +26,31 @@ struct PEXEvidenceCLIArgumentBoundaryTests {
         }
     }
 
-    @Test func evidenceFromCorpusReportRejectsOptionTokenAsOptionValue() {
-        expectInvalidInput("evidence report", contains: "--report requires a value") {
-            _ = try EvidenceFromCorpusReportCommand(arguments: ["--report", "--json"])
+    @Test func observationFromCorpusReportRejectsOptionTokenAsOptionValue() {
+        expectInvalidInput("observation report", contains: "--report requires a value") {
+            _ = try ObservationFromCorpusReportCommand(arguments: ["--report", "--json"])
         }
-        expectInvalidInput("evidence id", contains: "--evidence-id requires a value") {
-            _ = try EvidenceFromCorpusReportCommand(arguments: [
+        expectInvalidInput("record id", contains: "--record-id requires a value") {
+            _ = try ObservationFromCorpusReportCommand(arguments: [
                 "--report",
                 "/tmp/pex-spef-corpus-report.json",
-                "--evidence-id",
-                "--checked-at",
+                "--record-id",
+                "--observed-at",
             ])
         }
-        expectInvalidInput("checked at", contains: "--checked-at requires a value") {
-            _ = try EvidenceFromCorpusReportCommand(arguments: [
+        expectInvalidInput("observed at", contains: "--observed-at requires a value") {
+            _ = try ObservationFromCorpusReportCommand(arguments: [
                 "--report",
                 "/tmp/pex-spef-corpus-report.json",
-                "--checked-at",
+                "--observed-at",
                 "--json",
             ])
         }
-        expectInvalidInput("checked at format", contains: "--checked-at must be an ISO 8601 timestamp") {
-            _ = try EvidenceFromCorpusReportCommand(arguments: [
+        expectInvalidInput("observed at format", contains: "--observed-at must be an ISO 8601 timestamp") {
+            _ = try ObservationFromCorpusReportCommand(arguments: [
                 "--report",
                 "/tmp/pex-spef-corpus-report.json",
-                "--checked-at",
+                "--observed-at",
                 "not-a-date",
             ])
         }

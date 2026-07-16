@@ -14,7 +14,7 @@ struct SPEFCorpusRunnerDiagnosticsTests {
           "pinnedCommit": "revision",
           "sourceDirectory": "fixtures",
           "license": "test",
-          "qualificationPolicy": {
+          "evaluationPolicy": {
             "requireCorpusPassed": true,
             "minimumPassRate": 1,
             "requiredCoverageTags": []
@@ -90,10 +90,10 @@ struct SPEFCorpusRunnerDiagnosticsTests {
         #expect(report.summary.failedCaseCount == 1)
         #expect(report.summary.failureCodeCounts["total_ground_cap_mismatch"] == 1)
         #expect(report.summary.failureCategoryCounts["physical_bound_mismatch"] == 1)
-        #expect(report.qualification.qualified == false)
-        #expect(report.qualification.failures.contains { $0.code == "corpus_not_passed" })
-        #expect(report.toolEvidence.qualification.observedCounts["failureOccurrenceCount"] == 1)
-        #expect(report.toolEvidence.qualification.observedCounts["failureCategoryKindCount"] == 1)
+        #expect(report.evaluation.passed == false)
+        #expect(report.evaluation.failures.contains { $0.code == "corpus_not_passed" })
+        #expect(report.observationSummary.observedCounts["failureOccurrenceCount"] == 1)
+        #expect(report.observationSummary.observedCounts["failureCategoryKindCount"] == 1)
 
         let caseResult = try #require(report.caseResults.first)
         let fixture = try #require(corpus.manifest.fixtures.first)
@@ -119,10 +119,10 @@ struct SPEFCorpusRunnerDiagnosticsTests {
         #expect(report.status == "failed")
         #expect(report.summary.caseCount == 0)
         #expect(report.summary.passRate == 1)
-        #expect(report.qualification.qualified == false)
-        #expect(report.qualification.failures.contains { $0.code == "corpus_empty" })
-        #expect(report.toolEvidence.qualification.failureCodes.contains("corpus_empty"))
-        #expect(report.toolEvidence.qualification.observedCounts["caseCount"] == 0)
+        #expect(report.evaluation.passed == false)
+        #expect(report.evaluation.failures.contains { $0.code == "corpus_empty" })
+        #expect(report.observationSummary.failureCodes.contains("corpus_empty"))
+        #expect(report.observationSummary.observedCounts["caseCount"] == 0)
     }
 }
 
@@ -143,7 +143,7 @@ private func makePhysicalBoundCorpus() throws -> SPEFCorpusRunnerTestCorpus {
         pinnedCommit: "local",
         sourceDirectory: ".",
         license: "test-fixture",
-        qualificationPolicy: SPEFCorpus.QualificationPolicy(
+        evaluationPolicy: SPEFCorpus.EvaluationPolicy(
             minimumPassRate: 1,
             requiredCoverageTags: ["pex.physical-value"]
         ),
@@ -191,7 +191,7 @@ private func makeEmptyCorpus() throws -> SPEFCorpusRunnerTestCorpus {
         pinnedCommit: "local",
         sourceDirectory: ".",
         license: "test-fixture",
-        qualificationPolicy: .strict,
+        evaluationPolicy: .strict,
         fixtures: []
     )
     let manifestURL = try writeManifest(manifest, in: directory)

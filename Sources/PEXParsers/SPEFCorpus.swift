@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 
 public enum SPEFCorpus {
     public struct Manifest: Sendable, Hashable, Codable {
@@ -9,7 +10,7 @@ public enum SPEFCorpus {
         public let pinnedCommit: String
         public let sourceDirectory: String
         public let license: String
-        public let qualificationPolicy: QualificationPolicy
+        public let evaluationPolicy: EvaluationPolicy
         public let fixtures: [Fixture]
 
         private enum CodingKeys: String, CodingKey {
@@ -18,7 +19,7 @@ public enum SPEFCorpus {
             case pinnedCommit
             case sourceDirectory
             case license
-            case qualificationPolicy
+            case evaluationPolicy
             case fixtures
         }
 
@@ -28,7 +29,7 @@ public enum SPEFCorpus {
             pinnedCommit: String,
             sourceDirectory: String,
             license: String,
-            qualificationPolicy: QualificationPolicy = .strict,
+            evaluationPolicy: EvaluationPolicy = .strict,
             fixtures: [Fixture]
         ) {
             self.schemaVersion = schemaVersion
@@ -36,7 +37,7 @@ public enum SPEFCorpus {
             self.pinnedCommit = pinnedCommit
             self.sourceDirectory = sourceDirectory
             self.license = license
-            self.qualificationPolicy = qualificationPolicy
+            self.evaluationPolicy = evaluationPolicy
             self.fixtures = fixtures
         }
 
@@ -54,9 +55,9 @@ public enum SPEFCorpus {
             pinnedCommit = try container.decode(String.self, forKey: .pinnedCommit)
             sourceDirectory = try container.decode(String.self, forKey: .sourceDirectory)
             license = try container.decode(String.self, forKey: .license)
-            qualificationPolicy = try container.decode(
-                QualificationPolicy.self,
-                forKey: .qualificationPolicy
+            evaluationPolicy = try container.decode(
+                EvaluationPolicy.self,
+                forKey: .evaluationPolicy
             )
             fixtures = try container.decode([Fixture].self, forKey: .fixtures)
         }
@@ -448,7 +449,7 @@ public enum SPEFCorpus {
         }
     }
 
-    public struct QualificationFailure: Sendable, Hashable, Codable {
+    public struct EvaluationFailure: Sendable, Hashable, Codable {
         public let code: String
         public let message: String
         public let observedDouble: Double?
@@ -479,8 +480,8 @@ public enum SPEFCorpus {
         }
     }
 
-    public struct QualificationPolicy: Sendable, Hashable, Codable {
-        public static let strict = QualificationPolicy()
+    public struct EvaluationPolicy: Sendable, Hashable, Codable {
+        public static let strict = EvaluationPolicy()
 
         public let requireCorpusPassed: Bool
         public let minimumPassRate: Double
@@ -512,10 +513,10 @@ public enum SPEFCorpus {
             ))
         }
 
-        public func evaluate(summary: Summary) -> QualificationResult {
+        public func evaluate(summary: Summary) -> EvaluationResult {
             var failures = validationFailures()
             if summary.caseCount == 0 {
-                failures.append(QualificationFailure(
+                failures.append(EvaluationFailure(
                     code: "corpus_empty",
                     message: "The SPEF corpus contains no fixture cases.",
                     observedCount: 0,
@@ -523,7 +524,7 @@ public enum SPEFCorpus {
                 ))
             }
             if requireCorpusPassed && summary.failedCaseCount > 0 {
-                failures.append(QualificationFailure(
+                failures.append(EvaluationFailure(
                     code: "corpus_not_passed",
                     message: "The SPEF corpus did not pass every case.",
                     observedCount: summary.passedCaseCount,
@@ -531,7 +532,7 @@ public enum SPEFCorpus {
                 ))
             }
             if summary.passRate < minimumPassRate {
-                failures.append(QualificationFailure(
+                failures.append(EvaluationFailure(
                     code: "pass_rate_below_minimum",
                     message: "The SPEF corpus pass rate is below the required threshold.",
                     observedDouble: summary.passRate,
@@ -540,7 +541,7 @@ public enum SPEFCorpus {
             }
             let missingCoverageTags = requiredCoverageTags.filter { summary.coverageTagCounts[$0] == nil }
             if !missingCoverageTags.isEmpty {
-                failures.append(QualificationFailure(
+                failures.append(EvaluationFailure(
                     code: "required_coverage_missing",
                     message: "The SPEF corpus is missing one or more required coverage tags.",
                     observedCount: requiredCoverageTags.count - missingCoverageTags.count,
@@ -549,13 +550,13 @@ public enum SPEFCorpus {
                     requiredText: missingCoverageTags.joined(separator: ",")
                 ))
             }
-            return QualificationResult(policy: self, failures: failures)
+            return EvaluationResult(policy: self, failures: failures)
         }
 
-        private func validationFailures() -> [QualificationFailure] {
+        private func validationFailures() -> [EvaluationFailure] {
             if minimumPassRate < 0 || minimumPassRate > 1 || !minimumPassRate.isFinite {
                 return [
-                    QualificationFailure(
+                    EvaluationFailure(
                         code: "invalid_minimum_pass_rate",
                         message: "minimumPassRate must be a finite value between 0 and 1.",
                         observedDouble: minimumPassRate
@@ -570,120 +571,51 @@ public enum SPEFCorpus {
         }
     }
 
-    public struct QualificationResult: Sendable, Hashable, Codable {
-        public let policy: QualificationPolicy
-        public let failures: [QualificationFailure]
-        public let qualified: Bool
+    public struct EvaluationResult: Sendable, Hashable, Codable {
+        public let policy: EvaluationPolicy
+        public let failures: [EvaluationFailure]
 
-        private enum CodingKeys: String, CodingKey {
-            case policy
-            case failures
-            case qualified
-        }
-
-        public init(policy: QualificationPolicy, failures: [QualificationFailure]) {
+        public init(policy: EvaluationPolicy, failures: [EvaluationFailure]) {
             self.policy = policy
             self.failures = failures
-            self.qualified = failures.isEmpty
         }
 
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            policy = try container.decode(QualificationPolicy.self, forKey: .policy)
-            failures = try container.decode([QualificationFailure].self, forKey: .failures)
-            qualified = try container.decode(Bool.self, forKey: .qualified)
-        }
+        public var passed: Bool { failures.isEmpty }
     }
 
-    public struct FileReference: Sendable, Hashable, Codable {
-        public let path: String
-        public let kind: String
-        public let format: String
-        public let sha256: String?
-        public let byteCount: Int?
-
-        private enum CodingKeys: String, CodingKey {
-            case path
-            case kind
-            case format
-            case sha256
-            case byteCount
-        }
-
-        public init(path: String, kind: String, format: String, sha256: String? = nil, byteCount: Int? = nil) {
-            self.path = path
-            self.kind = kind
-            self.format = format
-            self.sha256 = sha256
-            self.byteCount = byteCount
-        }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            path = try container.decode(String.self, forKey: .path)
-            kind = try container.decode(String.self, forKey: .kind)
-            format = try container.decode(String.self, forKey: .format)
-            sha256 = try container.decodeIfPresent(String.self, forKey: .sha256)
-            byteCount = try container.decodeIfPresent(Int.self, forKey: .byteCount)
-        }
-    }
-
-    public struct QualificationSummary: Sendable, Hashable, Codable {
-        public let qualified: Bool
+    public struct EvaluationSummary: Sendable, Hashable, Codable {
         public let policyID: String?
         public let observedMetrics: [String: Double]
         public let observedCounts: [String: Int]
         public let failureCodes: [String]
 
         public init(
-            qualified: Bool,
             policyID: String?,
             observedMetrics: [String: Double],
             observedCounts: [String: Int],
             failureCodes: [String]
         ) {
-            self.qualified = qualified
             self.policyID = policyID
             self.observedMetrics = observedMetrics
             self.observedCounts = observedCounts
             self.failureCodes = failureCodes
         }
-    }
 
-    public struct ToolEvidence: Sendable, Hashable, Codable {
-        public let evidenceID: String
-        public let kind: String
-        public let artifact: FileReference
-        public let qualification: QualificationSummary
-        public let checkedAt: String?
-
-        public init(
-            evidenceID: String,
-            kind: String = "corpus",
-            artifact: FileReference,
-            qualification: QualificationSummary,
-            checkedAt: String? = nil
-        ) {
-            self.evidenceID = evidenceID
-            self.kind = kind
-            self.artifact = artifact
-            self.qualification = qualification
-            self.checkedAt = checkedAt
-        }
+        public var passed: Bool { failureCodes.isEmpty }
     }
 
     public struct Report: Sendable, Hashable, Codable {
-        public static let currentSchemaVersion = 1
+        public static let currentSchemaVersion = 2
 
         public let schemaVersion: Int
         public let status: String
         public let manifestPath: String
         public let sourceRepository: String
         public let pinnedCommit: String
-        public let sourceArtifacts: [FileReference]
+        public let sourceArtifacts: [ArtifactReference]
         public let summary: Summary
-        public let qualification: QualificationResult
-        public let toolEvidence: ToolEvidence
+        public let evaluation: EvaluationResult
+        public let observationSummary: EvaluationSummary
         public let caseResults: [CaseResult]
 
         private enum CodingKeys: String, CodingKey {
@@ -694,8 +626,8 @@ public enum SPEFCorpus {
             case pinnedCommit
             case sourceArtifacts
             case summary
-            case qualification
-            case toolEvidence
+            case evaluation
+            case observationSummary
             case caseResults
         }
 
@@ -703,30 +635,23 @@ public enum SPEFCorpus {
             schemaVersion: Int = Report.currentSchemaVersion,
             manifestPath: String,
             manifest: Manifest,
+            sourceArtifacts: [ArtifactReference],
             summary: Summary,
-            qualification: QualificationResult,
+            evaluation: EvaluationResult,
             caseResults: [CaseResult]
         ) {
             self.schemaVersion = schemaVersion
-            self.status = qualification.qualified ? "passed" : "failed"
+            self.status = evaluation.passed ? "passed" : "failed"
             self.manifestPath = manifestPath
             self.sourceRepository = manifest.sourceRepository
             self.pinnedCommit = manifest.pinnedCommit
-            self.sourceArtifacts = Self.sourceArtifacts(manifestPath: manifestPath, manifest: manifest)
+            self.sourceArtifacts = sourceArtifacts
             self.summary = summary
-            self.qualification = qualification
+            self.evaluation = evaluation
             self.caseResults = caseResults
             let failureOccurrenceCount = summary.failureCodeCounts.values.reduce(0, +)
-            self.toolEvidence = ToolEvidence(
-                evidenceID: "pex-spef-corpus:\(URL(filePath: manifestPath).deletingPathExtension().lastPathComponent)",
-                artifact: FileReference(
-                    path: manifestPath,
-                    kind: "corpus-manifest",
-                    format: "JSON"
-                ),
-                qualification: QualificationSummary(
-                    qualified: qualification.qualified,
-                    policyID: qualification.policy == .strict ? "strict" : "custom",
+            self.observationSummary = EvaluationSummary(
+                    policyID: evaluation.policy == .strict ? "strict" : "custom",
                     observedMetrics: [
                         "passRate": summary.passRate,
                         "totalGroundCapF": summary.totalGroundCapF,
@@ -743,15 +668,14 @@ public enum SPEFCorpus {
                         "failureCodeKindCount": summary.failureCodeCounts.count,
                         "failureCategoryCount": summary.failureCategoryCounts.count,
                         "failureCategoryKindCount": summary.failureCategoryCounts.count,
-                        "requiredCoverageTagCount": qualification.policy.requiredCoverageTags.count,
-                        "coveredRequiredCoverageTagCount": qualification.policy.requiredCoverageTags.filter {
+                        "requiredCoverageTagCount": evaluation.policy.requiredCoverageTags.count,
+                        "coveredRequiredCoverageTagCount": evaluation.policy.requiredCoverageTags.filter {
                             summary.coverageTagCounts[$0] != nil
                         }.count,
                         "totalNetCount": summary.totalNetCount,
                         "totalElementCount": summary.totalElementCount,
                     ],
-                    failureCodes: qualification.failures.map(\.code)
-                )
+                    failureCodes: evaluation.failures.map(\.code)
             )
         }
 
@@ -769,25 +693,11 @@ public enum SPEFCorpus {
             manifestPath = try container.decode(String.self, forKey: .manifestPath)
             sourceRepository = try container.decode(String.self, forKey: .sourceRepository)
             pinnedCommit = try container.decode(String.self, forKey: .pinnedCommit)
-            sourceArtifacts = try container.decode([FileReference].self, forKey: .sourceArtifacts)
+            sourceArtifacts = try container.decode([ArtifactReference].self, forKey: .sourceArtifacts)
             summary = try container.decode(Summary.self, forKey: .summary)
-            qualification = try container.decode(QualificationResult.self, forKey: .qualification)
-            toolEvidence = try container.decode(ToolEvidence.self, forKey: .toolEvidence)
+            evaluation = try container.decode(EvaluationResult.self, forKey: .evaluation)
+            observationSummary = try container.decode(EvaluationSummary.self, forKey: .observationSummary)
             caseResults = try container.decode([CaseResult].self, forKey: .caseResults)
-        }
-
-        private static func sourceArtifacts(manifestPath: String, manifest: Manifest) -> [FileReference] {
-            [
-                FileReference(path: manifestPath, kind: "corpus-manifest", format: "JSON")
-            ] + manifest.fixtures.map { fixture in
-                FileReference(
-                    path: fixture.sourcePath.isEmpty ? fixture.fileName : fixture.sourcePath,
-                    kind: "spef-fixture",
-                    format: "SPEF",
-                    sha256: fixture.sha256,
-                    byteCount: fixture.byteCount
-                )
-            }
         }
     }
 }

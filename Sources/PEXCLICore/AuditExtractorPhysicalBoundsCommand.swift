@@ -29,7 +29,7 @@ public struct AuditExtractorPhysicalBoundsCommand: Sendable {
             print(String(data: data, encoding: .utf8) ?? "{}")
         } else {
             print("Status: \(audit.status.rawValue)")
-            print("Backend: \(audit.oracleBackendID)")
+            print("Backend: \(audit.extractorBackendID)")
             print("Physical bounds: \(audit.summary.passedMetricCount)/\(audit.summary.declaredMetricCount) passed")
             print("Diagnostics: \(audit.diagnostics.count)")
             if let outputURL {

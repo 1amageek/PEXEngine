@@ -50,19 +50,19 @@ public struct PEXExternalExtractorFailureDiagnosticClassifier: Sendable {
                 )
         }
 
-        for failure in report.qualification.failures {
-            accumulators[.qualificationFailure, default: Accumulator(failureClass: .qualificationFailure)]
+        for failure in report.evaluation.failures {
+            accumulators[.evaluationFailure, default: Accumulator(failureClass: .evaluationFailure)]
                 .add(
                     reasonCodes: [failure.failureCode, failure.code].compactMap { $0 },
                     severity: .error,
                     caseID: failure.caseID,
                     cornerID: failure.caseID.flatMap { casesByID[$0]?.corner },
-                    suggestedActions: suggestedActions(for: .qualificationFailure)
+                    suggestedActions: suggestedActions(for: .evaluationFailure)
                 )
         }
 
         return accumulators.values
-            .map { $0.classification(backendID: report.oracleBackendID) }
+            .map { $0.classification(backendID: report.extractorBackendID) }
             .sorted { $0.classificationID < $1.classificationID }
     }
 
@@ -96,8 +96,8 @@ public struct PEXExternalExtractorFailureDiagnosticClassifier: Sendable {
         {
             classes.append(.physicalBoundMismatch)
         }
-        if diagnostic.category == "qualification" {
-            classes.append(.qualificationFailure)
+        if diagnostic.category == "evaluation" {
+            classes.append(.evaluationFailure)
         }
         if classes.isEmpty {
             classes.append(.externalExtractorFailure)
@@ -147,8 +147,8 @@ public struct PEXExternalExtractorFailureDiagnosticClassifier: Sendable {
             return ["inspect_external_pex_physical_bounds", "inspect_top_parasitic_nets", "check_extractor_units"]
         case .perCornerFailure:
             return ["inspect_failed_corner_artifacts", "compare_corner_configuration", "rerun_failed_corners"]
-        case .qualificationFailure:
-            return ["inspect_external_pex_case_failures", "review_qualification_policy"]
+        case .evaluationFailure:
+            return ["inspect_external_pex_case_failures", "review_evaluation_policy"]
         case .externalExtractorFailure:
             return ["inspect_external_pex_case_failures"]
         }

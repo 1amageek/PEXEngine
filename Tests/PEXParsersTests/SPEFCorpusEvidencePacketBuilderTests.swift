@@ -14,7 +14,7 @@ struct SPEFCorpusEvidencePacketBuilderTests {
             .deletingLastPathComponent()
             .appending(path: "outside.spef")
             .path(percentEncoded: false)
-        let report = makeReport(
+        let report = try makeReport(
             root: root,
             fixtures: [
                 fixture(fileName: "valid.spef", sourcePath: validFixturePath),
@@ -38,11 +38,14 @@ struct SPEFCorpusEvidencePacketBuilderTests {
         #expect(packet.inputs.contains { $0.artifactID == "corpus-input-1" })
         #expect(!packet.inputs.contains { $0.artifactID == "corpus-input-2" })
         #expect(!packet.inputs.contains { $0.artifactID == "corpus-input-3" })
-        #expect(packet.artifacts.contains { $0.artifactID == "tool-evidence" })
+        #expect(packet.artifacts.isEmpty)
+
+        #expect(throws: (any Error).self) {
+            try ArtifactLocation(workspaceRelativePath: "https://example.invalid/remote.spef")
+        }
 
         let integrityDiagnostics = packet.diagnostics.filter { $0.category == "artifact_integrity" }
         #expect(integrityDiagnostics.contains { $0.observedText == outsideFixturePath })
-        #expect(integrityDiagnostics.contains { $0.observedText == "https://example.invalid/remote.spef" })
         #expect(packet.readiness.contains {
             $0.component == "spef-corpus-artifacts" && $0.status == .blocked
         })
@@ -54,7 +57,7 @@ struct SPEFCorpusEvidencePacketBuilderTests {
         let root = try makeTemporaryDirectory(prefix: "spef-corpus-evidence-cases")
         defer { removeTemporaryItem(root) }
 
-        let report = makeReport(
+        let report = try makeReport(
             root: root,
             fixtures: [
                 fixture(fileName: "case/one.spef", sourcePath: root.appending(path: "case-one-a.spef").path(percentEncoded: false)),
@@ -104,7 +107,7 @@ private func makeReport(
     root: URL,
     fixtures: [SPEFCorpus.Fixture],
     caseResults: [SPEFCorpus.CaseResult]
-) -> SPEFCorpus.Report {
+) throws -> SPEFCorpus.Report {
     let manifest = SPEFCorpus.Manifest(
         schemaVersion: 1,
         sourceRepository: "local-fixtures",
@@ -114,14 +117,51 @@ private func makeReport(
         fixtures: fixtures
     )
     let summary = SPEFCorpus.Summary(caseResults: caseResults)
-    let qualification = manifest.qualificationPolicy.evaluate(summary: summary)
+    let evaluation = manifest.evaluationPolicy.evaluate(summary: summary)
     return SPEFCorpus.Report(
         manifestPath: root.appending(path: "fixture-manifest.json").path(percentEncoded: false),
         manifest: manifest,
+        sourceArtifacts: try makeArtifactReferences(root: root, fixtures: fixtures),
         summary: summary,
-        qualification: qualification,
+        evaluation: evaluation,
         caseResults: caseResults
     )
+}
+
+private func makeArtifactReferences(
+    root: URL,
+    fixtures: [SPEFCorpus.Fixture]
+) throws -> [ArtifactReference] {
+    var references = [ArtifactReference(
+        locator: ArtifactLocator(
+            location: try ArtifactLocation(fileURL: root.appending(path: "fixture-manifest.json")),
+            role: .input,
+            kind: .other,
+            format: .json
+        ),
+        digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: String(repeating: "a", count: 64)),
+        byteCount: 128
+    )]
+    for (index, fixture) in fixtures.enumerated() {
+        guard !fixture.sourcePath.contains("://") else { continue }
+        let location = fixture.sourcePath.hasPrefix("/")
+            ? try ArtifactLocation(fileURL: URL(filePath: fixture.sourcePath))
+            : try ArtifactLocation(fileURL: root.appending(path: fixture.fileName))
+        references.append(ArtifactReference(
+            locator: ArtifactLocator(
+                location: location,
+                role: .input,
+                kind: .parasitics,
+                format: .spef
+            ),
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: String(repeating: String(index % 10), count: 64)
+            ),
+            byteCount: UInt64(fixture.byteCount)
+        ))
+    }
+    return references
 }
 
 private func fixture(fileName: String, sourcePath: String) -> SPEFCorpus.Fixture {

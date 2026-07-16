@@ -1,30 +1,47 @@
+import Foundation
 import PEXCore
 
 public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
+    public static let currentSchemaVersion = 1
+
     public let schemaVersion: Int
     public let corpusSpec: String
-    public let oracleBackendID: String
+    public let extractorBackendID: String
     public let status: String
     public let summary: Summary
-    public let qualification: Qualification
+    public let evaluation: Evaluation
     public let cases: [CaseResult]
 
     public init(
-        schemaVersion: Int,
+        schemaVersion: Int = Self.currentSchemaVersion,
         corpusSpec: String,
-        oracleBackendID: String,
+        extractorBackendID: String,
         status: String,
         summary: Summary,
-        qualification: Qualification,
+        evaluation: Evaluation,
         cases: [CaseResult]
     ) {
         self.schemaVersion = schemaVersion
         self.corpusSpec = corpusSpec
-        self.oracleBackendID = oracleBackendID
+        self.extractorBackendID = extractorBackendID
         self.status = status
         self.summary = summary
-        self.qualification = qualification
+        self.evaluation = evaluation
         self.cases = cases
+    }
+
+    public func canonicalData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(self)
+    }
+
+    public static func decodeCanonical(from data: Data) throws -> Self {
+        let report = try JSONDecoder().decode(Self.self, from: data)
+        guard try report.canonicalData() == data else {
+            throw PEXEvidenceValidationError.reportDecodeFailed("non-canonical")
+        }
+        return report
     }
 
     public struct Summary: Sendable, Hashable, Codable {
@@ -67,16 +84,16 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
         }
     }
 
-    public struct Qualification: Sendable, Hashable, Codable {
-        public let qualified: Bool
+    public struct Evaluation: Sendable, Hashable, Codable {
         public let policy: Policy
-        public let failures: [QualificationFailure]
+        public let failures: [EvaluationFailure]
 
-        public init(qualified: Bool, policy: Policy, failures: [QualificationFailure]) {
-            self.qualified = qualified
+        public init(policy: Policy, failures: [EvaluationFailure]) {
             self.policy = policy
             self.failures = failures
         }
+
+        public var passed: Bool { failures.isEmpty }
     }
 
     public struct Policy: Sendable, Hashable, Codable {
@@ -89,7 +106,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
         }
     }
 
-    public struct QualificationFailure: Sendable, Hashable, Codable {
+    public struct EvaluationFailure: Sendable, Hashable, Codable {
         public let code: String
         public let caseID: String?
         public let failureCode: String?

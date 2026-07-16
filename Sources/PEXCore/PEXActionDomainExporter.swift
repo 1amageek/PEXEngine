@@ -10,7 +10,7 @@ public struct PEXActionDomainExporter: Sendable {
                 parseSPEFOperation(),
                 writeSPEFOperation(),
                 compareIROperation(),
-                qualifyCorpusOperation(),
+                evaluateCorpusOperation(),
                 exportEvidenceOperation(),
                 exportEvidencePacketOperation(),
                 exportExtractorEvidencePacketOperation(),
@@ -90,13 +90,13 @@ public struct PEXActionDomainExporter: Sendable {
         )
     }
 
-    private func qualifyCorpusOperation() -> PEXActionDomainOperation {
+    private func evaluateCorpusOperation() -> PEXActionDomainOperation {
         PEXActionDomainOperation(
-            operationID: "pex.qualify-spef-corpus",
+            operationID: "pex.evaluate-spef-corpus",
             maturity: "implemented",
             inputRefs: ["spef-corpus-manifest"],
             preconditions: ["corpus-manifest-valid", "coverage-tags-declared"],
-            effects: ["spef-corpus-report-written", "qualification-result-produced"],
+            effects: ["spef-corpus-report-written", "evaluation-result-produced"],
             producedArtifacts: ["pex-spef-corpus-report"],
             verificationGates: ["coverage-taxonomy", "duration-budget", "parasitic-ir-validation"],
             reversible: true
@@ -105,13 +105,13 @@ public struct PEXActionDomainExporter: Sendable {
 
     private func exportEvidenceOperation() -> PEXActionDomainOperation {
         PEXActionDomainOperation(
-            operationID: "pex.export-tool-evidence",
+            operationID: "pex.export-corpus-observations",
             maturity: "implemented",
             inputRefs: ["pex-spef-corpus-report"],
-            preconditions: ["qualified-corpus-report-readable"],
-            effects: ["tool-evidence-produced"],
-            producedArtifacts: ["pex-tool-evidence-export"],
-            verificationGates: ["tool-evidence-qualification"],
+            preconditions: ["evaluated-corpus-report-readable"],
+            effects: ["corpus-observations-produced"],
+            producedArtifacts: ["pex-corpus-observation-export"],
+            verificationGates: ["corpus-observation-validation"],
             reversible: true
         )
     }

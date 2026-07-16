@@ -13,7 +13,7 @@ public struct PEXExternalExtractorPhysicalBoundsAudit: Sendable, Hashable, Codab
     public let status: PEXExternalExtractorPhysicalBoundsAuditStatus
     public let reportPath: String?
     public let corpusSpec: String
-    public let oracleBackendID: String
+    public let extractorBackendID: String
     public let summary: Summary
     public let metricSummaries: [MetricSummary]
     public let caseSummaries: [CaseSummary]
@@ -26,7 +26,7 @@ public struct PEXExternalExtractorPhysicalBoundsAudit: Sendable, Hashable, Codab
         status: PEXExternalExtractorPhysicalBoundsAuditStatus,
         reportPath: String? = nil,
         corpusSpec: String,
-        oracleBackendID: String,
+        extractorBackendID: String,
         summary: Summary,
         metricSummaries: [MetricSummary],
         caseSummaries: [CaseSummary],
@@ -38,7 +38,7 @@ public struct PEXExternalExtractorPhysicalBoundsAudit: Sendable, Hashable, Codab
         self.status = status
         self.reportPath = reportPath
         self.corpusSpec = corpusSpec
-        self.oracleBackendID = oracleBackendID
+        self.extractorBackendID = extractorBackendID
         self.summary = summary
         self.metricSummaries = metricSummaries.sorted { $0.metricID < $1.metricID }
         self.caseSummaries = caseSummaries.sorted { $0.caseID < $1.caseID }
@@ -314,7 +314,7 @@ public struct PEXExternalExtractorPhysicalBoundsAuditor: Sendable {
             status: status,
             reportPath: reportPath,
             corpusSpec: report.corpusSpec,
-            oracleBackendID: report.oracleBackendID,
+            extractorBackendID: report.extractorBackendID,
             summary: PEXExternalExtractorPhysicalBoundsAudit.Summary(
                 caseCount: report.summary.caseCount,
                 declaredMetricCount: overall.declaredCount,
@@ -335,9 +335,9 @@ public struct PEXExternalExtractorPhysicalBoundsAuditor: Sendable {
 
     private func defaultAuditID(report: PEXExternalExtractorCorpusReport, reportPath: String?) -> String {
         if let reportPath, !reportPath.isEmpty {
-            return "pex-extractor-physical-bounds-audit:\(report.oracleBackendID):\(reportPath)"
+            return "pex-extractor-physical-bounds-audit:\(report.extractorBackendID):\(reportPath)"
         }
-        return "pex-extractor-physical-bounds-audit:\(report.oracleBackendID):\(report.corpusSpec)"
+        return "pex-extractor-physical-bounds-audit:\(report.extractorBackendID):\(report.corpusSpec)"
     }
 
     private func diagnostic(

@@ -16,6 +16,9 @@ flowchart TD
     IR --> Persist["Immutable PEX manifest"]
     Persist --> Result["PEXRunResult"]
     Result --> Boundary["PEXFoundationEvidence"]
+
+    Report["Extractor corpus report"] --> Observations["Raw implementation and correlation observations"]
+    Observations --> ToolQualification["ToolQualification trust decision"]
 ```
 
 ## Foundation integration
@@ -44,3 +47,22 @@ corner IDs and parasitic nodes remain PEX domain concepts.
 
 Foundation evidence is an interchange boundary, not a replacement for the
 PEX manifest or the canonical parasitic IR.
+
+## Observation boundary
+
+`PEXExternalExtractorCorpusReport` names the executing implementation with
+`extractorBackendID`. A report records one backend's retained regression corpus;
+it does not claim that backend is an oracle.
+
+PEXEngine loads and verifies corpus artifacts, correlates case sets against
+common physical bounds, and emits canonical `ArtifactReference` values with raw
+measurements. It does not assign trust, accept a tool for production, approve a
+flow gate, or authorize release. Those decisions belong to `ToolQualification`,
+`DesignFlowKernel`, and `ReleaseEngine`, respectively.
+
+| Observation | Meaning |
+|---|---|
+| Same implementation or executable digest | Not an independent comparison |
+| Missing or changed artifact bytes | Integrity finding |
+| Magic primary and Magic comparison | Regression observation only |
+| Independent implementations and correlated reports | Input for ToolQualification evaluation |

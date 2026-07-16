@@ -17,8 +17,8 @@ struct PEXActionDomainCommandTests {
         #expect(operationIDs.contains("pex.parse-spef"))
         #expect(operationIDs.contains("pex.write-spef"))
         #expect(operationIDs.contains("pex.compare-ir"))
-        #expect(operationIDs.contains("pex.qualify-spef-corpus"))
-        #expect(operationIDs.contains("pex.export-tool-evidence"))
+        #expect(operationIDs.contains("pex.evaluate-spef-corpus"))
+        #expect(operationIDs.contains("pex.export-corpus-observations"))
         #expect(operationIDs.contains("pex.export-evidence-packet"))
         #expect(operationIDs.contains("pex.export-extractor-evidence-packet"))
         #expect(operationIDs.contains("pex.audit-extractor-physical-bounds"))
@@ -63,8 +63,8 @@ struct PEXActionDomainCommandTests {
             "pex.parse-spef",
             "pex.write-spef",
             "pex.compare-ir",
-            "pex.qualify-spef-corpus",
-            "pex.export-tool-evidence",
+            "pex.evaluate-spef-corpus",
+            "pex.export-corpus-observations",
             "pex.export-evidence-packet",
             "pex.export-extractor-evidence-packet",
             "pex.audit-extractor-physical-bounds",
@@ -95,7 +95,7 @@ struct PEXActionDomainCommandTests {
                     "artifact-integrity",
                     "schema-validation",
                     "parasitic-ir-validation",
-                    "tool-evidence-qualification",
+                    "corpus-observation-validation",
                 ]).isEmpty,
                 "\(operation.operationID) must include a machine-checkable gate"
             )

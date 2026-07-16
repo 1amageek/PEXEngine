@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import PEXCore
+import CircuiteFoundation
 
 public struct SPEFCorpusRunner: Sendable {
     public init() {}
@@ -15,8 +16,10 @@ public struct SPEFCorpusRunner: Sendable {
         let caseResults = manifest.fixtures.map { fixture in
             runFixture(fixture, fixtureDirectory: resolvedFixtureDirectory)
         }
-        return report(
+        return try report(
             manifestURL: manifestURL,
+            manifestData: manifestData,
+            fixtureDirectory: resolvedFixtureDirectory,
             manifest: manifest,
             caseResults: caseResults
         )
@@ -48,17 +51,74 @@ public struct SPEFCorpusRunner: Sendable {
 
     private func report(
         manifestURL: URL,
+        manifestData: Data,
+        fixtureDirectory: URL,
         manifest: SPEFCorpus.Manifest,
         caseResults: [SPEFCorpus.CaseResult]
-    ) -> SPEFCorpus.Report {
+    ) throws -> SPEFCorpus.Report {
         let summary = SPEFCorpus.Summary(caseResults: caseResults)
-        let qualification = manifest.qualificationPolicy.evaluate(summary: summary)
+        let evaluation = manifest.evaluationPolicy.evaluate(summary: summary)
         return SPEFCorpus.Report(
             manifestPath: manifestURL.path(percentEncoded: false),
             manifest: manifest,
+            sourceArtifacts: try sourceArtifacts(
+                manifestURL: manifestURL,
+                manifestData: manifestData,
+                fixtureDirectory: fixtureDirectory,
+                manifest: manifest
+            ),
             summary: summary,
-            qualification: qualification,
+            evaluation: evaluation,
             caseResults: caseResults
+        )
+    }
+
+    private func sourceArtifacts(
+        manifestURL: URL,
+        manifestData: Data,
+        fixtureDirectory: URL,
+        manifest: SPEFCorpus.Manifest
+    ) throws -> [ArtifactReference] {
+        var artifacts = [try artifactReference(
+            url: manifestURL,
+            data: manifestData,
+            kind: .other,
+            format: .json
+        )]
+        for fixture in manifest.fixtures {
+            let fixtureURL = fixtureDirectory.appending(path: fixture.fileName)
+            let fixtureData: Data
+            do {
+                fixtureData = try Data(contentsOf: fixtureURL)
+            } catch {
+                continue
+            }
+            artifacts.append(try artifactReference(
+                url: fixtureURL,
+                data: fixtureData,
+                kind: .parasitics,
+                format: .spef
+            ))
+        }
+        return artifacts
+    }
+
+    private func artifactReference(
+        url: URL,
+        data: Data,
+        kind: ArtifactKind,
+        format: ArtifactFormat
+    ) throws -> ArtifactReference {
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        return ArtifactReference(
+            locator: ArtifactLocator(
+                location: try ArtifactLocation(fileURL: url),
+                role: .input,
+                kind: kind,
+                format: format
+            ),
+            digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: digest),
+            byteCount: UInt64(data.count)
         )
     }
 

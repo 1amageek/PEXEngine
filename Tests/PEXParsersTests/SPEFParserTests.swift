@@ -630,8 +630,8 @@ struct SPEFParserTests {
         #expect(report.status == "passed")
         #expect(report.summary.caseCount == 7)
         #expect(report.summary.failedCaseCount == 0)
-        #expect(report.qualification.qualified)
-        #expect(report.qualification.failures.isEmpty)
+        #expect(report.evaluation.passed)
+        #expect(report.evaluation.failures.isEmpty)
         #expect(report.summary.coverageTagCounts["pex.spef.openroad"] == 7)
         #expect(report.summary.coverageTagCounts["pex.extract.openrcx"] == 7)
         #expect(report.summary.coverageTagCounts["pex.physical-value"] == 7)
@@ -639,9 +639,9 @@ struct SPEFParserTests {
         #expect(report.summary.coverageTagCounts["pex.spef.net-name-consistency"] == 1)
         #expect(report.summary.coverageTagCounts["pex.spef.no-merging"] == 1)
         #expect(report.summary.coverageTagCounts["pex.spef.short-resover"] == 1)
-        #expect(report.toolEvidence.qualification.observedCounts["caseCount"] == 7)
-        #expect(report.toolEvidence.qualification.observedCounts["requiredCoverageTagCount"] == 14)
-        #expect(report.toolEvidence.qualification.observedCounts["coveredRequiredCoverageTagCount"] == 14)
+        #expect(report.observationSummary.observedCounts["caseCount"] == 7)
+        #expect(report.observationSummary.observedCounts["requiredCoverageTagCount"] == 14)
+        #expect(report.observationSummary.observedCounts["coveredRequiredCoverageTagCount"] == 14)
     }
 
     @Test func spefCorpusReportClassifiesParseAndPhysicalBoundFailures() throws {
@@ -667,7 +667,7 @@ struct SPEFParserTests {
             pinnedCommit: "local",
             sourceDirectory: directory.path(percentEncoded: false),
             license: "test-fixture",
-            qualificationPolicy: SPEFCorpus.QualificationPolicy(
+            evaluationPolicy: SPEFCorpus.EvaluationPolicy(
                 requiredCoverageTags: [
                     "pex.negative.parse-failure",
                     "pex.negative.physical-bound",
@@ -746,11 +746,11 @@ struct SPEFParserTests {
         #expect(report.summary.failureCategoryCounts["physical_bound_mismatch"] == 1)
         #expect(report.summary.failureCodeCounts["parse_failed"] == 1)
         #expect(report.summary.failureCodeCounts["total_ground_cap_mismatch"] == 1)
-        #expect(report.toolEvidence.qualification.observedCounts["failureOccurrenceCount"] == 2)
-        #expect(report.toolEvidence.qualification.observedCounts["failureCategoryCount"] == 2)
-        #expect(report.toolEvidence.qualification.observedCounts["failureCategoryKindCount"] == 2)
-        #expect(report.toolEvidence.qualification.observedCounts["failureCodeCount"] == 2)
-        #expect(report.toolEvidence.qualification.observedCounts["failureCodeKindCount"] == 2)
+        #expect(report.observationSummary.observedCounts["failureOccurrenceCount"] == 2)
+        #expect(report.observationSummary.observedCounts["failureCategoryCount"] == 2)
+        #expect(report.observationSummary.observedCounts["failureCategoryKindCount"] == 2)
+        #expect(report.observationSummary.observedCounts["failureCodeCount"] == 2)
+        #expect(report.observationSummary.observedCounts["failureCodeKindCount"] == 2)
 
         let parseResult = try #require(report.caseResults.first { $0.fileName == "malformed.spef" })
         let parseFailure = try #require(parseResult.failures.first { $0.code == "parse_failed" })
@@ -768,7 +768,7 @@ struct SPEFParserTests {
         let packet = SPEFCorpusEvidencePacketBuilder().build(report: report, packetID: "negative-packet")
         #expect(packet.packetID == "negative-packet")
         #expect(packet.confidence.level == .medium)
-        #expect(packet.inputs.contains { $0.kind == "spef-fixture" && $0.sha256 != nil })
+        #expect(packet.inputs.contains { $0.kind == "parasitics" && $0.sha256 != nil })
         #expect(packet.diagnostics.contains { $0.category == "parse_failure" && $0.caseID == "malformed.spef" })
         #expect(packet.diagnostics.contains { $0.category == "physical_bound_mismatch" && $0.expectedValue == 9e-12 })
         #expect(packet.decisionHints.contains { $0.action == "inspect_spef_syntax" })

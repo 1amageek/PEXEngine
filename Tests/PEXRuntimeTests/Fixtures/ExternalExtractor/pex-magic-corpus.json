@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "qualificationPolicy": {
+  "evaluationPolicy": {
     "requiredCoverageTags": [
       "pex.magic",
       "pex.ground-cap",

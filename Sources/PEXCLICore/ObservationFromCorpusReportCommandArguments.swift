@@ -1,52 +1,52 @@
 import Foundation
 import PEXEngine
 
-struct EvidenceFromCorpusReportCommandArguments: Sendable {
+struct ObservationFromCorpusReportCommandArguments: Sendable {
     let reportURL: URL
-    let evidenceID: String?
-    let checkedAt: Date
+    let recordID: String?
+    let observedAt: Date
     let jsonOutput: Bool
 
     init(arguments: [String], now: Date) throws {
-        var builder = EvidenceFromCorpusReportCommandArgumentBuilder(checkedAt: now)
+        var builder = ObservationFromCorpusReportCommandArgumentBuilder(observedAt: now)
         try builder.parse(arguments: arguments)
 
         guard let reportPath = builder.reportPath else {
-            throw PEXError.invalidInput("--report <path> is required for evidence-from-corpus-report command")
+            throw PEXError.invalidInput("--report <path> is required for observation-from-corpus-report command")
         }
 
         self.reportURL = URL(filePath: reportPath)
-        self.evidenceID = builder.evidenceID
-        self.checkedAt = builder.checkedAt
+        self.recordID = builder.recordID
+        self.observedAt = builder.observedAt
         self.jsonOutput = builder.jsonOutput
     }
 }
 
-private struct EvidenceFromCorpusReportCommandArgumentBuilder: Sendable {
+private struct ObservationFromCorpusReportCommandArgumentBuilder: Sendable {
     var reportPath: String?
-    var evidenceID: String?
-    var checkedAt: Date
+    var recordID: String?
+    var observedAt: Date
     var jsonOutput = false
 
     mutating func parse(arguments: [String]) throws {
         var cursor = PEXCLIArgumentCursor(arguments: arguments)
         while let argument = cursor.next() {
             switch argument {
-            case "--report", "--evidence-from-corpus-report":
+            case "--report", "--observation-from-corpus-report":
                 reportPath = try cursor.requireValue(for: argument)
-            case "--evidence-id":
-                evidenceID = try cursor.requireValue(for: argument)
-            case "--checked-at":
+            case "--record-id":
+                recordID = try cursor.requireValue(for: argument)
+            case "--observed-at":
                 let value = try cursor.requireValue(for: argument)
-                checkedAt = try Self.iso8601Date(argument: argument, value: value)
+                observedAt = try Self.iso8601Date(argument: argument, value: value)
             case "--json":
                 jsonOutput = true
             default:
                 if argument.hasPrefix("-") {
-                    throw PEXError.invalidInput("Unknown evidence-from-corpus-report argument '\(argument)'")
+                    throw PEXError.invalidInput("Unknown observation-from-corpus-report argument '\(argument)'")
                 }
                 guard reportPath == nil else {
-                    throw PEXError.invalidInput("Unexpected evidence-from-corpus-report positional argument '\(argument)'")
+                    throw PEXError.invalidInput("Unexpected observation-from-corpus-report positional argument '\(argument)'")
                 }
                 reportPath = argument
             }

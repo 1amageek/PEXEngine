@@ -2,7 +2,7 @@ import Foundation
 
 /// Validates technology semantics that JSON decoding alone cannot establish.
 /// The validator is deliberately independent from any backend so it can be
-/// used by CLI, library, and qualification workflows consistently.
+/// used by CLI, library, and evaluation workflows consistently.
 public struct TechnologyIRValidator: Sendable {
     public init() {}
 

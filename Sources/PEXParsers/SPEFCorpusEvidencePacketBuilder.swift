@@ -11,24 +11,14 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     ) -> PEXEvidencePacket {
         let contexts = caseContexts(report.caseResults)
         let inputBuild = artifactRefs(from: report.sourceArtifacts, allowedArtifactRootPath: allowedArtifactRootPath)
-        let toolEvidenceBuild = artifactRef(
-            from: report.toolEvidence.artifact,
-            artifactID: "tool-evidence",
-            role: "qualification-evidence",
-            allowedArtifactRootPath: allowedArtifactRootPath
-        )
         let inputRefs = inputBuild.refs
-        let toolEvidenceRefs = toolEvidenceBuild.refs
         let manifestArtifactID = inputRefs.first { $0.artifactID == "corpus-manifest" }?.artifactID
-        let toolEvidenceArtifactID = toolEvidenceRefs.first?.artifactID
         let diagnostics = inputBuild.diagnostics
-            + toolEvidenceBuild.diagnostics
             + contexts.flatMap(\.diagnostics)
             + diagnostics(
                 from: report,
                 inputRefs: inputRefs,
-                contexts: contexts,
-                toolEvidenceArtifactID: toolEvidenceArtifactID
+                contexts: contexts
             )
         let decisionHints = decisionHints(from: report, diagnostics: diagnostics, manifestArtifactID: manifestArtifactID)
 
@@ -44,7 +34,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
             ),
             intent: PEXEvidenceIntent(
                 summary: "Expose retained SPEF corpus observations as PEX decision material.",
-                designContext: "Corpus-level parser and physical-value qualification for extracted parasitic data.",
+                designContext: "Corpus-level parser and physical-value evaluation for extracted parasitic data.",
                 requestedObservations: [
                     "coverage-tags",
                     "parse-structure",
@@ -58,14 +48,14 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
                 manifestArtifactID: manifestArtifactID,
                 diagnostics: diagnostics
             ),
-            artifacts: toolEvidenceRefs,
+            artifacts: [],
             normalizedViews: normalizedViews(report: report, manifestArtifactID: manifestArtifactID),
             metrics: metrics(report: report, manifestArtifactID: manifestArtifactID),
             diagnostics: diagnostics,
             confidence: confidence(report: report, diagnostics: diagnostics),
             decisionHints: decisionHints,
             coverageTags: report.summary.coverageTagCounts.keys.sorted(),
-            relatedEvidenceIDs: [report.toolEvidence.evidenceID]
+            relatedEvidenceIDs: []
         )
     }
 
@@ -128,7 +118,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     }
 
     private func artifactRefs(
-        from refs: [SPEFCorpus.FileReference],
+        from refs: [ArtifactReference],
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
         var result = ArtifactRefBuildResult()
@@ -147,7 +137,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     }
 
     private func artifactRef(
-        from ref: SPEFCorpus.FileReference,
+        from ref: ArtifactReference,
         artifactID: String,
         role: String,
         allowedArtifactRootPath: String?
@@ -164,10 +154,10 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
                 artifactID: artifactID,
                 path: ref.path,
                 role: role,
-                kind: ref.kind,
-                format: ref.format,
+                kind: ref.kind.rawValue,
+                format: ref.format.rawValue,
                 sha256: ref.sha256,
-                byteCount: ref.byteCount
+                byteCount: Int(exactly: ref.byteCount)
             ))
         }
         return result
@@ -268,8 +258,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     private func diagnostics(
         from report: SPEFCorpus.Report,
         inputRefs: [PEXEvidenceArtifactRef],
-        contexts: [EvidenceCaseContext],
-        toolEvidenceArtifactID: String?
+        contexts: [EvidenceCaseContext]
     ) -> [PEXEvidenceDiagnostic] {
         var diagnostics: [PEXEvidenceDiagnostic] = []
 
@@ -296,18 +285,18 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
             }
         }
 
-        for (index, failure) in report.qualification.failures.enumerated() {
+        for (index, failure) in report.evaluation.failures.enumerated() {
             diagnostics.append(PEXEvidenceDiagnostic(
-                diagnosticID: "qualification:\(sanitizedIdentifierToken(failure.code)):\(index)",
+                diagnosticID: "evaluation:\(sanitizedIdentifierToken(failure.code)):\(index)",
                 code: failure.code,
-                category: "qualification",
+                category: "evaluation",
                 severity: .error,
                 message: failure.message,
                 observedText: failure.observedText,
                 expectedText: failure.requiredText,
                 observedValue: failure.observedDouble,
                 expectedValue: failure.requiredDouble,
-                artifactIDs: toolEvidenceArtifactID.map { [$0] } ?? []
+                artifactIDs: []
             ))
         }
 
@@ -327,10 +316,10 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
             "Retained SPEF output does not prove local extractor readiness.",
         ]
 
-        if report.qualification.qualified {
-            strengths.append("Qualification policy passed for the retained corpus.")
+        if report.evaluation.passed {
+            strengths.append("Evaluation policy passed for the retained corpus.")
         } else {
-            uncertainties.append("Qualification policy did not pass; inspect diagnostics before using the corpus as positive evidence.")
+            uncertainties.append("Evaluation policy did not pass; inspect diagnostics before using the corpus as positive evidence.")
         }
 
         if report.summary.coverageTagCounts["pex.physical-value"] != nil {
@@ -343,7 +332,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
         if diagnostics.contains(where: { $0.category == "artifact_integrity" }) {
             level = .low
             uncertainties.append("Artifact integrity diagnostics block direct trust in retained SPEF corpus decision material.")
-        } else if diagnostics.isEmpty && report.qualification.qualified {
+        } else if diagnostics.isEmpty && report.evaluation.passed {
             level = .high
         } else if report.summary.caseCount > 0 {
             level = .medium
@@ -353,7 +342,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
 
         return PEXEvidenceConfidence(
             level: level,
-            rationale: "Confidence reflects corpus qualification, retained provenance, physical coverage, and unresolved diagnostics.",
+            rationale: "Confidence reflects corpus evaluation, retained provenance, physical coverage, and unresolved diagnostics.",
             strengths: strengths,
             uncertainties: uncertainties
         )

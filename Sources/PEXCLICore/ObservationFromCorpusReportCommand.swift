@@ -2,17 +2,17 @@ import CryptoKit
 import Foundation
 import PEXEngine
 
-public struct EvidenceFromCorpusReportCommand: Sendable {
+public struct ObservationFromCorpusReportCommand: Sendable {
     public let reportURL: URL
-    public let evidenceID: String?
-    public let checkedAt: Date
+    public let recordID: String?
+    public let observedAt: Date
     public let jsonOutput: Bool
 
     public init(arguments: [String], now: Date = Date()) throws {
-        let parsed = try EvidenceFromCorpusReportCommandArguments(arguments: arguments, now: now)
+        let parsed = try ObservationFromCorpusReportCommandArguments(arguments: arguments, now: now)
         self.reportURL = parsed.reportURL
-        self.evidenceID = parsed.evidenceID
-        self.checkedAt = parsed.checkedAt
+        self.recordID = parsed.recordID
+        self.observedAt = parsed.observedAt
         self.jsonOutput = parsed.jsonOutput
     }
 
@@ -26,13 +26,13 @@ public struct EvidenceFromCorpusReportCommand: Sendable {
             print(String(data: jsonData, encoding: .utf8) ?? "{}")
         } else {
             print("Status: \(output.status)")
-            print("Evidence: \(output.toolEvidence.evidenceID)")
+            print("Observation: \(output.observationRecord.recordID)")
             print("Report: \(output.reportPath)")
         }
-        return output.toolEvidence.qualification.qualified
+        return output.observationRecord.observations.passed
     }
 
-    public func buildExport() throws -> SPEFCorpusToolEvidenceExport {
+    public func buildExport() throws -> SPEFCorpusObservationExport {
         let reportData: Data
         do {
             reportData = try Data(contentsOf: reportURL)
@@ -53,12 +53,13 @@ public struct EvidenceFromCorpusReportCommand: Sendable {
             )
         }
 
-        return SPEFCorpusToolEvidenceExport(
+        return try SPEFCorpusObservationExport(
             reportPath: reportURL.path(percentEncoded: false),
             reportSHA256: Self.sha256Hex(reportData),
+            reportByteCount: UInt64(reportData.count),
             report: report,
-            evidenceID: evidenceID,
-            checkedAt: checkedAt
+            recordID: recordID,
+            observedAt: observedAt
         )
     }
 

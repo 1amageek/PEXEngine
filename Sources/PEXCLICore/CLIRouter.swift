@@ -36,14 +36,14 @@ public enum CLIRouter {
                 }
             case "parse-corpus":
                 let cmd = try ParseCorpusCommand(arguments: Array(arguments.dropFirst()))
-                let qualified = try await cmd.run()
-                if !qualified {
+                let evaluated = try await cmd.run()
+                if !evaluated {
                     _exit(exitCode(for: .irValidationFailed))
                 }
-            case "evidence-from-corpus-report":
-                let cmd = try EvidenceFromCorpusReportCommand(arguments: Array(arguments.dropFirst()))
-                let qualified = try await cmd.run()
-                if !qualified {
+            case "observation-from-corpus-report":
+                let cmd = try ObservationFromCorpusReportCommand(arguments: Array(arguments.dropFirst()))
+                let evaluated = try await cmd.run()
+                if !evaluated {
                     _exit(exitCode(for: .irValidationFailed))
                 }
             case "evidence-packet-from-corpus-report":
@@ -195,11 +195,11 @@ public enum CLIRouter {
             --out <path>           Write report JSON
             --json                 Output report as JSON
 
-          evidence-from-corpus-report
-                          Export ToolEvidence-compatible JSON from a SPEF corpus report
+          observation-from-corpus-report
+                          Export raw observations from a SPEF corpus report
             --report <path>        SPEF corpus report JSON
-            --evidence-id <id>     Override evidence ID
-            --checked-at <time>    ISO 8601 timestamp
+            --record-id <id>       Override observation record ID
+            --observed-at <time>   ISO 8601 timestamp
             --json                 Output export as JSON
 
           evidence-packet-from-corpus-report
