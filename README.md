@@ -321,7 +321,8 @@ The typed `extractorRun.multiCorner.comparisonBasis` field is
 `perCornerTechnology` for this case and `sharedTechnology` when every corner
 uses the run-level technology. Agents must inspect this field before treating
 the numeric spread as a PVT metric; neither value replaces foundry correlation
-evidence, and older manifests decode it as `unknown`.
+evidence. Current persisted manifests must encode the comparison basis
+explicitly, and previous manifest schemas are rejected.
 The persisted `extractorRun.multiCorner.notes` repeats this distinction for
 Agent and human review, so a numerically comparable spread is not mistaken for
 a foundry-correlated PVT result.
@@ -525,6 +526,10 @@ Each extraction run produces immutable artifacts:
   reports/summary.md     # Human-readable summary
   reports/source-connectivity/<corner-id>.json
 ```
+
+`manifest.json` uses `PEXArtifactManifest.currentVersion` (currently version 3)
+and is decoded strictly. The canonical package fixture is
+`Tests/PEXPersistenceTests/Fixtures/pex-artifact-manifest-v3.json`.
 
 Loading a run reconstructs corner results from the manifest rather than assuming default paths. Successful corners retain their IR, raw output files, log file paths, and extractor multi-corner comparison summaries; failed corners retain raw and log evidence even when no IR artifact exists.
 

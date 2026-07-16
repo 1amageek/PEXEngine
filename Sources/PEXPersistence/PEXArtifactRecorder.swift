@@ -628,7 +628,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
     let layoutFormat: LayoutFormat
     let sourceNetlistFormat: NetlistFormat
     let corners: [PEXCorner]
-    let technology: TechnologyInput?
+    let technology: TechnologyInput
     let technologyByCorner: [String: TechnologyInput]
     let processProfile: PEXProcessProfileReference?
     let extractorRunRequest: PEXExtractorRunRequest
@@ -641,7 +641,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         layoutFormat: LayoutFormat,
         sourceNetlistFormat: NetlistFormat,
         corners: [PEXCorner],
-        technology: TechnologyInput?,
+        technology: TechnologyInput,
         technologyByCorner: [String: TechnologyInput],
         processProfile: PEXProcessProfileReference?,
         extractorRunRequest: PEXExtractorRunRequest,
@@ -682,11 +682,11 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         self.layoutFormat = try container.decode(LayoutFormat.self, forKey: .layoutFormat)
         self.sourceNetlistFormat = try container.decode(NetlistFormat.self, forKey: .sourceNetlistFormat)
         self.corners = try container.decode([PEXCorner].self, forKey: .corners)
-        self.technology = try container.decodeIfPresent(TechnologyInput.self, forKey: .technology)
-        self.technologyByCorner = try container.decodeIfPresent(
+        self.technology = try container.decode(TechnologyInput.self, forKey: .technology)
+        self.technologyByCorner = try container.decode(
             [String: TechnologyInput].self,
             forKey: .technologyByCorner
-        ) ?? [:]
+        )
         self.processProfile = try container.decodeIfPresent(
             PEXProcessProfileReference.self,
             forKey: .processProfile

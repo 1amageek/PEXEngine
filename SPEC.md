@@ -546,7 +546,7 @@ per-corner TechnologyIR is explicitly provided. This proves process-specific
 routing, not PVT equivalence. The persisted
 `extractorRun.multiCorner.comparisonBasis` is `perCornerTechnology` for this
 case and `sharedTechnology` when all corners use the run-level technology;
-`unknown` is used for legacy artifacts without the field. Consumers must use
+`unknown` is encoded explicitly when the current execution cannot establish the basis. Consumers must use
 this typed scope together with `comparisonStatus` before promoting a spread to
 a PVT signoff claim. `extractorRun.multiCorner.notes` remains a human-readable
 diagnostic. PVT claims still require foundry-qualified decks and correlation

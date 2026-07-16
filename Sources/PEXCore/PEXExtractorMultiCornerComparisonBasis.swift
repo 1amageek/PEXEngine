@@ -8,7 +8,7 @@ public enum PEXExtractorMultiCornerComparisonBasis: String, Sendable, Codable, H
     case sharedTechnology
     /// At least one corner uses an explicit technology override.
     case perCornerTechnology
-    /// The persisted artifact predates this field or does not expose enough
-    /// metadata to establish the comparison basis.
+    /// The current execution does not expose enough metadata to establish the
+    /// comparison basis. Persisted artifacts must still encode this value.
     case unknown
 }

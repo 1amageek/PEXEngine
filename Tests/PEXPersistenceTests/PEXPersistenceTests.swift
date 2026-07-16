@@ -5,6 +5,31 @@ import Foundation
 
 @Suite("PEXPersistence Tests")
 struct PEXPersistenceTests {
+    @Test func canonicalManifestFixtureUsesCurrentSchema() throws {
+        let url = try #require(Bundle.module.url(
+            forResource: "pex-artifact-manifest-v3",
+            withExtension: "json"
+        ))
+        let decoded = try JSONDecoder().decode(
+            PEXArtifactManifest.self,
+            from: Data(contentsOf: url)
+        )
+        #expect(decoded.version == PEXArtifactManifest.currentVersion)
+        #expect(decoded.runID.description == "00000000-0000-0000-0000-000000000001")
+    }
+
+    @Test func manifestDecoderRejectsPreviousSchema() throws {
+        let url = try #require(Bundle.module.url(
+            forResource: "pex-artifact-manifest-v3",
+            withExtension: "json"
+        ))
+        let current = try String(contentsOf: url, encoding: .utf8)
+        let previous = current.replacingOccurrences(of: "\"version\" : 3", with: "\"version\" : 2")
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXArtifactManifest.self, from: Data(previous.utf8))
+        }
+    }
+
     @Test func runSummaryRejectsMissingMultiCornerProjection() {
         let data = Data("""
         {

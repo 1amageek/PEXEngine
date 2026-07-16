@@ -73,7 +73,11 @@ let package = Package(
             dependencies: ["PEXParsers", "PEXCore"],
             resources: [.copy("Fixtures/OpenROAD")]
         ),
-        .testTarget(name: "PEXPersistenceTests", dependencies: ["PEXPersistence", "PEXCore"]),
+        .testTarget(
+            name: "PEXPersistenceTests",
+            dependencies: ["PEXPersistence", "PEXCore"],
+            resources: [.copy("Fixtures/pex-artifact-manifest-v3.json")]
+        ),
         .testTarget(
             name: "PEXRuntimeTests",
             dependencies: [

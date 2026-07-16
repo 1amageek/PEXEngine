@@ -32,13 +32,13 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.init(
-                layout: try container.decodeIfPresent(String.self, forKey: .layout) ?? "top.oas",
-                netlist: try container.decodeIfPresent(String.self, forKey: .netlist) ?? "top.cir",
-                technology: try container.decodeIfPresent(String.self, forKey: .technology) ?? "tech.json",
-                technologyByCorner: try container.decodeIfPresent(
+                layout: try container.decode(String.self, forKey: .layout),
+                netlist: try container.decode(String.self, forKey: .netlist),
+                technology: try container.decode(String.self, forKey: .technology),
+                technologyByCorner: try container.decode(
                     [String: String].self,
                     forKey: .technologyByCorner
-                ) ?? [:]
+                )
             )
         }
     }
@@ -87,12 +87,12 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             self.init(
-                includeCouplingCaps: try container.decodeIfPresent(Bool.self, forKey: .includeCouplingCaps) ?? true,
+                includeCouplingCaps: try container.decode(Bool.self, forKey: .includeCouplingCaps),
                 minCapacitanceF: try container.decodeIfPresent(Double.self, forKey: .minCapacitanceF),
                 minResistanceOhm: try container.decodeIfPresent(Double.self, forKey: .minResistanceOhm),
-                maxParallelJobs: try container.decodeIfPresent(Int.self, forKey: .maxParallelJobs) ?? 2,
-                strictValidation: try container.decodeIfPresent(Bool.self, forKey: .strictValidation) ?? false,
-                sourceConnectivityPolicy: try container.decodeIfPresent(PEXSourceConnectivityPolicy.self, forKey: .sourceConnectivityPolicy) ?? .warn
+                maxParallelJobs: try container.decode(Int.self, forKey: .maxParallelJobs),
+                strictValidation: try container.decode(Bool.self, forKey: .strictValidation),
+                sourceConnectivityPolicy: try container.decode(PEXSourceConnectivityPolicy.self, forKey: .sourceConnectivityPolicy)
             )
         }
     }
@@ -103,13 +103,13 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
     public var topCell: String
     public var backendID: String
     public var processProfile: PEXProcessProfileReference?
-        public var corners: [String]
+    public var corners: [String]
     public var inputs: InputPaths
     public var output: OutputPaths
     public var options: Options
 
     public init(
-        version: Int = 1,
+        version: Int = Self.currentVersion,
         enabled: Bool = true,
         executablePath: String? = nil,
         topCell: String = "TOP",
@@ -143,15 +143,15 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
             )
         }
         self.version = version
-        self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        self.enabled = try container.decode(Bool.self, forKey: .enabled)
         self.executablePath = try container.decodeIfPresent(String.self, forKey: .executablePath)
-        self.topCell = try container.decodeIfPresent(String.self, forKey: .topCell) ?? "TOP"
-        self.backendID = try container.decodeIfPresent(String.self, forKey: .backendID) ?? ""
+        self.topCell = try container.decode(String.self, forKey: .topCell)
+        self.backendID = try container.decode(String.self, forKey: .backendID)
         self.processProfile = try container.decodeIfPresent(PEXProcessProfileReference.self, forKey: .processProfile)
-        self.corners = try container.decodeIfPresent([String].self, forKey: .corners) ?? ["tt_25c_1v0"]
-        self.inputs = try container.decodeIfPresent(InputPaths.self, forKey: .inputs) ?? InputPaths()
-        self.output = try container.decodeIfPresent(OutputPaths.self, forKey: .output) ?? OutputPaths()
-        self.options = try container.decodeIfPresent(Options.self, forKey: .options) ?? Options()
+        self.corners = try container.decode([String].self, forKey: .corners)
+        self.inputs = try container.decode(InputPaths.self, forKey: .inputs)
+        self.output = try container.decode(OutputPaths.self, forKey: .output)
+        self.options = try container.decode(Options.self, forKey: .options)
     }
 
     public var normalizedCorners: [String] {

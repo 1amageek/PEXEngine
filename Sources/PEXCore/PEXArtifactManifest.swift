@@ -213,6 +213,35 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         self.resumedFromRunID = resumedFromRunID
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case version, runID, requestHash, backendID, status, startedAt, finishedAt
+        case corners, artifacts, warnings, extractorRun, resumedFromRunID
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let version = try container.decode(Int.self, forKey: .version)
+        guard version == Self.currentVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .version,
+                in: container,
+                debugDescription: "Unsupported PEX artifact manifest version \(version)."
+            )
+        }
+        self.version = version
+        runID = try container.decode(PEXRunID.self, forKey: .runID)
+        requestHash = try container.decode(PEXRequestHash.self, forKey: .requestHash)
+        backendID = try container.decode(String.self, forKey: .backendID)
+        status = try container.decode(PEXRunStatus.self, forKey: .status)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        finishedAt = try container.decode(Date.self, forKey: .finishedAt)
+        corners = try container.decode([PEXArtifactCorner].self, forKey: .corners)
+        artifacts = try container.decode([PEXArtifactRecord].self, forKey: .artifacts)
+        warnings = try container.decode([PEXWarning].self, forKey: .warnings)
+        extractorRun = try container.decodeIfPresent(PEXExtractorRunResult.self, forKey: .extractorRun)
+        resumedFromRunID = try container.decodeIfPresent(PEXRunID.self, forKey: .resumedFromRunID)
+    }
+
     public func artifact(id: ArtifactID) -> PEXArtifactRecord? {
         artifacts.first { $0.id == id }
     }

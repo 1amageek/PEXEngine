@@ -20,7 +20,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
 
     public init(
         comparisonStatus: PEXExtractorMultiCornerComparisonStatus,
-        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis,
         cornerCount: Int,
         successfulCornerCount: Int,
         failedCornerCount: Int,
@@ -44,7 +44,7 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
 
     public init(
         cornerResults: [PEXExtractorRunResult.CornerSummary],
-        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis,
         additionalNotes: [String] = []
     ) {
         let successfulCorners = cornerResults.filter { $0.status == .success }
@@ -117,10 +117,10 @@ public struct PEXExtractorMultiCornerSummary: Sendable, Codable, Hashable {
                 PEXExtractorMultiCornerComparisonStatus.self,
                 forKey: .comparisonStatus
             ),
-            comparisonBasis: try container.decodeIfPresent(
+            comparisonBasis: try container.decode(
                 PEXExtractorMultiCornerComparisonBasis.self,
                 forKey: .comparisonBasis
-            ) ?? .unknown,
+            ),
             cornerCount: try container.decode(Int.self, forKey: .cornerCount),
             successfulCornerCount: try container.decode(Int.self, forKey: .successfulCornerCount),
             failedCornerCount: try container.decode(Int.self, forKey: .failedCornerCount),

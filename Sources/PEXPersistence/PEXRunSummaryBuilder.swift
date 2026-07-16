@@ -424,7 +424,7 @@ public struct PEXMultiCornerParasiticSummary: Sendable, Codable, Hashable {
         successfulCornerCount: Int,
         failedCornerCount: Int,
         failedCornerIDs: [String],
-        comparisonBasis: PEXExtractorMultiCornerComparisonBasis = .unknown,
+        comparisonBasis: PEXExtractorMultiCornerComparisonBasis,
         totalCapacitance: PEXCornerMetricSpreadSummary,
         totalResistance: PEXCornerMetricSpreadSummary,
         topNetSpreads: [PEXNetCornerSpreadSummary],
@@ -489,10 +489,10 @@ public struct PEXMultiCornerParasiticSummary: Sendable, Codable, Hashable {
             successfulCornerCount: try container.decode(Int.self, forKey: .successfulCornerCount),
             failedCornerCount: try container.decode(Int.self, forKey: .failedCornerCount),
             failedCornerIDs: try container.decode([String].self, forKey: .failedCornerIDs),
-            comparisonBasis: try container.decodeIfPresent(
+            comparisonBasis: try container.decode(
                 PEXExtractorMultiCornerComparisonBasis.self,
                 forKey: .comparisonBasis
-            ) ?? .unknown,
+            ),
             totalCapacitance: try container.decode(
                 PEXCornerMetricSpreadSummary.self,
                 forKey: .totalCapacitance

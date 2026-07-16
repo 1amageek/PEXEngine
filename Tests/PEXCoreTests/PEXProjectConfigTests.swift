@@ -8,9 +8,23 @@ struct PEXProjectConfigTests {
         let json = """
         {
             "version": 1,
+            "enabled": true,
             "topCell": "INVERTER",
             "backendID": "mock",
-            "corners": ["tt_25c_1v0", "ss_125c_0v81"]
+            "corners": ["tt_25c_1v0", "ss_125c_0v81"],
+            "inputs": {
+                "layout": "top.oas",
+                "netlist": "top.cir",
+                "technology": "tech.json",
+                "technologyByCorner": {}
+            },
+            "output": { "workspace": ".xcircuite/pex/runs" },
+            "options": {
+                "includeCouplingCaps": true,
+                "maxParallelJobs": 2,
+                "strictValidation": false,
+                "sourceConnectivityPolicy": "warn"
+            }
         }
         """
         let data = Data(json.utf8)
@@ -20,6 +34,33 @@ struct PEXProjectConfigTests {
         #expect(config.corners.count == 2)
         #expect(config.version == 1)
         #expect(config.enabled == true)
+    }
+
+    @Test(arguments: [
+        "enabled", "topCell", "backendID", "corners", "inputs", "output", "options"
+    ])
+    func decodeRejectsMissingRequiredTopLevelField(_ field: String) throws {
+        let encoded = try JSONEncoder().encode(PEXProjectConfig())
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: field)
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXProjectConfig.self, from: data)
+        }
+    }
+
+    @Test func decodeRejectsMissingRequiredNestedField() throws {
+        let encoded = try JSONEncoder().encode(PEXProjectConfig())
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var inputs = try #require(object["inputs"] as? [String: Any])
+        inputs.removeValue(forKey: "technologyByCorner")
+        object["inputs"] = inputs
+        let data = try JSONSerialization.data(withJSONObject: object)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXProjectConfig.self, from: data)
+        }
     }
 
     @Test func decodeRejectsMissingVersion() {

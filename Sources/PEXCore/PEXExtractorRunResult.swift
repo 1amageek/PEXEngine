@@ -81,7 +81,10 @@ public struct PEXExtractorRunResult: Sendable, Codable, Hashable {
         self.readiness = readiness
         self.status = status
         self.cornerResults = cornerResults
-        self.multiCorner = multiCorner ?? PEXExtractorMultiCornerSummary(cornerResults: cornerResults)
+        self.multiCorner = multiCorner ?? PEXExtractorMultiCornerSummary(
+            cornerResults: cornerResults,
+            comparisonBasis: .unknown
+        )
         self.artifactIDs = Array(Set(artifactIDs.filter { !$0.isEmpty })).sorted()
         self.diagnostics = diagnostics
     }

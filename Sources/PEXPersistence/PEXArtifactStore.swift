@@ -136,22 +136,14 @@ public struct PEXArtifactStore: Sendable {
         })
 
         let technology: TechnologyInput
-        if let capturedTechnology = captured.technology {
-            switch capturedTechnology {
-            case .jsonFile:
-                guard let technologyRecord else {
-                    throw PEXError.persistenceFailed("Captured JSON technology input is missing")
-                }
-                technology = .jsonFile(try resolver.validatedURL(for: technologyRecord))
-            case .inline(let value):
-                technology = .inline(value)
+        switch captured.technology {
+        case .jsonFile:
+            guard let technologyRecord else {
+                throw PEXError.persistenceFailed("Captured JSON technology input is missing")
             }
-        } else if let technologyRecord {
-            // Compatibility path for manifests created before the technology
-            // payload was included in the captured request schema.
             technology = .jsonFile(try resolver.validatedURL(for: technologyRecord))
-        } else {
-            throw PEXError.persistenceFailed("Captured request is missing technology input")
+        case .inline(let value):
+            technology = .inline(value)
         }
 
         var technologyByCorner: [String: TechnologyInput] = [:]
