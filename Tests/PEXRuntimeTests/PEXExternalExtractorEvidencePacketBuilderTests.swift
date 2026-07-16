@@ -136,10 +136,10 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(packet.coverageTags == ["pex.ground-cap", "pex.magic", "pex.physical-value"])
         #expect(packet.intent.requestedObservations.contains("failure-diagnostics"))
         let layoutArtifact = try #require(packet.inputs.first { $0.reference.artifactID == "plate:layoutPath" })
-        #expect(layoutArtifact.reference.sha256 == "816534932c2e27e1df5a4bbfbc3bc00871df209834ca0f3f7162594b35c6ce7c")
+        #expect(layoutArtifact.reference.digest.hexadecimalValue == "816534932c2e27e1df5a4bbfbc3bc00871df209834ca0f3f7162594b35c6ce7c")
         #expect(layoutArtifact.reference.byteCount == 512)
         let irArtifact = try #require(packet.artifacts.first { $0.reference.artifactID == "plate:irPath" })
-        #expect(irArtifact.reference.sha256 == "7e0c1f61a8c7ed7f2f1a8e9f2b6631fd61a25d70564be14f6a3ac047e8feab44")
+        #expect(irArtifact.reference.digest.hexadecimalValue == "7e0c1f61a8c7ed7f2f1a8e9f2b6631fd61a25d70564be14f6a3ac047e8feab44")
         #expect(irArtifact.reference.byteCount == 2048)
         #expect(packet.readiness == [
             PEXEvidenceReadiness(
@@ -818,9 +818,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
 
     @Test("Physical bounds audit retained Magic corpus declares expected bounds")
     func physicalBoundsAuditCorpusSpecDeclaresRetainedMagicBounds() throws {
-        let fixtureURL = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .appending(path: "Fixtures/ExternalExtractor/pex-magic-corpus.json")
+        let fixtureURL = try externalExtractorFixtureURL(named: "pex-magic-corpus")
         let spec = try JSONDecoder().decode(
             ExternalExtractorCorpusSpec.self,
             from: Data(contentsOf: fixtureURL)
@@ -850,15 +848,10 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
 
     @Test("Physical bounds audit fixture regenerates from retained extractor report")
     func physicalBoundsAuditFixtureRegeneratesFromRetainedReport() throws {
-        let testDirectory = URL(filePath: #filePath).deletingLastPathComponent()
-        let pexEngineRoot = testDirectory
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let workspaceRoot = pexEngineRoot.deletingLastPathComponent()
-        let reportURL = testDirectory
-            .appending(path: "Fixtures/ExternalExtractor/pex-real-extractor-report.json")
-        let fixtureURL = workspaceRoot
-            .appending(path: "docs/contract-fixtures/pex-extractor-physical-bounds-audit-v1.json")
+        let reportURL = try externalExtractorFixtureURL(named: "pex-real-extractor-report")
+        let fixtureURL = try externalExtractorFixtureURL(
+            named: "pex-extractor-physical-bounds-audit-v1"
+        )
         let report = try JSONDecoder().decode(
             PEXExternalExtractorCorpusReport.self,
             from: Data(contentsOf: reportURL)
@@ -879,9 +872,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
 
     @Test("External extractor evidence packet preserves retained artifact hashes")
     func evidencePacketPreservesRetainedArtifactHashes() throws {
-        let fixtureURL = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .appending(path: "Fixtures/ExternalExtractor/pex-real-extractor-report.json")
+        let fixtureURL = try externalExtractorFixtureURL(named: "pex-real-extractor-report")
         let report = try JSONDecoder().decode(
             PEXExternalExtractorCorpusReport.self,
             from: Data(contentsOf: fixtureURL)
@@ -890,10 +881,10 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let packet = PEXExternalExtractorEvidencePacketBuilder().build(report: report)
 
         let input = try #require(packet.inputs.first { $0.reference.artifactID == "sky130-plate-magic-pex:layoutPath" })
-        #expect(input.reference.sha256 == "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062")
+        #expect(input.reference.digest.hexadecimalValue == "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062")
         #expect(input.reference.byteCount == 182)
         let ir = try #require(packet.artifacts.first { $0.reference.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
-        #expect(ir.reference.sha256 == "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c")
+        #expect(ir.reference.digest.hexadecimalValue == "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c")
         #expect(ir.reference.byteCount == 17645)
         let rcIR = try #require(packet.artifacts.first { $0.reference.artifactID == "sky130-inverter-magic-pex-ss:irPath" })
         #expect(rcIR.cornerID == "ss")
@@ -1034,6 +1025,14 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         in packet: PEXEvidencePacket
     ) throws -> PEXFailureDiagnosticClassification {
         try #require(packet.failureClassifications.first { $0.failureClass == failureClass })
+    }
+
+    private func externalExtractorFixtureURL(named name: String) throws -> URL {
+        try #require(Bundle.module.url(
+            forResource: name,
+            withExtension: "json",
+            subdirectory: "ExternalExtractor"
+        ))
     }
 
     private func makeExternalExtractorReport(

@@ -1,0 +1,153 @@
+{
+  "auditID": "fixture-audit",
+  "caseSummaries": [
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "corner": "tt",
+      "coverageTags": [
+        "pex.coupling-cap",
+        "pex.magic",
+        "pex.physical-value",
+        "pex.rc-network",
+        "pex.resistance",
+        "pex.standard-cell",
+        "pex.total-capacitance"
+      ],
+      "declaredMetricCount": 3,
+      "evaluatedMetricCount": 3,
+      "failedMetricCount": 0,
+      "failedMetrics": [],
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passedMetricCount": 3,
+      "status": "passed"
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "corner": "ss",
+      "coverageTags": [
+        "pex.coupling-cap",
+        "pex.magic",
+        "pex.multi-corner",
+        "pex.physical-value",
+        "pex.rc-network",
+        "pex.resistance",
+        "pex.standard-cell",
+        "pex.total-capacitance"
+      ],
+      "declaredMetricCount": 3,
+      "evaluatedMetricCount": 3,
+      "failedMetricCount": 0,
+      "failedMetrics": [],
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passedMetricCount": 3,
+      "status": "passed"
+    },
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "corner": "tt",
+      "coverageTags": [
+        "pex.ground-cap",
+        "pex.magic",
+        "pex.physical-value",
+        "pex.total-capacitance"
+      ],
+      "declaredMetricCount": 2,
+      "evaluatedMetricCount": 2,
+      "failedMetricCount": 0,
+      "failedMetrics": [],
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passedMetricCount": 2,
+      "status": "passed"
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "corner": "ss",
+      "coverageTags": [
+        "pex.ground-cap",
+        "pex.magic",
+        "pex.multi-corner",
+        "pex.physical-value",
+        "pex.total-capacitance"
+      ],
+      "declaredMetricCount": 2,
+      "evaluatedMetricCount": 2,
+      "failedMetricCount": 0,
+      "failedMetrics": [],
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passedMetricCount": 2,
+      "status": "passed"
+    }
+  ],
+  "corpusSpec": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json",
+  "diagnostics": [],
+  "extractorBackendID": "magic",
+  "metricSummaries": [
+    {
+      "declaredCount": 4,
+      "evaluatedCount": 4,
+      "evaluationRate": 1,
+      "failedCount": 0,
+      "metricID": "totalCapacitanceF",
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passRate": 1,
+      "passedCount": 4,
+      "unit": "F"
+    },
+    {
+      "declaredCount": 2,
+      "evaluatedCount": 2,
+      "evaluationRate": 1,
+      "failedCount": 0,
+      "metricID": "totalCouplingCapF",
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passRate": 1,
+      "passedCount": 2,
+      "unit": "F"
+    },
+    {
+      "declaredCount": 2,
+      "evaluatedCount": 2,
+      "evaluationRate": 1,
+      "failedCount": 0,
+      "metricID": "totalGroundCapF",
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passRate": 1,
+      "passedCount": 2,
+      "unit": "F"
+    },
+    {
+      "declaredCount": 2,
+      "evaluatedCount": 2,
+      "evaluationRate": 1,
+      "failedCount": 0,
+      "metricID": "totalResistanceOhm",
+      "missingExpectationCount": 0,
+      "missingObservationCount": 0,
+      "passRate": 1,
+      "passedCount": 2,
+      "unit": "ohm"
+    }
+  ],
+  "reportPath": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-real-extractor-report.json",
+  "schemaVersion": 1,
+  "status": "satisfied",
+  "suggestedActions": [],
+  "summary": {
+    "caseCount": 4,
+    "declaredMetricCount": 10,
+    "evaluatedMetricCount": 10,
+    "evaluationRate": 1,
+    "failedMetricCount": 0,
+    "missingExpectationCount": 0,
+    "missingObservationCount": 0,
+    "passRate": 1,
+    "passedMetricCount": 10
+  }
+}

@@ -78,7 +78,10 @@ struct PEXPersistenceTests {
         let decoded = try decoder.decode(PEXArtifactManifest.self, from: data)
         #expect(decoded.version == PEXArtifactManifest.currentVersion)
         #expect(decoded.artifacts.allSatisfy { !$0.locator.location.value.hasPrefix("/") })
-        #expect(decoded.artifacts.allSatisfy { $0.availability != .available || ($0.reference?.sha256 != nil && $0.reference?.byteCount != nil) })
+        #expect(decoded.artifacts.allSatisfy {
+            $0.availability != .available
+                || ($0.reference?.digest.hexadecimalValue != nil && $0.reference?.byteCount != nil)
+        })
     }
 
     @Test func recorderCapturesInputsInsideRunDirectory() throws {
@@ -96,7 +99,7 @@ struct PEXPersistenceTests {
 
         for record in [layout, netlist, request] {
             #expect(record.availability == .available)
-            #expect(record.reference?.sha256 != nil)
+            #expect(record.reference?.digest.hexadecimalValue != nil)
             #expect(record.reference?.byteCount ?? 0 > 0)
             #expect(!record.locator.location.value.hasPrefix("/"))
             #expect(FileManager.default.fileExists(atPath: workspace.runDirectory.appending(path: record.locator.location.value).path(percentEncoded: false)))
@@ -311,7 +314,10 @@ struct PEXPersistenceTests {
 
         #expect(record.availability == .available)
         #expect(try String(contentsOf: capturedURL, encoding: .utf8) == "original-layout")
-        #expect(record.reference?.sha256 == PEXArtifactResolver.sha256(data: try Data(contentsOf: capturedURL)))
+        #expect(
+            record.reference?.digest.hexadecimalValue
+                == PEXArtifactResolver.sha256(data: try Data(contentsOf: capturedURL))
+        )
     }
 
     @Test func recorderDoesNotOverwriteFixedInputArtifacts() throws {
@@ -331,7 +337,10 @@ struct PEXPersistenceTests {
         let secondRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout, netlist])
 
         #expect(firstRequest.locator.location != secondRequest.locator.location)
-        #expect(PEXArtifactResolver.sha256(data: try Data(contentsOf: firstRequestURL)) == firstRequest.reference?.sha256)
+        #expect(
+            PEXArtifactResolver.sha256(data: try Data(contentsOf: firstRequestURL))
+                == firstRequest.reference?.digest.hexadecimalValue
+        )
         #expect(try Data(contentsOf: firstRequestURL) == firstRequestData)
 
         let firstTechnology = try recorder.captureInlineTechnology(TechnologyIR(
@@ -354,7 +363,10 @@ struct PEXPersistenceTests {
         ))
 
         #expect(firstTechnology.locator.location != secondTechnology.locator.location)
-        #expect(PEXArtifactResolver.sha256(data: try Data(contentsOf: firstTechnologyURL)) == firstTechnology.reference?.sha256)
+        #expect(
+            PEXArtifactResolver.sha256(data: try Data(contentsOf: firstTechnologyURL))
+                == firstTechnology.reference?.digest.hexadecimalValue
+        )
         #expect(try Data(contentsOf: firstTechnologyURL) == firstTechnologyData)
     }
 

@@ -784,7 +784,7 @@ struct PEXCLITests {
         #expect(export.observationRecord.recordID == "pex-spef-corpus-test")
         #expect(export.reportArtifact.kind == .report)
         #expect(export.reportArtifact.format == .json)
-        #expect(export.reportArtifact.sha256 == export.reportSHA256)
+        #expect(export.reportArtifact.digest.hexadecimalValue == export.reportSHA256)
         #expect(export.observationRecord.observedAt == "2026-06-19T00:00:00.000Z")
         #expect(export.observationRecord.observations.passed)
         #expect(export.observationRecord.observations.observedCounts["caseCount"] == 7)

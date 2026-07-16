@@ -505,7 +505,11 @@ struct PEXRuntimeTests {
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let deckArtifacts = manifest.artifacts(kind: .processProfileDeckInput)
         #expect(deckArtifacts.count == 2)
-        #expect(deckArtifacts.allSatisfy { $0.availability == .available && $0.reference?.sha256 != nil && $0.reference?.byteCount != nil })
+        #expect(deckArtifacts.allSatisfy {
+            $0.availability == .available
+                && $0.reference?.digest.hexadecimalValue != nil
+                && $0.reference?.byteCount != nil
+        })
         #expect(deckArtifacts.allSatisfy { $0.locator.location.value.hasPrefix("inputs/process-profile-decks/") })
     }
 
@@ -1101,7 +1105,7 @@ struct PEXRuntimeTests {
                 stage: $0.stage,
                 cornerID: $0.cornerID,
                 relativePath: $0.locator.location.value,
-                sha256: isRunSpecificReport ? nil : $0.reference?.sha256,
+                sha256: isRunSpecificReport ? nil : $0.reference?.digest.hexadecimalValue,
                 byteCount: isRunSpecificReport ? nil : $0.reference?.byteCount,
                 availability: $0.availability
             )
