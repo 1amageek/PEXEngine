@@ -27,11 +27,15 @@ build_magic() {
     git clone --depth 1 https://github.com/RTimothyEdwards/magic "$SRC/magic" 2>/dev/null || true
     cd "$SRC/magic"
     if [ "$OS" = "Darwin" ]; then
+        local tcl_tk_prefix
+        local gnu_sed
+        tcl_tk_prefix="$(brew --prefix tcl-tk)"
+        gnu_sed="$(brew --prefix gnu-sed)/libexec/gnubin/sed"
         export SDKROOT="$(xcrun --show-sdk-path)"
         export CC="$(xcrun -f clang)" CXX="$(xcrun -f clang++)"
         ./configure --prefix="$PREFIX/magic" --without-x \
-            --with-tcl=/opt/homebrew/opt/tcl-tk/lib --with-tk=/opt/homebrew/opt/tcl-tk/lib >/dev/null
-        sed -i 's#^SED *= .*#SED = /opt/homebrew/opt/gnu-sed/libexec/gnubin/sed#' defs.mak
+            --with-tcl="$tcl_tk_prefix/lib" --with-tk="$tcl_tk_prefix/lib" >/dev/null
+        MAGIC_SED="$gnu_sed" perl -pi -e 's#^SED\s*=.*#SED = $ENV{MAGIC_SED}#' defs.mak
     else
         ./configure --prefix="$PREFIX/magic" >/dev/null
     fi
