@@ -243,7 +243,7 @@ public struct PEXArtifactStore: Sendable {
         let successCount = cornerResults.filter { $0.status == .success }.count
         let failureCount = cornerResults.filter { $0.status == .failed }.count
 
-        return PEXRunResult(
+        return try PEXRunResult(
             runID: manifest.runID,
             requestHash: manifest.requestHash,
             status: manifest.status,
@@ -251,7 +251,7 @@ public struct PEXArtifactStore: Sendable {
             finishedAt: manifest.finishedAt,
             cornerResults: cornerResults,
             warnings: manifest.warnings,
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: workspace.manifestURL,
             metrics: PEXRunMetrics(
                 totalDurationSeconds: manifest.finishedAt.timeIntervalSince(manifest.startedAt),

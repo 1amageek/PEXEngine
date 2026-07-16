@@ -1,7 +1,7 @@
 import Foundation
 import PEXCore
 
-public struct DSPFPEXParser: PEXParserProtocol {
+public struct DSPFPEXParser: PEXParsing {
     public let format: PEXOutputFormat = .dspf
 
     public let groundNodes: Set<String>

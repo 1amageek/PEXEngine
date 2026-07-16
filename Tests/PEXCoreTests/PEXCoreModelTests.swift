@@ -37,7 +37,7 @@ struct PEXCoreModelTests {
     }
 
     @Test func backendSelectionMock() {
-        let sel = PEXBackendSelection.mock()
+        let sel = PEXBackendSelection(backendID: "mock")
         #expect(sel.backendID == "mock")
         #expect(sel.executablePath == nil)
     }

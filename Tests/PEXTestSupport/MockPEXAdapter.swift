@@ -1,6 +1,8 @@
 import Foundation
 import PEXCore
 
+/// Deterministic extractor used exclusively by PEXEngine tests.
+
 public struct MockPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
     public let backendID = "mock"
     public let capabilities = PEXBackendCapabilities(

@@ -650,7 +650,7 @@ struct PEXCLITests {
         )
         try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
 
-        let result = PEXRunResult(
+        let result = try PEXRunResult(
             runID: runID,
             requestHash: PEXRequestHash("extract-summary"),
             status: .success,
@@ -661,7 +661,7 @@ struct PEXCLITests {
                 PEXCornerResult(cornerID: "ss", status: .success, ir: nil, metrics: PEXCornerMetrics(durationSeconds: 0.1, netCount: 2, elementCount: 0)),
             ],
             warnings: [],
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: workspace.manifestURL,
             metrics: PEXRunMetrics(totalDurationSeconds: 0.2, cornerCount: 2, successCount: 2, failureCount: 0)
         )

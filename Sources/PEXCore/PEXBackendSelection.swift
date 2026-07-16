@@ -12,12 +12,4 @@ public struct PEXBackendSelection: Sendable, Codable, Hashable {
         self.executablePath = executablePath
         self.environmentOverrides = environmentOverrides
     }
-
-    public static func mock() -> Self {
-        PEXBackendSelection(
-            backendID: "mock",
-            executablePath: nil,
-            environmentOverrides: [:]
-        )
-    }
 }

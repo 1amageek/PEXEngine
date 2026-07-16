@@ -3,6 +3,7 @@ import Foundation
 import Synchronization
 @testable import PEXCore
 @testable import PEXAdapters
+@testable import PEXTestSupport
 
 @Suite("MockPEXAdapter Tests")
 struct MockPEXAdapterTests {

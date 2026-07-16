@@ -4,8 +4,8 @@
 
 - Depend on `CircuiteFoundation` for the engine and cross-engine evidence
   vocabulary.
-- Expose `PEXEngineProtocol` as a Foundation `Engine` contract.
-- Provide `PEXFoundationEvidence` with `EvidenceManifest`,
+- Expose `PEXExecuting` as a Foundation `Engine` contract.
+- Make `PEXRunResult` directly provide `EvidenceManifest`,
   `ArtifactReference`, `ExecutionProvenance`, and typed diagnostics.
 - Reject available artifact records without a valid SHA-256 or byte count.
 - Preserve immutable manifests, retry lineage, corner status, and typed

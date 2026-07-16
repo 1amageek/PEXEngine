@@ -45,7 +45,8 @@ The package is designed around a pipeline: `PEXRunRequest` → adapter execution
 | Module | Responsibility | Files |
 |---|---|---|
 | **PEXCore** | Domain models, IR, protocols, typed errors, registries, validation | ~53 files |
-| **PEXAdapters** | Backend adapters (`MagicPEXAdapter` real extraction, `MockPEXAdapter`, `MagicToolchain`, `ProcessRunner`, default backend registry) | 6 files |
+| **PEXAdapters** | Production backend integrations (`MagicPEXAdapter`, `MagicToolchain`, process execution, default backend registry) | tracked |
+| **PEXTestSupport** | Test-only synthetic extraction and deterministic fixture generation | tracked |
 | **PEXParsers** | SPEF lexer/parser/lowering pipeline, SPEF writer, deterministic SPICE backannotation writer/composer, Magic SPICE parasitic parser | tracked |
 | **PEXPersistence** | Manifest, workspace, IR serializer, artifact store, report generator | 5 files |
 | **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, source-connectivity parsers, default engine | tracked |
@@ -55,9 +56,9 @@ The package is designed around a pipeline: `PEXRunRequest` → adapter execution
 
 ### Core Protocols
 
-- **`PEXEngineProtocol`** — extraction plus selective failed-corner retry with `resumedFromRunID` provenance
+- **`PEXExecuting`** — extraction plus selective failed-corner retry with `resumedFromRunID` provenance
 - **`PEXAdapter`** — `prepare`/`execute`/`cleanup` lifecycle with `PEXBackendCapabilities`
-- **`PEXParserProtocol`** — parses `PEXRawOutput` into `ParasiticIR` via `PEXParseContext`
+- **`PEXParsing`** — parses `PEXRawOutput` into `ParasiticIR` via `PEXParseContext`
 - **`PEXService`** — host app integration (`extract(for:corners:backend:)`)
 
 ### Canonical IR (`ParasiticIR`)
@@ -96,7 +97,7 @@ circuit-studio's `PEXCommandService` invokes: `pexengine extract --config <path>
 - **One file, one type** — each file contains one primary type
 - **Protocol-oriented** — public interfaces defined as protocols, implementations separate
 - **Dependencies injected** via protocols for testability
-- **MockPEXAdapter stays first-class** — deterministic backend for tests, previews, and development; `MagicPEXAdapter` is the real extraction backend and its tests are tool-gated (skip when Magic is absent)
+- **Synthetic extraction is test-only** — production defaults register only physical extraction backends; deterministic synthetic extraction lives in `PEXTestSupport`
 - Adapters must declare capability flags (coupling, corner sweep, RC reduction, incremental)
 
 ## Artifact Output Structure

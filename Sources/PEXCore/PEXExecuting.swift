@@ -1,6 +1,7 @@
 import CircuiteFoundation
 
-public protocol PEXEngineProtocol: Engine
+/// Executes parasitic extraction and selective failed-corner retries.
+public protocol PEXExecuting: Engine
 where Request == PEXRunRequest, Output == PEXRunResult {
     func run(_ request: PEXRunRequest) async throws -> PEXRunResult
 

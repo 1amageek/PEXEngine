@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import PEXTestSupport
 @testable import PEXCore
 @testable import PEXRuntime
 
@@ -48,7 +49,7 @@ struct PEXResumeTests {
             artifacts: [],
             warnings: []
         )
-        let parentResult = PEXRunResult(
+        let parentResult = try PEXRunResult(
             runID: parentID,
             requestHash: PEXRequestHash("parent"),
             status: .partialSuccess,
@@ -60,12 +61,12 @@ struct PEXResumeTests {
                 metrics: PEXCornerMetrics(durationSeconds: 0, netCount: 0, elementCount: 0)
             )],
             warnings: [],
-            artifacts: parentManifest,
+            artifactManifest: parentManifest,
             manifestURL: directory.appending(path: "parent-manifest.json"),
             metrics: PEXRunMetrics(totalDurationSeconds: 0, cornerCount: 1, successCount: 0, failureCount: 1)
         )
 
-        let result = try await DefaultPEXEngine.withDefaults().retryFailedCorners(
+        let result = try await DefaultPEXEngine.withTestDefaults().retryFailedCorners(
             request,
             from: parentResult
         )
@@ -73,7 +74,7 @@ struct PEXResumeTests {
         #expect(result.status == .success)
         #expect(result.cornerResults.map(\.cornerID) == [PEXCornerID("ss")])
         #expect(result.resumedFromRunID == parentID)
-        #expect(result.artifacts.resumedFromRunID == parentID)
+        #expect(result.artifactManifest.resumedFromRunID == parentID)
     }
 
     private func remove(_ url: URL) {

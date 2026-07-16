@@ -40,7 +40,7 @@ struct PEXFoundationBoundaryTests {
             artifacts: [artifact],
             warnings: []
         )
-        let result = PEXRunResult(
+        let result = try PEXRunResult(
             runID: runID,
             requestHash: PEXRequestHash("request"),
             status: .success,
@@ -48,7 +48,7 @@ struct PEXFoundationBoundaryTests {
             finishedAt: now,
             cornerResults: [],
             warnings: [],
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: URL(fileURLWithPath: "/tmp/pex-manifest.json"),
             metrics: PEXRunMetrics(
                 totalDurationSeconds: 0,
@@ -57,22 +57,7 @@ struct PEXFoundationBoundaryTests {
                 failureCount: 0
             )
         )
-        let provenance = try ExecutionProvenance(
-            producer: ProducerIdentity(
-                kind: .engine,
-                identifier: "PEXEngine",
-                version: "1.0.0"
-            ),
-            startedAt: now,
-            completedAt: now
-        )
-
-        let boundary = try PEXFoundationEvidence(
-            result: result,
-            provenance: provenance
-        )
-
-        #expect(boundary.evidence.artifacts.map(\.id.rawValue) == ["plate:raw-spef"])
-        #expect(boundary.evidence.artifacts.map(\.locator.role) == [.output])
+        #expect(result.evidence.artifacts.map(\.id.rawValue) == ["plate:raw-spef"])
+        #expect(result.evidence.artifacts.map(\.locator.role) == [.output])
     }
 }

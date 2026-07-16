@@ -84,7 +84,7 @@ public struct PEXRunLineage: Sendable, Codable, Hashable {
                 effectiveByCorner[cornerResult.cornerID] = (
                     result.runID,
                     cornerResult,
-                    result.artifacts.corners.first { $0.cornerID == cornerResult.cornerID }
+                    result.artifactManifest.corners.first { $0.cornerID == cornerResult.cornerID }
                 )
             }
         }

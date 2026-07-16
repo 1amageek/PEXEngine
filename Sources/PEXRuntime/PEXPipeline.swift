@@ -85,7 +85,7 @@ struct PEXPipeline: Sendable {
         return adapter
     }
 
-    func resolveParser(for format: PEXOutputFormat) throws -> any PEXParserProtocol {
+    func resolveParser(for format: PEXOutputFormat) throws -> any PEXParsing {
         guard let parser = parserRegistry.parser(for: format) else {
             throw PEXError(
                 kind: .parseFailed,

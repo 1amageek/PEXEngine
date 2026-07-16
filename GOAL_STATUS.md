@@ -3,8 +3,8 @@
 | Goal | Status |
 |---|---|
 | CircuiteFoundation dependency | Complete |
-| Foundation engine protocol | Complete (`PEXEngineProtocol`) |
-| Foundation evidence boundary | Complete (`PEXFoundationEvidence`) |
+| Foundation engine protocol | Complete (`PEXExecuting`) |
+| Foundation result protocols | Complete (`PEXRunResult` direct conformance) |
 | Integrity-preserving artifact conversion | Complete |
 | Raw implementation and correlation observations | Complete |
 | Same-tool comparison classification | Complete (same implementation or executable digest is not independent) |

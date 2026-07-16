@@ -1,12 +1,13 @@
 import Foundation
 import Testing
+import PEXTestSupport
 @testable import PEXCore
 @testable import PEXRuntime
 
 @Suite("PEX Input Validation Tests")
 struct PEXInputValidationTests {
     @Test func missingLayoutIsRejectedBeforeRunWorkspaceCreation() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: URL(filePath: "/tmp/pex-missing-layout-\(UUID().uuidString).gds"),
             layoutFormat: .gds,
@@ -36,7 +37,7 @@ struct PEXInputValidationTests {
     }
 
     @Test func cornerTechnologyRejectsWhitespaceInCornerID() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let root = FileManager.default.temporaryDirectory
             .appending(path: "pex-corner-validation-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -184,7 +184,7 @@ public actor PEXOrchestrator {
         )
         try store.saveManifest(manifest)
 
-        return PEXRunResult(
+        return try PEXRunResult(
             runID: runID,
             requestHash: requestHash,
             status: status,
@@ -192,7 +192,7 @@ public actor PEXOrchestrator {
             finishedAt: finishedAt,
             cornerResults: cornerResults,
             warnings: allWarnings,
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: workspace.manifestURL,
             metrics: metrics,
             extractorRun: extractorRun,

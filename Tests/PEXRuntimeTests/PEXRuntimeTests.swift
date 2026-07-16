@@ -5,6 +5,7 @@ import Foundation
 @testable import PEXParsers
 @testable import PEXPersistence
 @testable import PEXRuntime
+import PEXTestSupport
 
 @Suite("PEXRuntime Tests")
 struct PEXRuntimeTests {
@@ -118,7 +119,7 @@ struct PEXRuntimeTests {
     }
 
     @Test func endToEndWithMockAdapter() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
 
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
@@ -165,17 +166,17 @@ struct PEXRuntimeTests {
         #expect(result.extractorRun?.multiCorner.successfulCornerCount == 2)
         #expect(result.extractorRun?.multiCorner.totalCapacitance.observedCornerCount == 2)
         #expect(result.extractorRun?.multiCorner.totalResistance.observedCornerCount == 2)
-        #expect(result.artifacts.extractorRun?.readiness.status == .ready)
-        #expect(result.artifacts.extractorRun?.multiCorner.comparisonStatus == .comparable)
-        #expect(result.artifacts.artifacts(kind: .spefRoundTrip).count == 2)
-        #expect(result.artifacts.artifacts(kind: .spiceBackannotation).count == 2)
-        #expect(result.artifacts.artifacts(kind: .sourceConnectivityReport).count == 2)
+        #expect(result.artifactManifest.extractorRun?.readiness.status == .ready)
+        #expect(result.artifactManifest.extractorRun?.multiCorner.comparisonStatus == .comparable)
+        #expect(result.artifactManifest.artifacts(kind: .spefRoundTrip).count == 2)
+        #expect(result.artifactManifest.artifacts(kind: .spiceBackannotation).count == 2)
+        #expect(result.artifactManifest.artifacts(kind: .sourceConnectivityReport).count == 2)
         #expect(result.warnings.count == 22)
-        #expect(result.artifacts.warnings == result.warnings)
+        #expect(result.artifactManifest.warnings == result.warnings)
         #expect(result.warnings.allSatisfy { $0.stage == .irValidation })
         #expect(Set(result.warnings.compactMap(\.cornerID)) == Set([PEXCornerID("tt_25c_1v0"), PEXCornerID("ss_125c_0v81")]))
 
-        let manifestArtifactIDs = Set(result.artifacts.artifacts.map { $0.id.rawValue })
+        let manifestArtifactIDs = Set(result.artifactManifest.artifacts.map { $0.id.rawValue })
         let extractorRun = try #require(result.extractorRun)
         for summary in extractorRun.cornerResults {
             #expect(summary.warningCount == 11)
@@ -206,7 +207,7 @@ struct PEXRuntimeTests {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_golden_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
         let inputs = try makeInputFiles(in: tempDir)
-        let result = try await DefaultPEXEngine.withDefaults().run(PEXRunRequest(
+        let result = try await DefaultPEXEngine.withTestDefaults().run(PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
             sourceNetlistURL: inputs.netlistURL,
@@ -244,8 +245,8 @@ struct PEXRuntimeTests {
         let inputs = try makeInputFiles(in: tempDir.appending(path: "inputs"))
         let firstWorkspace = tempDir.appending(path: "first")
         let secondWorkspace = tempDir.appending(path: "second")
-        let first = try await DefaultPEXEngine.withDefaults().run(makeMockRequest(inputs: inputs, workspace: firstWorkspace))
-        let second = try await DefaultPEXEngine.withDefaults().run(makeMockRequest(inputs: inputs, workspace: secondWorkspace))
+        let first = try await DefaultPEXEngine.withTestDefaults().run(makeMockRequest(inputs: inputs, workspace: firstWorkspace))
+        let second = try await DefaultPEXEngine.withTestDefaults().run(makeMockRequest(inputs: inputs, workspace: secondWorkspace))
         let firstIR = try #require(first.cornerResults.first?.ir)
         let secondIR = try #require(second.cornerResults.first?.ir)
 
@@ -253,7 +254,7 @@ struct PEXRuntimeTests {
         #expect(second.status == .success)
         #expect(first.requestHash == second.requestHash)
         #expect(firstIR == secondIR)
-        #expect(canonicalArtifactGraph(first.artifacts) == canonicalArtifactGraph(second.artifacts))
+        #expect(canonicalArtifactGraph(first.artifactManifest) == canonicalArtifactGraph(second.artifactManifest))
     }
 
     @Test func defaultPEXServiceExtractAndLoadRun() async throws {
@@ -261,7 +262,7 @@ struct PEXRuntimeTests {
         defer { removeTemporaryItem(tempDir) }
         let inputs = try makeInputFiles(in: tempDir)
 
-        let service = DefaultPEXService.withDefaults()
+        let service = DefaultPEXService(engine: DefaultPEXEngine.withTestDefaults())
 
         let tech = TechnologyIR(
             processName: "test_process",
@@ -272,7 +273,7 @@ struct PEXRuntimeTests {
             backendHints: [:]
         )
 
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -294,7 +295,7 @@ struct PEXRuntimeTests {
         #expect(loaded.status == .success)
         #expect(loaded.cornerResults.count == 1)
         #expect(loaded.cornerResults[0].ir != nil)
-        #expect(loaded.artifacts.artifacts(kind: .parasiticIR, cornerID: PEXCornerID("tt")).count == 1)
+        #expect(loaded.artifactManifest.artifacts(kind: .parasiticIR, cornerID: PEXCornerID("tt")).count == 1)
         #expect(loaded.extractorRun?.request.backendID == "mock")
         #expect(loaded.extractorRun?.readiness.status == .ready)
         let lineage = try service.loadLineage(result.runID, workspace: tempDir)
@@ -329,7 +330,7 @@ struct PEXRuntimeTests {
             backendHints: [:]
         )
 
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -367,7 +368,7 @@ struct PEXRuntimeTests {
         let tempDir = FileManager.default.temporaryDirectory.appending(path: "pex_module_query_test_\(UUID().uuidString)")
         defer { removeTemporaryItem(tempDir) }
         let inputs = try makeInputFiles(in: tempDir)
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -523,7 +524,7 @@ struct PEXRuntimeTests {
             emitIRJSON: false,
             strictValidation: false
         )
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -598,7 +599,7 @@ struct PEXRuntimeTests {
             workingDirectory: tempDir
         ))
 
-        let manifestCorner = try #require(result.artifacts.corners.first)
+        let manifestCorner = try #require(result.artifactManifest.corners.first)
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.failureKind == .adapterUnavailable)
     }
@@ -671,7 +672,7 @@ struct PEXRuntimeTests {
     // MARK: - Error Path Tests
 
     @Test func pipelineRejectsEmptyTopCell() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: URL(filePath: "/tmp/test.gds"),
             layoutFormat: .gds,
@@ -693,7 +694,7 @@ struct PEXRuntimeTests {
     }
 
     @Test func pipelineRejectsEmptyCorners() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: URL(filePath: "/tmp/test.gds"),
             layoutFormat: .gds,
@@ -715,7 +716,7 @@ struct PEXRuntimeTests {
     }
 
     @Test func pipelineRejectsDuplicateCornerIDs() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: URL(filePath: "/tmp/test.gds"),
             layoutFormat: .gds,
@@ -737,7 +738,7 @@ struct PEXRuntimeTests {
     }
 
     @Test func pipelineRejectsInvalidNumericOptions() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let invalidOptions = PEXRunOptions(
             extractMode: .rc,
             includeCouplingCaps: true,
@@ -769,7 +770,7 @@ struct PEXRuntimeTests {
     }
 
     @Test func pipelineRejectsUnknownBackend() async throws {
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: URL(filePath: "/tmp/test.gds"),
             layoutFormat: .gds,
@@ -877,7 +878,7 @@ struct PEXRuntimeTests {
         defer { removeTemporaryItem(tempDir) }
         let inputs = try makeInputFiles(in: tempDir)
 
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -932,7 +933,7 @@ struct PEXRuntimeTests {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(tech).write(to: techFile)
 
-        let service = DefaultPEXService.withDefaults()
+        let service = DefaultPEXService(engine: DefaultPEXEngine.withTestDefaults())
         let selection = LayoutSelection(
             layoutURL: inputs.layoutURL,
             netlistURL: inputs.netlistURL,
@@ -956,7 +957,7 @@ struct PEXRuntimeTests {
         defer { removeTemporaryItem(tempDir) }
         let inputs = try makeInputFiles(in: tempDir)
 
-        let engine = DefaultPEXEngine.withDefaults()
+        let engine = DefaultPEXEngine.withTestDefaults()
         let request = PEXRunRequest(
             layoutURL: inputs.layoutURL,
             layoutFormat: .gds,
@@ -1016,7 +1017,7 @@ struct PEXRuntimeTests {
 
         let result = try await engine.run(request)
         let resultOrder = result.cornerResults.map(\.cornerID)
-        let manifestOrder = result.artifacts.corners.map(\.cornerID)
+        let manifestOrder = result.artifactManifest.corners.map(\.cornerID)
 
         #expect(result.status == .success)
         #expect(resultOrder == [PEXCornerID("slow"), PEXCornerID("medium"), PEXCornerID("fast")])

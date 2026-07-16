@@ -1,7 +1,7 @@
 import PEXCore
 import PEXAdapters
 
-public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
+public final class DefaultPEXEngine: PEXExecuting, Sendable {
     private let orchestrator: PEXOrchestrator
 
     public init(
@@ -15,8 +15,7 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
     }
 
     public static func withDefaults() -> DefaultPEXEngine {
-        // Canonical backend set (mock + real Magic), shared with the CLI's
-        // list/doctor commands via default factories so they never drift.
+        // Canonical production backends are shared with CLI discovery.
         let adapters = PEXAdapterRegistry(adapters: PEXDefaultBackends.makeAll())
         let parsers = PEXDefaultParsers.makeRegistry()
         return DefaultPEXEngine(
@@ -45,9 +44,9 @@ public final class DefaultPEXEngine: PEXEngineProtocol, Sendable {
                 "Only failed or partial-success PEX runs can be retried"
             )
         }
-        guard previousResult.artifacts.backendID == request.backendSelection.backendID else {
+        guard previousResult.artifactManifest.backendID == request.backendSelection.backendID else {
             throw PEXError.invalidInput(
-                "Retry backend '\(request.backendSelection.backendID)' does not match prior backend '\(previousResult.artifacts.backendID)'"
+                "Retry backend '\(request.backendSelection.backendID)' does not match prior backend '\(previousResult.artifactManifest.backendID)'"
             )
         }
 

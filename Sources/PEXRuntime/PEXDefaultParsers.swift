@@ -2,7 +2,7 @@ import PEXCore
 import PEXParsers
 
 public enum PEXDefaultParsers {
-    public static func makeAll() -> [any PEXParserProtocol] {
+    public static func makeAll() -> [any PEXParsing] {
         [
             SPEFPEXParser(),
             DSPFPEXParser(),

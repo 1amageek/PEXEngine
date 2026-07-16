@@ -14,8 +14,7 @@ flowchart TD
     Execute --> Parse["SPEF / DSPF / SPICE parser"]
     Parse --> IR["ParasiticIR validation"]
     IR --> Persist["Immutable PEX manifest"]
-    Persist --> Result["PEXRunResult"]
-    Result --> Boundary["PEXFoundationEvidence"]
+    Persist --> Result["PEXRunResult + Foundation protocols"]
 
     Report["Extractor corpus report"] --> Observations["Raw implementation and correlation observations"]
     Observations --> ToolQualification["ToolQualification trust decision"]
@@ -23,16 +22,15 @@ flowchart TD
 
 ## Foundation integration
 
-`PEXEngineProtocol` refines `CircuiteFoundation.Engine` with
+`PEXExecuting` refines `CircuiteFoundation.Engine` with
 `PEXRunRequest`/`PEXRunResult`; `DefaultPEXEngine.execute` delegates to the
 existing run path. Retry and lineage APIs remain PEX-specific.
 
-`PEXFoundationEvidence` maps available records from `PEXArtifactManifest` to
-Foundation `ArtifactReference` values. It validates record status, SHA-256,
-byte count, relative location, kind, and format. PEX warnings and extractor
-diagnostics become typed `DesignDiagnostic` values. The result's run
-provenance is supplied by the caller so the Foundation layer cannot invent
-tool identity or execution timestamps.
+`PEXRunResult` directly maps available `PEXArtifactManifest` records to
+Foundation `ArtifactReference` values, publishes `EvidenceManifest`, and
+converts warnings and extractor diagnostics to `DesignDiagnostic`. Its
+provenance is derived from the retained backend identity, inputs, and run
+timestamps, so no caller-side projection can invent execution identity.
 
 `PEXRunRequest.designObjectReference()` provides a stable top-cell identity;
 corner IDs and parasitic nodes remain PEX domain concepts.

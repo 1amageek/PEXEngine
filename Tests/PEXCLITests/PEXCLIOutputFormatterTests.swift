@@ -6,8 +6,8 @@ import Testing
 
 @Suite("PEXCLI output formatter tests")
 struct PEXCLIOutputFormatterTests {
-    @Test func outputFormatterSuccess() {
-        let result = makeCLIResult(
+    @Test func outputFormatterSuccess() throws {
+        let result = try makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .success,
@@ -35,8 +35,8 @@ struct PEXCLIOutputFormatterTests {
         #expect(output.contains("test warn"))
     }
 
-    @Test func outputFormatterPartialSuccess() {
-        let result = makeCLIResult(
+    @Test func outputFormatterPartialSuccess() throws {
+        let result = try makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .partialSuccess,
@@ -67,8 +67,8 @@ struct PEXCLIOutputFormatterTests {
         #expect(!output.contains("Warnings"))
     }
 
-    @Test func outputFormatterFailed() {
-        let result = makeCLIResult(
+    @Test func outputFormatterFailed() throws {
+        let result = try makeCLIResult(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("h"),
             status: .failed,
@@ -122,7 +122,7 @@ struct PEXCLIOutputFormatterTests {
         cornerResults: [PEXCornerResult],
         warnings: [PEXWarning],
         metrics: PEXRunMetrics
-    ) -> PEXRunResult {
+    ) throws -> PEXRunResult {
         let cornerEntries = cornerResults.map { result in
             PEXArtifactCorner(
                 cornerID: result.cornerID,
@@ -141,7 +141,7 @@ struct PEXCLIOutputFormatterTests {
             artifacts: [],
             warnings: warnings
         )
-        return PEXRunResult(
+        return try PEXRunResult(
             runID: runID,
             requestHash: requestHash,
             status: status,
@@ -149,7 +149,7 @@ struct PEXCLIOutputFormatterTests {
             finishedAt: finishedAt,
             cornerResults: cornerResults,
             warnings: warnings,
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: URL(filePath: "/tmp/m.json"),
             metrics: metrics
         )

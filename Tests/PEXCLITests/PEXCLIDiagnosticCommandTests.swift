@@ -31,14 +31,6 @@ struct PEXCLIDiagnosticCommandTests {
         #expect(decoded.checks.contains { $0.name == "Backend Registration" && $0.status == .ok })
         #expect(decoded.checks.contains { $0.name == "Temp Directory" })
 
-        let mock = try #require(decoded.backends.first { $0.id == "mock" })
-        #expect(mock.readiness.backendID == "mock")
-        #expect(mock.readiness.status == .ready)
-        #expect(mock.readiness.capabilities != nil)
-        #expect(mock.readiness.diagnostics.contains {
-            $0.code == "synthetic_extractor" && !$0.suggestedActions.isEmpty
-        })
-
         let magic = try #require(decoded.backends.first { $0.id == "magic" })
         #expect(magic.readiness.backendID == "magic")
         #expect([PEXExtractorReadinessStatus.ready, .blocked].contains(magic.readiness.status))
@@ -84,16 +76,12 @@ struct PEXCLIDiagnosticCommandTests {
         let data = try JSONEncoder().encode(entries)
         let decoded = try JSONDecoder().decode([BackendEntry].self, from: data)
 
-        #expect(Set(decoded.map(\.id)) == Set(["magic", "mock"]))
+        #expect(Set(decoded.map(\.id)) == Set(["magic"]))
         for entry in decoded {
             #expect(entry.readiness.backendID == entry.id)
             #expect(!entry.readiness.reason.isEmpty)
             #expect(entry.readiness.capabilities != nil)
         }
-
-        let mock = try #require(decoded.first { $0.id == "mock" })
-        #expect(mock.readiness.status == .ready)
-        #expect(mock.nativeOutputFormats.contains("spef"))
 
         let magic = try #require(decoded.first { $0.id == "magic" })
         #expect([PEXExtractorReadinessStatus.ready, .blocked].contains(magic.readiness.status))

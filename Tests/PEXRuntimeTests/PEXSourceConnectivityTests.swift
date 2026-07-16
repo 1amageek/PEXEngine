@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import PEXTestSupport
 @testable import PEXCore
 @testable import PEXRuntime
 @testable import PEXAdapters
@@ -229,9 +230,9 @@ struct PEXSourceConnectivityTests {
             workingDirectory: directory
         )
 
-        let result = try await DefaultPEXEngine.withDefaults().run(request)
+        let result = try await DefaultPEXEngine.withTestDefaults().run(request)
         #expect(result.status == .failed)
-        let reportRecord = result.artifacts.artifacts(kind: .sourceConnectivityReport, cornerID: "tt").first
+        let reportRecord = result.artifactManifest.artifacts(kind: .sourceConnectivityReport, cornerID: "tt").first
         let record = try #require(reportRecord)
         let reportURL = try record.locator.location.resolvedFileURL(
             relativeTo: result.manifestURL.deletingLastPathComponent()

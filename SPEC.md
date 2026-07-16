@@ -67,20 +67,20 @@ Design goals:
 - `SPEFParser`, `DSPFParser`, parser registry.
 
 5. `PEXAdapters`
-- Adapter protocols + implementations (`MockAdapter` required).
+- Production adapter protocols and external-tool implementations.
 - Optional proprietary adapters in separate packages.
 
 6. `PEXCLI`
 - Executable target exposing `pexengine` command.
 
-7. `PEXTestingSupport` (optional test helper target)
+7. `PEXTestSupport` (test helper target)
 - Fixtures, golden loaders, compliance test utilities.
 
 ## 5. Public API Design
 
 ### 5.1 Primary engine protocol
 ```swift
-public protocol PEXEngineProtocol {
+public protocol PEXExecuting: Engine<PEXRunRequest, PEXRunResult> {
     func run(_ request: PEXRunRequest) async throws -> PEXRunResult
     func retryFailedCorners(_ request: PEXRunRequest,
                             from previousResult: PEXRunResult) async throws -> PEXRunResult
@@ -277,7 +277,7 @@ Run directory:
 - `runs/<run-id>/reports/source-connectivity/<corner-id>.json`
 - `runs/<run-id>/reports/summary.md`
 
-Failed or partial runs may be retried with `PEXEngineProtocol.retryFailedCorners`.
+Failed or partial runs may be retried with `PEXExecuting.retryFailedCorners`.
 The retry creates a new immutable run directory containing only the failed
 corners and records `resumedFromRunID` in both `manifest.json` and
 `PEXRunResult`; successful prior-corner artifacts remain immutable in the

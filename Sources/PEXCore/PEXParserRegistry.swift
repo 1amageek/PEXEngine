@@ -1,17 +1,17 @@
 import Synchronization
 
 public final class PEXParserRegistry: Sendable {
-    private let parsers: Mutex<[PEXOutputFormat: any PEXParserProtocol]>
+    private let parsers: Mutex<[PEXOutputFormat: any PEXParsing]>
 
     public init() {
         self.parsers = Mutex([:])
     }
 
-    public func register(_ parser: any PEXParserProtocol) {
+    public func register(_ parser: any PEXParsing) {
         parsers.withLock { $0[parser.format] = parser }
     }
 
-    public func parser(for format: PEXOutputFormat) -> (any PEXParserProtocol)? {
+    public func parser(for format: PEXOutputFormat) -> (any PEXParsing)? {
         parsers.withLock { $0[format] }
     }
 

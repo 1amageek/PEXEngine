@@ -10,16 +10,15 @@ contracts.
 
 ```mermaid
 flowchart LR
-    Request["PEXRunRequest"] --> Engine["PEXEngineProtocol"]
+    Request["PEXRunRequest"] --> Engine["PEXExecuting"]
     Engine --> Result["PEXRunResult"]
     Result --> Domain["ParasiticIR + PEX manifest"]
-    Result --> Boundary["PEXFoundationEvidence"]
-    Boundary --> Foundation["EvidenceManifest + DesignDiagnostic"]
+    Result --> Foundation["EvidenceManifest + DesignDiagnostic"]
 ```
 
-`PEXFoundationEvidence` emits only available artifacts with validated SHA-256
-and byte-count metadata. Missing integrity data is a typed boundary error; it
-is never replaced by a guessed digest.
+`PEXRunResult` directly implements `ArtifactProducing`, `EvidenceProviding`,
+and `DiagnosticReporting`. It exposes only available, digest-bearing records;
+no wrapper or facade guesses missing integrity data.
 
 ## Xcircuite integration
 
@@ -114,7 +113,8 @@ PEXRunResult
 | Module | Responsibility |
 |---|---|
 | **PEXCore** | Domain models, IR types, protocols, typed errors, registries, validation |
-| **PEXAdapters** | Backend adapters (MagicPEXAdapter, MockPEXAdapter, ProcessRunner) |
+| **PEXAdapters** | Production backend integrations (MagicPEXAdapter, MagicToolchain, process execution) |
+| **PEXTestSupport** | Test-only synthetic extractor and deterministic fixture generator |
 | **PEXParsers** | SPEF lexer / parser / lowering pipeline including `*INDUC`, DSPF lowering including `L*` elements, Magic SPICE parasitic lowering including `L*` elements, and deterministic SPICE backannotation writing |
 | **PEXPersistence** | Manifest, workspace layout, IR serializer, artifact store, report generator, run summary builder |
 | **PEXRuntime** | Orchestrator (actor), pipeline, technology resolver, config mapper, engine |

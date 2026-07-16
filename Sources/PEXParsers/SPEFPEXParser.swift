@@ -1,7 +1,7 @@
 import Foundation
 import PEXCore
 
-public struct SPEFPEXParser: PEXParserProtocol {
+public struct SPEFPEXParser: PEXParsing {
     public let format: PEXOutputFormat = .spef
 
     public init() {}

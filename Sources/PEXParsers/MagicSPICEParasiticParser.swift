@@ -14,7 +14,7 @@ import PEXCore
 /// becomes a `coupling` element. Device lines (`X`/`M`/...) and directives are
 /// ignored — only parasitics are lowered. Each distinct signal node is its own
 /// single-node net, which satisfies `ParasiticIRValidator`'s membership rules.
-public struct MagicSPICEParasiticParser: PEXParserProtocol {
+public struct MagicSPICEParasiticParser: PEXParsing {
 
     public let format: PEXOutputFormat = .spice
 

@@ -1,4 +1,5 @@
 import Testing
+import PEXTestSupport
 import Foundation
 @testable import PEXCore
 @testable import PEXPersistence
@@ -1060,7 +1061,7 @@ struct PEXPersistenceTests {
             artifacts: [record],
             warnings: []
         )
-        return PEXRunResult(
+        return try PEXRunResult(
             runID: manifest.runID,
             requestHash: manifest.requestHash,
             status: .success,
@@ -1075,7 +1076,7 @@ struct PEXPersistenceTests {
                 )
             ],
             warnings: [],
-            artifacts: manifest,
+            artifactManifest: manifest,
             manifestURL: URL(filePath: "/tmp/manifest.json"),
             metrics: PEXRunMetrics(totalDurationSeconds: 1.0, cornerCount: 1, successCount: 1, failureCount: 0)
         )

@@ -5,6 +5,7 @@ import Testing
 @testable import PEXParsers
 @testable import PEXPersistence
 @testable import PEXRuntime
+import PEXTestSupport
 
 @Suite("PEX Corner Technology Tests")
 struct PEXCornerTechnologyTests {

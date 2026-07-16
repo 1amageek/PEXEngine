@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import PEXTestSupport
 @testable import PEXCore
 
 @Suite("PEX Request Hash Tests")
