@@ -78,7 +78,7 @@ struct PEXPipeline: Sendable {
         }
     }
 
-    func resolveAdapter(for backendID: String) throws -> any PEXAdapter {
+    func resolveAdapter(for backendID: String) throws -> any PEXExtracting {
         guard let adapter = adapterRegistry.adapter(for: backendID) else {
             throw PEXError.adapterUnavailable(backendID: backendID)
         }
@@ -97,7 +97,7 @@ struct PEXPipeline: Sendable {
     }
 
     func executeCorner(
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         context: PEXExecutionContext
     ) async throws -> PEXAdapterExecutionResult {
         try await adapter.prepare(context)

@@ -127,7 +127,7 @@ private actor TechnologyObserver {
     }
 }
 
-private struct TechnologyObservingAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+private struct TechnologyObservingAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     let observer: TechnologyObserver
     private let delegate = MockPEXAdapter()
 

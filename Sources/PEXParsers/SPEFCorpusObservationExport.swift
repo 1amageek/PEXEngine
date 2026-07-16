@@ -65,7 +65,7 @@ public struct SPEFCorpusObservationExport: Sendable, Hashable, Codable {
     }
 
     public var reportPath: String { reportArtifact.path }
-    public var reportSHA256: String { reportArtifact.sha256 }
+    public var reportSHA256: String { reportArtifact.digest.hexadecimalValue }
 
     private static func defaultRecordID(reportPath: String) -> String {
         let filename = URL(filePath: reportPath).deletingPathExtension().lastPathComponent

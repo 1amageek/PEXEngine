@@ -93,7 +93,7 @@ PEXRunRequest
 [ TechnologyResolver ] --> TechnologyIR
     |
     v
-[ PEXAdapter ]         --> PEXRawOutput (SPEF/DSPF/SPICE)
+[ PEXExtracting ]         --> PEXRawOutput (SPEF/DSPF/SPICE)
     |
     v
 [ PEXParser ]          --> ParasiticIR (canonical)

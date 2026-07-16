@@ -104,7 +104,7 @@ public protocol PEXService {
 
 ### 5.3 Adapter protocol
 ```swift
-public protocol PEXAdapter: Sendable {
+public protocol PEXExtracting: Sendable {
     var backendID: String { get }
     var capabilities: PEXBackendCapabilities { get }
 

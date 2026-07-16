@@ -57,7 +57,7 @@ The package is designed around a pipeline: `PEXRunRequest` → adapter execution
 ### Core Protocols
 
 - **`PEXExecuting`** — extraction plus selective failed-corner retry with `resumedFromRunID` provenance
-- **`PEXAdapter`** — `prepare`/`execute`/`cleanup` lifecycle with `PEXBackendCapabilities`
+- **`PEXExtracting`** — `prepare`/`execute`/`cleanup` lifecycle with `PEXBackendCapabilities`
 - **`PEXParsing`** — parses `PEXRawOutput` into `ParasiticIR` via `PEXParseContext`
 - **`PEXService`** — host app integration (`extract(for:corners:backend:)`)
 

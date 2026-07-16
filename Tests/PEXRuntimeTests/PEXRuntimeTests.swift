@@ -1037,7 +1037,7 @@ struct PEXRuntimeTests {
         )
     }
 
-    private func makeEngine(adapter: any PEXAdapter) -> DefaultPEXEngine {
+    private func makeEngine(adapter: any PEXExtracting) -> DefaultPEXEngine {
         let adapters = PEXAdapterRegistry(adapters: [adapter])
         let parsers = PEXParserRegistry()
         parsers.register(SPEFPEXParser())
@@ -1145,7 +1145,7 @@ struct PEXRuntimeTests {
     }
 }
 
-private struct PartialFailurePEXAdapter: PEXAdapter {
+private struct PartialFailurePEXAdapter: PEXExtracting {
     let backendID = "partial-failure"
     let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: false,
@@ -1178,7 +1178,7 @@ private struct PartialFailurePEXAdapter: PEXAdapter {
     func cleanup(_ context: PEXExecutionContext) async {}
 }
 
-private struct CornerUnavailablePEXAdapter: PEXAdapter {
+private struct CornerUnavailablePEXAdapter: PEXExtracting {
     let backendID = "corner-unavailable"
     let capabilities = MockPEXAdapter().capabilities
 
@@ -1197,7 +1197,7 @@ private struct CornerUnavailablePEXAdapter: PEXAdapter {
     func cleanup(_ context: PEXExecutionContext) async {}
 }
 
-private struct DelayedMockPEXAdapter: PEXAdapter {
+private struct DelayedMockPEXAdapter: PEXExtracting {
     let backendID = "delayed-mock"
     let capabilities = MockPEXAdapter().capabilities
     private let base = MockPEXAdapter()
@@ -1223,7 +1223,7 @@ private struct DelayedMockPEXAdapter: PEXAdapter {
     }
 }
 
-private struct SingleCornerReadyPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+private struct SingleCornerReadyPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     let backendID = "single-corner-ready"
     let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
@@ -1262,7 +1262,7 @@ private struct SingleCornerReadyPEXAdapter: PEXAdapter, PEXAdapterReadinessProvi
     func cleanup(_ context: PEXExecutionContext) async {}
 }
 
-private struct CornerDeckAwarePEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+private struct CornerDeckAwarePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     let backendID = "corner-deck-aware"
     let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
@@ -1305,7 +1305,7 @@ private struct CornerDeckAwarePEXAdapter: PEXAdapter, PEXAdapterReadinessProvidi
     }
 }
 
-private struct BlockedReadinessPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+private struct BlockedReadinessPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     let backendID = "blocked-readiness"
     let capabilities = MockPEXAdapter().capabilities
 
@@ -1338,7 +1338,7 @@ private struct BlockedReadinessPEXAdapter: PEXAdapter, PEXAdapterReadinessProvid
     func cleanup(_ context: PEXExecutionContext) async {}
 }
 
-private struct IRPersistenceFailurePEXAdapter: PEXAdapter {
+private struct IRPersistenceFailurePEXAdapter: PEXExtracting {
     let backendID = "ir-persistence-failure"
     let capabilities = MockPEXAdapter().capabilities
     private let base = MockPEXAdapter()
@@ -1360,7 +1360,7 @@ private struct IRPersistenceFailurePEXAdapter: PEXAdapter {
     }
 }
 
-private struct UnsupportedFormatPEXAdapter: PEXAdapter {
+private struct UnsupportedFormatPEXAdapter: PEXExtracting {
     let backendID = "unsupported-format"
     let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: false,

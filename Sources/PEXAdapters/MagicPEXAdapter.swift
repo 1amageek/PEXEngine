@@ -8,7 +8,7 @@ import PEXCore
 /// and writes a SPICE netlist (parsed downstream by `MagicSPICEParasiticParser`).
 /// If the Magic toolchain is unavailable it fails loudly rather than fabricating
 /// output.
-public struct MagicPEXAdapter: PEXAdapter, PEXAdapterReadinessProviding {
+public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
 
     public let backendID = "magic"
     // The default Magic/Sky130 profile exposes one physical extraction table,

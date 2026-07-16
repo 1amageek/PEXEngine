@@ -201,7 +201,7 @@ public actor PEXOrchestrator {
     }
 
     private func toolReadiness(
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         processProfile: PEXProcessProfileReference?
     ) -> PEXExtractorToolReadiness {
         if let provider = adapter as? PEXAdapterReadinessProviding {
@@ -248,7 +248,7 @@ public actor PEXOrchestrator {
 
     private func validateExecutionGate(
         request: PEXRunRequest,
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         readiness: PEXExtractorToolReadiness
     ) throws {
         if let executablePath = request.backendSelection.executablePath,
@@ -463,7 +463,7 @@ public actor PEXOrchestrator {
 
     private func executeCorners(
         request: PEXRunRequest,
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         technology: TechnologyIR,
         technologiesByCorner: [String: TechnologyIR],
         workspace: PEXRunWorkspace,
@@ -541,7 +541,7 @@ public actor PEXOrchestrator {
     }
 
     private func executeSingleCorner(
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         context: PEXExecutionContext,
         store: PEXArtifactStore,
         recorder: PEXArtifactRecorder,
@@ -575,7 +575,7 @@ public actor PEXOrchestrator {
     }
 
     private func executeSuccessfulCorner(
-        adapter: any PEXAdapter,
+        adapter: any PEXExtracting,
         context: PEXExecutionContext,
         store: PEXArtifactStore,
         recorder: PEXArtifactRecorder,

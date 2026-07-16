@@ -138,7 +138,7 @@ public struct DoctorCommand: Sendable {
         }
     }
 
-    private static func toolReadiness(_ adapter: any PEXAdapter) -> PEXExtractorToolReadiness {
+    private static func toolReadiness(_ adapter: any PEXExtracting) -> PEXExtractorToolReadiness {
         if let provider = adapter as? PEXAdapterReadinessProviding {
             return provider.toolReadiness(processProfile: nil)
         }
