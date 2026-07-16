@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 
 public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
     EvidenceProviding, DiagnosticReporting

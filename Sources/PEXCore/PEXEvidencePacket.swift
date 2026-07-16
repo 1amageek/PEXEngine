@@ -1,3 +1,5 @@
+import CircuiteFoundation
+
 public struct PEXEvidencePacket: Sendable, Hashable, Codable {
     public static let currentSchemaVersion = 2
 

@@ -1,5 +1,5 @@
 import Foundation
-@_exported import CircuiteFoundation
+import CircuiteFoundation
 
 public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case layoutInput
