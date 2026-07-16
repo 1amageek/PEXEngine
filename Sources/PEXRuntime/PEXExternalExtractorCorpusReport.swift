@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import PEXCore
 
 public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {

@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import CircuiteFoundation
 import PEXEngine
 
 public struct PEXMetricRecoveryMetricReport: Codable, Sendable, Equatable {

@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import PEXEngine
 
 public struct PEXIRComparisonReport: Codable, Sendable, Equatable {

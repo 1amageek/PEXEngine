@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import CircuiteFoundation
 import PEXCore
 #if os(Linux)
 import Glibc

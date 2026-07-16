@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import CircuiteFoundation
 import PEXCore
 
 public struct PEXArtifactRecorder: Sendable {
