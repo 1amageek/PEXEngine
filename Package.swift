@@ -59,7 +59,8 @@ let package = Package(
         .target(
             name: "PEXTestSupport",
             dependencies: ["PEXCore", "PEXAdapters", "PEXParsers", "PEXRuntime"],
-            path: "Tests/PEXTestSupport"
+            path: "Tests/PEXTestSupport",
+            resources: [.copy("../PEXParsersTests/Fixtures/OpenROAD")]
         ),
         .testTarget(
             name: "PEXAdaptersTests",
@@ -77,8 +78,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PEXParsersTests",
-            dependencies: ["PEXParsers", "PEXCore"],
-            resources: [.copy("Fixtures/OpenROAD")]
+            dependencies: ["PEXParsers", "PEXCore", "PEXTestSupport"]
         ),
         .testTarget(
             name: "PEXPersistenceTests",
@@ -98,7 +98,7 @@ let package = Package(
             ]
         ),
         .testTarget(name: "PEXCLITests", dependencies: [
-            "PEXCLICore", "PEXEngine", "PEXCore",
+            "PEXCLICore", "PEXEngine", "PEXCore", "PEXTestSupport",
         ]),
     ]
 )

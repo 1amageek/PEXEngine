@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import PEXTestSupport
 @testable import PEXCLICore
 @testable import PEXEngine
 @testable import PEXCore
@@ -693,7 +694,8 @@ struct PEXCLITests {
     // MARK: - ParseCorpusCommand
 
     @Test func parseCorpusCommandArguments() throws {
-        let manifestURL = openROADFixtureDirectoryURL().appending(path: "fixture-manifest.json")
+        let fixtureDirectory = try openROADFixtureDirectoryURL()
+        let manifestURL = fixtureDirectory.appending(path: "fixture-manifest.json")
         let outputURL = FileManager.default.temporaryDirectory
             .appending(path: "pex-corpus-\(UUID().uuidString)")
             .appending(path: "report.json")
@@ -702,20 +704,20 @@ struct PEXCLITests {
             "--manifest",
             manifestURL.path(percentEncoded: false),
             "--fixtures-dir",
-            openROADFixtureDirectoryURL().path(percentEncoded: false),
+            fixtureDirectory.path(percentEncoded: false),
             "--out",
             outputURL.path(percentEncoded: false),
             "--json",
         ])
 
         #expect(cmd.manifestURL == manifestURL)
-        #expect(cmd.fixtureDirectory == openROADFixtureDirectoryURL())
+        #expect(cmd.fixtureDirectory == fixtureDirectory)
         #expect(cmd.outputURL == outputURL)
         #expect(cmd.jsonOutput == true)
     }
 
     @Test func parseCorpusCommandBuildsOpenROADEvaluationReport() throws {
-        let fixtureDirectory = openROADFixtureDirectoryURL()
+        let fixtureDirectory = try openROADFixtureDirectoryURL()
         let manifestURL = fixtureDirectory.appending(path: "fixture-manifest.json")
         let cmd = try ParseCorpusCommand(arguments: [
             "--manifest",
@@ -760,7 +762,7 @@ struct PEXCLITests {
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { removeTemporaryItem(tempDir) }
 
-        let manifestURL = openROADFixtureDirectoryURL().appending(path: "fixture-manifest.json")
+        let manifestURL = try PEXTestFixtureResources.openROADManifestURL()
         let report = try SPEFCorpusRunner().run(manifestURL: manifestURL)
         let reportURL = tempDir.appending(path: "pex-spef-corpus-report.json")
         let encoder = JSONEncoder()
@@ -803,7 +805,7 @@ struct PEXCLITests {
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { removeTemporaryItem(tempDir) }
 
-        let manifestURL = openROADFixtureDirectoryURL().appending(path: "fixture-manifest.json")
+        let manifestURL = try PEXTestFixtureResources.openROADManifestURL()
         let report = try SPEFCorpusRunner().run(manifestURL: manifestURL)
         let reportURL = tempDir.appending(path: "pex-spef-corpus-report.json")
         let encoder = JSONEncoder()
@@ -840,7 +842,7 @@ struct PEXCLITests {
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         defer { removeTemporaryItem(tempDir) }
 
-        let manifestURL = openROADFixtureDirectoryURL().appending(path: "fixture-manifest.json")
+        let manifestURL = try PEXTestFixtureResources.openROADManifestURL()
         let report = try SPEFCorpusRunner().run(manifestURL: manifestURL)
         let reportURL = tempDir.appending(path: "pex-spef-corpus-report.json")
         let packetURL = tempDir.appending(path: "packets/pex-evidence-packet.json")
@@ -1557,13 +1559,8 @@ private func removeTemporaryItem(_ url: URL) {
     }
 }
 
-private func openROADFixtureDirectoryURL() -> URL {
-    URL(filePath: #filePath)
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .appending(path: "PEXParsersTests")
-        .appending(path: "Fixtures")
-        .appending(path: "OpenROAD")
+private func openROADFixtureDirectoryURL() throws -> URL {
+    try PEXTestFixtureResources.openROADDirectoryURL()
 }
 
 private func writeConfig(strictValidation: Bool, to url: URL) throws {

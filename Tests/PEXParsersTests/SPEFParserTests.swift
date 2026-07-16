@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CryptoKit
+import PEXTestSupport
 @testable import PEXCore
 @testable import PEXParsers
 
@@ -1118,10 +1119,6 @@ private struct OpenROADFixtureLoweredSummary: Decodable, Sendable {
     let capTolerance: Double
 }
 
-private enum OpenROADFixtureError: Error {
-    case missingFixture(String)
-}
-
 private func openROADFixtureManifest() throws -> OpenROADFixtureManifest {
     let url = try openROADFixtureManifestURL()
     let data = try Data(contentsOf: url)
@@ -1129,17 +1126,11 @@ private func openROADFixtureManifest() throws -> OpenROADFixtureManifest {
 }
 
 private func openROADFixtureManifestURL() throws -> URL {
-    guard let url = Bundle.module.url(forResource: "fixture-manifest", withExtension: "json", subdirectory: "OpenROAD") else {
-        throw OpenROADFixtureError.missingFixture("fixture-manifest.json")
-    }
-    return url
+    try PEXTestFixtureResources.openROADManifestURL()
 }
 
 private func openROADFixtureURL(fileName: String) throws -> URL {
-    guard let url = Bundle.module.url(forResource: fileName, withExtension: nil, subdirectory: "OpenROAD") else {
-        throw OpenROADFixtureError.missingFixture(fileName)
-    }
-    return url
+    try PEXTestFixtureResources.openROADFixtureURL(fileName: fileName)
 }
 
 private func sha256Hex(_ data: Data) -> String {
