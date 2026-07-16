@@ -1,6 +1,7 @@
 import Testing
 import PEXTestSupport
 import Foundation
+import CircuiteFoundation
 @testable import PEXCore
 @testable import PEXPersistence
 

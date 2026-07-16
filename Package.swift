@@ -100,11 +100,21 @@ let package = Package(
         ),
         .testTarget(
             name: "PEXParsersTests",
-            dependencies: ["PEXParsers", "PEXCore", "PEXTestSupport"]
+            dependencies: [
+                "PEXParsers",
+                "PEXCore",
+                "PEXTestSupport",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            ]
         ),
         .testTarget(
             name: "PEXPersistenceTests",
-            dependencies: ["PEXPersistence", "PEXCore", "PEXTestSupport"],
+            dependencies: [
+                "PEXPersistence",
+                "PEXCore",
+                "PEXTestSupport",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            ],
             resources: [.copy("Fixtures/pex-artifact-manifest-v3.json")]
         ),
         .testTarget(
@@ -121,6 +131,7 @@ let package = Package(
         ),
         .testTarget(name: "PEXCLITests", dependencies: [
             "PEXCLICore", "PEXEngine", "PEXCore", "PEXTestSupport",
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
         ]),
     ]
 )

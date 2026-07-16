@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import Testing
 import PEXTestSupport
 @testable import PEXCore

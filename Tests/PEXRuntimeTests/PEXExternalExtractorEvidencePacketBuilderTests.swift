@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CircuiteFoundation
 @testable import PEXCore
 @testable import PEXRuntime
 
