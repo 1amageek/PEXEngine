@@ -821,7 +821,7 @@ struct PEXCLITests {
 
         let packet = try cmd.buildPacket()
 
-        #expect(packet.schemaVersion == 1)
+        #expect(packet.schemaVersion == PEXEvidencePacket.currentSchemaVersion)
         #expect(packet.packetID == "packet-test")
         #expect(packet.domain == "pex.parasitic-evidence")
         #expect(packet.subject.backendID == "openrcx")
@@ -864,7 +864,11 @@ struct PEXCLITests {
 
         #expect(decoded.packetID == "packet-write-test")
         #expect(decoded.subject.backendID == "openrcx")
-        #expect(decoded.inputs.contains { $0.reference.artifactID == "corpus-manifest" })
+        #expect(decoded.inputs.contains {
+            $0.reference.locator.role == .input
+                && $0.reference.locator.kind == .other
+                && $0.reference.locator.format == .json
+        })
         #expect(decoded.artifacts.isEmpty)
         #expect(decoded.metrics.contains { $0.name == "caseCount" && $0.unit == "count" })
         #expect(decoded.confidence.level == .high)

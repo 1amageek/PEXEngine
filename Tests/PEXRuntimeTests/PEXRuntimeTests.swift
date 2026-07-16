@@ -175,7 +175,7 @@ struct PEXRuntimeTests {
         #expect(result.warnings.allSatisfy { $0.stage == .irValidation })
         #expect(Set(result.warnings.compactMap(\.cornerID)) == Set([PEXCornerID("tt_25c_1v0"), PEXCornerID("ss_125c_0v81")]))
 
-        let manifestArtifactIDs = Set(result.artifacts.artifacts.map(\.id))
+        let manifestArtifactIDs = Set(result.artifacts.artifacts.map { $0.id.rawValue })
         let extractorRun = try #require(result.extractorRun)
         for summary in extractorRun.cornerResults {
             #expect(summary.warningCount == 11)
@@ -574,8 +574,8 @@ struct PEXRuntimeTests {
 
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.stage == .backendExecution)
-        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
-        #expect(resolver.records(kind: .log, cornerID: "tt", status: .available).count == 1)
+        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", availability: .available).count == 1)
+        #expect(resolver.records(kind: .log, cornerID: "tt", availability: .available).count == 1)
         #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
         #expect(!report.issues.contains { $0.kind == .failedCornerWithoutEvidence })
     }
@@ -629,7 +629,7 @@ struct PEXRuntimeTests {
 
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.stage == .parsing)
-        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
+        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", availability: .available).count == 1)
         #expect(irRecord.availability == .missing)
         #expect(report.status == .incomplete)
         #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
@@ -661,7 +661,7 @@ struct PEXRuntimeTests {
 
         #expect(result.status == .failed)
         #expect(manifestCorner.failure?.stage == .persistence)
-        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", status: .available).count == 1)
+        #expect(resolver.records(kind: .rawOutput, cornerID: "tt", availability: .available).count == 1)
         #expect(irRecord.availability == .missing)
         #expect(report.status == .incomplete)
         #expect(report.issues.contains { $0.kind == .failedCorner && $0.cornerID == PEXCornerID("tt") })
@@ -1087,7 +1087,7 @@ struct PEXRuntimeTests {
         let cornerID: PEXCornerID?
         let relativePath: String
         let sha256: String?
-        let byteCount: Int?
+        let byteCount: UInt64?
         let availability: PEXArtifactAvailability
     }
 

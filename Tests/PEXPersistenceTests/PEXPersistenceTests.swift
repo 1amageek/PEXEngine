@@ -42,7 +42,7 @@ struct PEXPersistenceTests {
         #expect(decoded.cornerID == ir.cornerID)
     }
 
-    @Test func manifestGraphCodableRequiresV2Records() throws {
+    @Test func manifestGraphCodableRequiresCurrentRecords() throws {
         let manifest = try makeManifest()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -50,7 +50,7 @@ struct PEXPersistenceTests {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(PEXArtifactManifest.self, from: data)
-        #expect(decoded.version == 2)
+        #expect(decoded.version == PEXArtifactManifest.currentVersion)
         #expect(decoded.artifacts.allSatisfy { !$0.locator.location.value.hasPrefix("/") })
         #expect(decoded.artifacts.allSatisfy { $0.availability != .available || ($0.reference?.sha256 != nil && $0.reference?.byteCount != nil) })
     }

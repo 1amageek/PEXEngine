@@ -58,18 +58,18 @@ public struct PEXRunOptions: Sendable, Codable, Hashable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
-            extractMode: try container.decodeIfPresent(PEXExtractMode.self, forKey: .extractMode) ?? .rc,
-            includeCouplingCaps: try container.decodeIfPresent(Bool.self, forKey: .includeCouplingCaps) ?? true,
+            extractMode: try container.decode(PEXExtractMode.self, forKey: .extractMode),
+            includeCouplingCaps: try container.decode(Bool.self, forKey: .includeCouplingCaps),
             minCapacitanceF: try container.decodeIfPresent(Double.self, forKey: .minCapacitanceF),
             minResistanceOhm: try container.decodeIfPresent(Double.self, forKey: .minResistanceOhm),
-            maxParallelJobs: try container.decodeIfPresent(Int.self, forKey: .maxParallelJobs) ?? 2,
-            emitRawArtifacts: try container.decodeIfPresent(Bool.self, forKey: .emitRawArtifacts) ?? true,
-            emitIRJSON: try container.decodeIfPresent(Bool.self, forKey: .emitIRJSON) ?? true,
-            strictValidation: try container.decodeIfPresent(Bool.self, forKey: .strictValidation) ?? true,
-            sourceConnectivityPolicy: try container.decodeIfPresent(
+            maxParallelJobs: try container.decode(Int.self, forKey: .maxParallelJobs),
+            emitRawArtifacts: try container.decode(Bool.self, forKey: .emitRawArtifacts),
+            emitIRJSON: try container.decode(Bool.self, forKey: .emitIRJSON),
+            strictValidation: try container.decode(Bool.self, forKey: .strictValidation),
+            sourceConnectivityPolicy: try container.decode(
                 PEXSourceConnectivityPolicy.self,
                 forKey: .sourceConnectivityPolicy
-            ) ?? .disabled
+            )
         )
     }
 

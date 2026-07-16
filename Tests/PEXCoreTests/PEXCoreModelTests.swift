@@ -49,7 +49,7 @@ struct PEXCoreModelTests {
         #expect(opts.maxParallelJobs == 2)
     }
 
-    @Test func legacyRunOptionsDecodeWithoutConnectivityPolicy() throws {
+    @Test func runOptionsRejectMissingConnectivityPolicy() {
         let data = Data(
             """
             {
@@ -63,10 +63,9 @@ struct PEXCoreModelTests {
             """.utf8
         )
 
-        let decoded = try JSONDecoder().decode(PEXRunOptions.self, from: data)
-
-        #expect(decoded.extractMode == .rc)
-        #expect(decoded.sourceConnectivityPolicy == .disabled)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXRunOptions.self, from: data)
+        }
     }
 
     @Test func extractionRulesDefault() {
@@ -343,7 +342,7 @@ struct PEXCoreModelTests {
     @Test func evidencePacketRejectsMissingEvidenceCollections() throws {
         let json = """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "packetID": "incomplete-packet",
           "domain": "pex.parasitic-evidence",
           "subject": {
@@ -374,7 +373,7 @@ struct PEXCoreModelTests {
     @Test func evidencePacketDecodeRestoresCanonicalCollections() throws {
         let json = """
         {
-          "schemaVersion": 1,
+          "schemaVersion": 2,
           "packetID": "packet-1",
           "domain": "pex.parasitic-evidence",
           "subject": {
@@ -389,11 +388,23 @@ struct PEXCoreModelTests {
           },
           "inputs": [
             {
-              "artifactID": "manifest",
-              "path": "fixture-manifest.json",
-              "role": "intent",
-              "kind": "corpus-manifest",
-              "format": "json"
+              "reference": {
+                "id": "manifest",
+                "locator": {
+                  "location": {
+                    "storage": "workspaceRelative",
+                    "value": "fixture-manifest.json"
+                  },
+                  "role": "input",
+                  "kind": "other",
+                  "format": "json"
+                },
+                "digest": {
+                  "algorithm": "sha256",
+                  "hexadecimalValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                },
+                "byteCount": 1
+              }
             }
           ],
           "readiness": [
@@ -469,6 +480,9 @@ struct PEXCoreModelTests {
         #expect(packet.intent.cornerIDs == ["ss", "tt"])
         #expect(packet.intent.targetNets == ["out", "vdd"])
         #expect(packet.intent.requestedObservations == ["artifact", "physical"])
+        #expect(packet.inputs.first?.reference.artifactID == "manifest")
+        #expect(packet.inputs.first?.reference.locator.role == .input)
+        #expect(packet.inputs.first?.reference.digest.algorithm == .sha256)
         #expect(packet.readiness.first?.artifactIDs == ["manifest"])
         #expect(packet.readiness.first?.suggestedActions == ["inspect_artifact", "rerun_packet_export"])
         #expect(packet.normalizedViews.first?.sourceArtifactIDs == ["manifest"])

@@ -117,32 +117,20 @@ public struct PEXRunLineage: Sendable, Codable, Hashable {
         return .failed
     }
 
-    /// Keeps lineage JSON produced before artifact provenance was added
-    /// readable. Older snapshots still contain the effective corner results;
-    /// their artifact provenance is unavailable, so the leaf run is retained
-    /// only as the compatibility source identifier and no artifact IDs are
-    /// inferred.
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let decodedRootRunID = try container.decode(PEXRunID.self, forKey: .rootRunID)
-        let decodedLeafRunID = try container.decode(PEXRunID.self, forKey: .leafRunID)
-        self.rootRunID = decodedRootRunID
-        self.leafRunID = decodedLeafRunID
+        self.rootRunID = try container.decode(PEXRunID.self, forKey: .rootRunID)
+        self.leafRunID = try container.decode(PEXRunID.self, forKey: .leafRunID)
         self.runs = try container.decode([Run].self, forKey: .runs)
         self.effectiveStatus = try container.decode(PEXRunStatus.self, forKey: .effectiveStatus)
-        let decodedCornerResults = try container.decode([PEXCornerResult].self, forKey: .effectiveCornerResults)
-        self.effectiveCornerResults = decodedCornerResults
-        if let effectiveCorners = try container.decodeIfPresent([EffectiveCorner].self, forKey: .effectiveCorners) {
-            self.effectiveCorners = effectiveCorners
-        } else {
-            self.effectiveCorners = decodedCornerResults.map {
-                EffectiveCorner(
-                    cornerID: $0.cornerID,
-                    sourceRunID: decodedLeafRunID,
-                    status: $0.status
-                )
-            }
-        }
+        self.effectiveCornerResults = try container.decode(
+            [PEXCornerResult].self,
+            forKey: .effectiveCornerResults
+        )
+        self.effectiveCorners = try container.decode(
+            [EffectiveCorner].self,
+            forKey: .effectiveCorners
+        )
     }
 
     public func encode(to encoder: Encoder) throws {

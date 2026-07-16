@@ -206,7 +206,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         })
         #expect(normalizationDiagnostic.severity == .error)
         #expect(normalizationDiagnostic.observedText == "missing ir/tt.json")
-        #expect(normalizationDiagnostic.artifactIDs.contains("broken-normalization:manifestPath"))
+        #expect(normalizationDiagnostic.artifactIDs.isEmpty)
         #expect(normalizationDiagnostic.suggestedActions.contains("inspect_parasitic_ir_artifact"))
 
         #expect(packet.decisionHints.contains {
@@ -217,7 +217,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(packet.decisionHints.contains {
             $0.action == "inspect_parasitic_ir_artifact"
                 && $0.relatedDiagnosticIDs.contains(normalizationDiagnostic.diagnosticID)
-                && $0.artifactIDs.contains("broken-normalization:manifestPath")
+                && $0.artifactIDs.isEmpty
         })
         #expect(packet.confidence.level == .medium)
         #expect(packet.confidence.uncertainties.contains("The external extractor corpus evaluation did not pass."))
@@ -438,7 +438,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         #expect(unit.metricIDs == ["totalGroundCapF"])
         #expect(unit.caseIDs.contains("unit-scale"))
         #expect(unit.cornerIDs.contains("ff"))
-        #expect(unit.artifactIDs.contains("unit-scale:irPath"))
+        #expect(unit.artifactIDs.isEmpty)
         #expect(unit.suggestedActions.contains("check_extractor_units"))
 
         let physical = try classification(.physicalBoundMismatch, in: packet)
@@ -1007,9 +1007,7 @@ struct PEXExternalExtractorEvidencePacketBuilderTests {
         let diagnosticIDs = packet.diagnostics.map(\.diagnosticID)
 
         #expect(caseMetricIDs == ["case-one", "case-one-2", "case-one-3"])
-        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one:irPath" })
-        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one-2:irPath" })
-        #expect(packet.artifacts.contains { $0.reference.artifactID == "case-one-3:irPath" })
+        #expect(packet.artifacts.isEmpty)
         #expect(Set(diagnosticIDs).count == diagnosticIDs.count)
         #expect(packet.diagnostics.contains {
             $0.diagnosticID == "external-case:case-one:case-id-unsafe"

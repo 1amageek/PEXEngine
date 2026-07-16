@@ -768,7 +768,10 @@ struct SPEFParserTests {
         let packet = SPEFCorpusEvidencePacketBuilder().build(report: report, packetID: "negative-packet")
         #expect(packet.packetID == "negative-packet")
         #expect(packet.confidence.level == .medium)
-        #expect(packet.inputs.contains { $0.kind == "parasitics" && $0.sha256 != nil })
+        #expect(packet.inputs.contains {
+            $0.reference.locator.kind.rawValue == "parasitics"
+                && $0.reference.digest.algorithm == .sha256
+        })
         #expect(packet.diagnostics.contains { $0.category == "parse_failure" && $0.caseID == "malformed.spef" })
         #expect(packet.diagnostics.contains { $0.category == "physical_bound_mismatch" && $0.expectedValue == 9e-12 })
         #expect(packet.decisionHints.contains { $0.action == "inspect_spef_syntax" })

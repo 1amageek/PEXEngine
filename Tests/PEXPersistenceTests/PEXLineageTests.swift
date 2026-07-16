@@ -87,18 +87,17 @@ struct PEXLineageTests {
         #expect(lineage.effectiveCornerResults.first { $0.cornerID == "ss" }?.status == .success)
         #expect(lineage.effectiveCornerResults.first { $0.cornerID == "tt" }?.status == .success)
         #expect(lineage.effectiveCorners.first { $0.cornerID == "ss" }?.sourceRunID == childID)
-        #expect(lineage.effectiveCorners.first { $0.cornerID == "ss" }?.artifactIDs == [childIRRecord.id])
+        #expect(lineage.effectiveCorners.first { $0.cornerID == "ss" }?.artifactIDs == [childIRRecord.id.rawValue])
         #expect(lineage.effectiveCorners.first { $0.cornerID == "tt" }?.sourceRunID == parentID)
-        #expect(lineage.effectiveCorners.first { $0.cornerID == "tt" }?.artifactIDs == [parentIRRecord.id])
+        #expect(lineage.effectiveCorners.first { $0.cornerID == "tt" }?.artifactIDs == [parentIRRecord.id.rawValue])
 
         let encoded = try JSONEncoder().encode(lineage)
-        var legacyObject = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        legacyObject.removeValue(forKey: "effectiveCorners")
-        let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
-        let decodedLegacy = try JSONDecoder().decode(PEXRunLineage.self, from: legacyData)
-        #expect(decodedLegacy.effectiveCorners.count == decodedLegacy.effectiveCornerResults.count)
-        #expect(decodedLegacy.effectiveCorners.first?.artifactIDs.isEmpty == true)
-        #expect(decodedLegacy.effectiveCorners.first?.sourceRunID == childID)
+        var incompleteObject = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        incompleteObject.removeValue(forKey: "effectiveCorners")
+        let incompleteData = try JSONSerialization.data(withJSONObject: incompleteObject)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXRunLineage.self, from: incompleteData)
+        }
     }
 
     private func makeIR(cornerID: String) -> ParasiticIR {
