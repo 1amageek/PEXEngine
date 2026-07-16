@@ -7,6 +7,7 @@ struct PEXProjectConfigTests {
     @Test func decodeFromJSON() throws {
         let json = """
         {
+            "version": 1,
             "topCell": "INVERTER",
             "backendID": "mock",
             "corners": ["tt_25c_1v0", "ss_125c_0v81"]
@@ -19,6 +20,22 @@ struct PEXProjectConfigTests {
         #expect(config.corners.count == 2)
         #expect(config.version == 1)
         #expect(config.enabled == true)
+    }
+
+    @Test func decodeRejectsMissingVersion() {
+        let data = Data(#"{"topCell":"INVERTER"}"#.utf8)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXProjectConfig.self, from: data)
+        }
+    }
+
+    @Test func decodeRejectsUnsupportedVersion() {
+        let data = Data(#"{"version":2,"topCell":"INVERTER"}"#.utf8)
+
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXProjectConfig.self, from: data)
+        }
     }
 
     @Test func defaultValues() {
