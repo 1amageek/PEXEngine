@@ -25,7 +25,7 @@ let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileMan
     ? .package(path: "../SignoffToolSupport")
     : .package(
         url: "https://github.com/1amageek/SignoffToolSupport.git",
-        revision: "7bfd1864edd147c59a1dc79e58f297120d165323"
+        revision: "2c8ce00a8f873934e74e3f219e0cbd122a862fe9"
     )
 
 let package = Package(
