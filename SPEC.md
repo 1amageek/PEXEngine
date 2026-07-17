@@ -302,12 +302,15 @@ newer corner results over older results for review and downstream evaluation.
 - Provide clear error when backend is not available.
 
 ### 10.3 External tool execution
-`ProcessRunner` abstraction:
+The injected SignoffToolSupport `TimedProcessRunning` contract:
 - command path resolution,
 - env injection,
 - timeout/cancellation,
 - stdout/stderr capture,
 - exit code mapping.
+
+PEXEngine does not own a second process-spawn, timeout, or process-tree
+termination implementation.
 
 ## 11. Parser Architecture
 

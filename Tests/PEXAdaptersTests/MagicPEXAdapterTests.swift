@@ -484,7 +484,7 @@ struct MagicPEXAdapterTests {
             magicExecutableURL: executableURL,
             rcFileURL: URL(filePath: "/tmp/sky130A.magicrc"),
             pdkRoot: "/tmp/pdk"
-        ), runner: ProcessRunner(
+        ), processRunner: TimedProcessRunner(
             timeoutSeconds: 5,
             terminationGraceSeconds: 0.05,
             pipeDrainGraceSeconds: 0.05

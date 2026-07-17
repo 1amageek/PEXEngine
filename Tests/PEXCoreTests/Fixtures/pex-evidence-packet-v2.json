@@ -1,0 +1,907 @@
+{
+  "artifacts": [],
+  "confidence": {
+    "level": "low",
+    "rationale": "Confidence reflects retained external execution, physical coverage, evaluation result, and unresolved diagnostics.",
+    "strengths": [
+      "Physical capacitance and resistance metrics are normalized into canonical PEX units.",
+      "Physical-value coverage is represented in the retained external extractor corpus.",
+      "The external extractor corpus evaluation passed.",
+      "The packet is based on retained external extractor execution results."
+    ],
+    "uncertainties": [
+      "One or more retained external extractor artifact references were not safe to trust.",
+      "The packet exposes decision material and does not choose a repair action."
+    ]
+  },
+  "coverageTags": [
+    "pex.coupling-cap",
+    "pex.ground-cap",
+    "pex.magic",
+    "pex.multi-corner",
+    "pex.physical-value",
+    "pex.rc-network",
+    "pex.resistance",
+    "pex.standard-cell",
+    "pex.total-capacitance"
+  ],
+  "decisionHints": [
+    {
+      "action": "inspect_external_pex_artifact_paths",
+      "artifactIDs": [],
+      "hintID": "external-diagnostic-action:inspect_external_pex_artifact_paths",
+      "priority": "high",
+      "rationale": "One or more retained external PEX diagnostics point to this inspection handle.",
+      "relatedDiagnosticIDs": [
+        "external-case:sky130-inverter-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:technologyPath-artifact-integrity"
+      ]
+    },
+    {
+      "action": "regenerate_external_pex_corpus_report",
+      "artifactIDs": [],
+      "hintID": "external-diagnostic-action:regenerate_external_pex_corpus_report",
+      "priority": "high",
+      "rationale": "One or more retained external PEX diagnostics point to this inspection handle.",
+      "relatedDiagnosticIDs": [
+        "external-case:sky130-inverter-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:technologyPath-artifact-integrity"
+      ]
+    }
+  ],
+  "diagnostics": [
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex:layoutPath-artifact-integrity",
+      "message": "The external PEX layoutPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex:sourceNetlistPath-artifact-integrity",
+      "message": "The external PEX sourceNetlistPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex:technologyPath-artifact-integrity",
+      "message": "The external PEX technologyPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex-ss:layoutPath-artifact-integrity",
+      "message": "The external PEX layoutPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+      "message": "The external PEX sourceNetlistPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex-ss:technologyPath-artifact-integrity",
+      "message": "The external PEX technologyPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex:layoutPath-artifact-integrity",
+      "message": "The external PEX layoutPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex:sourceNetlistPath-artifact-integrity",
+      "message": "The external PEX sourceNetlistPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex:technologyPath-artifact-integrity",
+      "message": "The external PEX technologyPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex-ss:layoutPath-artifact-integrity",
+      "message": "The external PEX layoutPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+      "message": "The external PEX sourceNetlistPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex-ss:technologyPath-artifact-integrity",
+      "message": "The external PEX technologyPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex:manifestPath-artifact-integrity",
+      "message": "The external PEX manifestPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex:irPath-artifact-integrity",
+      "message": "The external PEX irPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/ir/tt.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex-ss:manifestPath-artifact-integrity",
+      "message": "The external PEX manifestPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-plate-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-plate-magic-pex-ss:irPath-artifact-integrity",
+      "message": "The external PEX irPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/ir/ss.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex:manifestPath-artifact-integrity",
+      "message": "The external PEX manifestPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex:irPath-artifact-integrity",
+      "message": "The external PEX irPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/ir/tt.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex-ss:manifestPath-artifact-integrity",
+      "message": "The external PEX manifestPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "category": "artifact_integrity",
+      "code": "artifact_reference_unsafe",
+      "diagnosticID": "external-case:sky130-inverter-magic-pex-ss:irPath-artifact-integrity",
+      "message": "The external PEX irPath artifact reference is not safe to trust: path is outside the allowed external PEX artifact root",
+      "observedText": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/ir/ss.json",
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    }
+  ],
+  "domain": "pex.parasitic-evidence",
+  "failureClassifications": [
+    {
+      "artifactIDs": [],
+      "backendID": "magic",
+      "caseIDs": [
+        "sky130-inverter-magic-pex",
+        "sky130-inverter-magic-pex-ss",
+        "sky130-plate-magic-pex",
+        "sky130-plate-magic-pex-ss"
+      ],
+      "classificationID": "external-extractor:magic:external_extractor_failure",
+      "cornerIDs": [
+        "ss",
+        "tt"
+      ],
+      "diagnosticIDs": [
+        "external-case:sky130-inverter-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:sourceNetlistPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:irPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:layoutPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:manifestPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:sourceNetlistPath-artifact-integrity"
+      ],
+      "failureClass": "external_extractor_failure",
+      "metricIDs": [],
+      "reasonCodes": [
+        "artifact_reference_unsafe"
+      ],
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "inspect_external_pex_case_failures",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "backendID": "magic",
+      "caseIDs": [],
+      "classificationID": "external-extractor:magic:missing_extractor_readiness",
+      "cornerIDs": [],
+      "diagnosticIDs": [],
+      "failureClass": "missing_extractor_readiness",
+      "metricIDs": [],
+      "reasonCodes": [
+        "readiness_blocked"
+      ],
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "backendID": "magic",
+      "caseIDs": [
+        "sky130-inverter-magic-pex",
+        "sky130-inverter-magic-pex-ss",
+        "sky130-plate-magic-pex",
+        "sky130-plate-magic-pex-ss"
+      ],
+      "classificationID": "external-extractor:magic:process_profile_error",
+      "cornerIDs": [
+        "ss",
+        "tt"
+      ],
+      "diagnosticIDs": [
+        "external-case:sky130-inverter-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-inverter-magic-pex:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex-ss:technologyPath-artifact-integrity",
+        "external-case:sky130-plate-magic-pex:technologyPath-artifact-integrity"
+      ],
+      "failureClass": "process_profile_error",
+      "metricIDs": [],
+      "reasonCodes": [
+        "artifact_reference_unsafe"
+      ],
+      "severity": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "inspect_pdk_and_technology_inputs",
+        "inspect_process_profile_resolution",
+        "regenerate_external_pex_corpus_report"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "reference": {
+        "byteCount": 10610,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "5bee512d44057b77d7e9ffa79f88a24d217fba58724811fd7c73d0a53b8e59a6"
+        },
+        "id": "derived-79232eb00f8495977fe838c149287db1a89ce0954970e9e26e1643d6ddc324e1",
+        "locator": {
+          "format": "json",
+          "kind": "other",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 358867,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "264512161111a9e6fe6ab1e389e3fefc168ba10ff17aebe84a3e8de436d5683c"
+        },
+        "id": "derived-720b57e0eb404bad8af6086b43743a61ca78531c0a28151531d14607e98bb89e",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/45_gcd.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 448059,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "37213c37df2c9d1326a6bb8e8d5052c31fdacc652a1322bcaf52265996c53d01"
+        },
+        "id": "derived-d76429488bd3a1f3ba21c7e284a5c0e62fb5f937f3673107ea4617095c6e58a7",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/coordinates.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 5733,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab02"
+        },
+        "id": "derived-a3803c45e41604f809ecc6611f14e88aab1b52a822f99fc94b01d0bfb3332e37",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/ext_pattern.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 504204,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "3f42eb50caf2a8990663f4e477ced79f220d56bc69856522d04c2c107cf9ada7"
+        },
+        "id": "derived-4351c1918fc558bf039f7385e34625eb9e905754aff0671e60ce4508b0504ef2",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/gcd.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 968,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd"
+        },
+        "id": "derived-be288dd6d6c86da96906031b3d787f153d006c3ab9090b12ac75bd4769ab9b0c",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/net_name_consistency.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 569303,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "5d05ab216b75f0c39a7345900a51c89241abf90a28eea05677b7aa64cf67eb1d"
+        },
+        "id": "derived-6b24fc04769863d027c7b73ca3bc88b1d76509692df2860634bc1dff3d98e205",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/no_merging.spefok"
+          },
+          "role": "input"
+        }
+      }
+    },
+    {
+      "reference": {
+        "byteCount": 418572,
+        "digest": {
+          "algorithm": "sha256",
+          "hexadecimalValue": "e03647c62e2d7b67f08f9726bdd14354011d7f01785a34edce969436ae4eda4f"
+        },
+        "id": "derived-de79938eb6a651a5331882d44fdbb425da92646ae163e2a06afb22110881a823",
+        "locator": {
+          "format": "spef",
+          "kind": "parasitics",
+          "location": {
+            "storage": "workspaceRelative",
+            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/short_resover.spefok"
+          },
+          "role": "input"
+        }
+      }
+    }
+  ],
+  "intent": {
+    "cornerIDs": [
+      "ss",
+      "tt"
+    ],
+    "designContext": "External extractor corpus with physical capacitance and resistance bounds.",
+    "requestedObservations": [
+      "extractor-readiness",
+      "failure-diagnostics",
+      "normalized-parasitic-ir",
+      "physical-bound-evaluation",
+      "raw-extractor-artifacts"
+    ],
+    "summary": "Expose retained real-extractor PEX observations as decision material.",
+    "targetNets": []
+  },
+  "metrics": [
+    {
+      "name": "passRate",
+      "scope": "external-extractor-corpus",
+      "value": 1
+    },
+    {
+      "name": "totalGroundCapF",
+      "scope": "external-extractor-corpus",
+      "unit": "F",
+      "value": 8.401600000000001e-15
+    },
+    {
+      "name": "totalCouplingCapF",
+      "scope": "external-extractor-corpus",
+      "unit": "F",
+      "value": 5.30586e-15
+    },
+    {
+      "name": "totalCapacitanceF",
+      "scope": "external-extractor-corpus",
+      "unit": "F",
+      "value": 1.3707460000000002e-14
+    },
+    {
+      "name": "totalResistanceOhm",
+      "scope": "external-extractor-corpus",
+      "unit": "ohm",
+      "value": 6669.90722
+    },
+    {
+      "name": "physicalBoundPassRate",
+      "scope": "external-extractor-corpus",
+      "value": 1
+    },
+    {
+      "name": "physicalBoundEvaluationRate",
+      "scope": "external-extractor-corpus",
+      "value": 1
+    },
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "cornerID": "tt",
+      "expectedValue": 4.2008e-15,
+      "name": "totalGroundCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 4.200800000000001e-15
+    },
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "cornerID": "tt",
+      "name": "totalCouplingCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex:irPath",
+      "unit": "F",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "cornerID": "tt",
+      "expectedValue": 4.2008e-15,
+      "name": "totalCapacitanceF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 4.200800000000001e-15
+    },
+    {
+      "caseID": "sky130-plate-magic-pex",
+      "cornerID": "tt",
+      "name": "totalResistanceOhm",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex:irPath",
+      "unit": "ohm",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "cornerID": "ss",
+      "expectedValue": 4.2008e-15,
+      "name": "totalGroundCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex-ss:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 4.200800000000001e-15
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "cornerID": "ss",
+      "name": "totalCouplingCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex-ss:irPath",
+      "unit": "F",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "cornerID": "ss",
+      "expectedValue": 4.2008e-15,
+      "name": "totalCapacitanceF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex-ss:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 4.200800000000001e-15
+    },
+    {
+      "caseID": "sky130-plate-magic-pex-ss",
+      "cornerID": "ss",
+      "name": "totalResistanceOhm",
+      "scope": "case",
+      "sourceArtifactID": "sky130-plate-magic-pex-ss:irPath",
+      "unit": "ohm",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "cornerID": "tt",
+      "name": "totalGroundCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex:irPath",
+      "unit": "F",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "cornerID": "tt",
+      "expectedValue": 2.65293e-15,
+      "name": "totalCouplingCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 2.65293e-15
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "cornerID": "tt",
+      "expectedValue": 2.65293e-15,
+      "name": "totalCapacitanceF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 2.65293e-15
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex",
+      "cornerID": "tt",
+      "expectedValue": 3334.95361,
+      "name": "totalResistanceOhm",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex:irPath",
+      "tolerance": 50,
+      "unit": "ohm",
+      "value": 3334.95361
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "cornerID": "ss",
+      "name": "totalGroundCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex-ss:irPath",
+      "unit": "F",
+      "value": 0
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "cornerID": "ss",
+      "expectedValue": 2.65293e-15,
+      "name": "totalCouplingCapF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex-ss:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 2.65293e-15
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "cornerID": "ss",
+      "expectedValue": 2.65293e-15,
+      "name": "totalCapacitanceF",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex-ss:irPath",
+      "tolerance": 2e-16,
+      "unit": "F",
+      "value": 2.65293e-15
+    },
+    {
+      "caseID": "sky130-inverter-magic-pex-ss",
+      "cornerID": "ss",
+      "expectedValue": 3334.95361,
+      "name": "totalResistanceOhm",
+      "scope": "case",
+      "sourceArtifactID": "sky130-inverter-magic-pex-ss:irPath",
+      "tolerance": 50,
+      "unit": "ohm",
+      "value": 3334.95361
+    }
+  ],
+  "normalizedViews": [
+    {
+      "kind": "parasitic-ir-summary",
+      "scope": "external-extractor-corpus",
+      "sourceArtifactIDs": [],
+      "summaryAttributes": {},
+      "summaryCounts": {
+        "caseCount": 4,
+        "failedCaseCount": 0,
+        "failureClass:external_extractor_failure": 1,
+        "failureClass:missing_extractor_readiness": 1,
+        "failureClass:process_profile_error": 1,
+        "passedCaseCount": 4,
+        "physicalBoundDeclaredCount": 10,
+        "physicalBoundEvaluatedCount": 10,
+        "physicalBoundFailedCount": 0,
+        "physicalBoundMissingExpectationCount": 0,
+        "physicalBoundMissingObservationCount": 0,
+        "physicalBoundPassedCount": 10,
+        "totalElementCount": 72,
+        "totalNetCount": 14
+      },
+      "summaryMetrics": {
+        "passRate": 1,
+        "physicalBoundEvaluationRate": 1,
+        "physicalBoundPassRate": 1,
+        "totalCapacitanceF": 1.3707460000000002e-14,
+        "totalCouplingCapF": 5.30586e-15,
+        "totalGroundCapF": 8.401600000000001e-15,
+        "totalResistanceOhm": 6669.90722
+      },
+      "unitSystem": "canonical",
+      "viewID": "external-extractor-physical-summary"
+    }
+  ],
+  "packetID": "pex-evidence-packet:fixture",
+  "readiness": [
+    {
+      "artifactIDs": [],
+      "component": "external-extractor-artifacts",
+      "reason": "One or more external PEX evidence identifiers or artifact references are not safe to trust.",
+      "status": "blocked",
+      "suggestedActions": [
+        "inspect_external_pex_artifact_paths",
+        "regenerate_external_pex_corpus_report"
+      ]
+    },
+    {
+      "artifactIDs": [],
+      "component": "external-extractor-execution",
+      "reason": "At least one retained external extractor case produced normalized PEX evidence.",
+      "status": "ready",
+      "suggestedActions": []
+    }
+  ],
+  "relatedEvidenceIDs": [
+    "pex-external-extractor:magic"
+  ],
+  "schemaVersion": 2,
+  "subject": {
+    "backendID": "magic",
+    "identifier": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json",
+    "kind": "external-extractor-corpus"
+  }
+}

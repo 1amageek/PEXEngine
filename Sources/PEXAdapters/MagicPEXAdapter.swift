@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import PEXCore
+import SignoffToolSupport
 
 /// Real parasitic-extraction adapter driven by Magic against a profile-declared PDK.
 ///
@@ -24,11 +25,14 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     )
 
     private let toolchain: MagicToolchain?
-    private let runner: ProcessRunner
+    private let processRunner: any TimedProcessRunning
 
-    public init(toolchain: MagicToolchain? = MagicToolchain.locate(), runner: ProcessRunner = ProcessRunner()) {
+    public init(
+        toolchain: MagicToolchain? = MagicToolchain.locate(),
+        processRunner: any TimedProcessRunning = TimedProcessRunner()
+    ) {
         self.toolchain = toolchain
-        self.runner = runner
+        self.processRunner = processRunner
     }
 
     public func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
@@ -133,7 +137,7 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     public func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
         let plan = try makeExecutionPlan(for: context)
         let result = try await runMagic(plan, context: context)
-        let combinedOutput = result.stdout + "\n" + result.stderr
+        let combinedOutput = result.standardOutput + "\n" + result.standardError
         let logURL = try writeProcessLog(combinedOutput, context: context)
         try validateMagicResult(result, combinedOutput: combinedOutput, plan: plan, logURL: logURL, context: context)
         return executionResult(plan: plan, logURL: logURL, context: context)
@@ -313,21 +317,40 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     private func runMagic(
         _ plan: MagicPEXExecutionPlan,
         context: PEXExecutionContext
-    ) async throws -> ProcessRunner.ProcessResult {
+    ) async throws -> TimedProcessResult {
+        let process = Process()
+        process.executableURL = plan.toolchain.magicExecutableURL
+        process.arguments = [
+            "-dnull", "-noconsole",
+            "-rcfile", plan.toolchain.rcFileURL.path(percentEncoded: false),
+            plan.driverURL.path(percentEncoded: false),
+        ]
+        process.environment = plan.environment
+        process.currentDirectoryURL = context.rawOutputDirectory
         do {
-            return try await runner.run(
-                executableURL: plan.toolchain.magicExecutableURL,
-                arguments: [
-                    "-dnull", "-noconsole",
-                    "-rcfile", plan.toolchain.rcFileURL.path(percentEncoded: false),
-                    plan.driverURL.path(percentEncoded: false),
-                ],
-                environment: plan.environment,
-                workingDirectory: context.rawOutputDirectory,
+            return try await processRunner.run(
+                process: process,
                 cancellationCheck: context.cancellationCheck
             )
-        } catch let error as PEXError where error.kind == .cancelled {
-            throw error
+        } catch let error as TimedProcessError {
+            if case .cancelled = error {
+                throw PEXError(
+                    kind: .cancelled,
+                    stage: .backendExecution,
+                    cornerID: context.corner.id,
+                    backendID: backendID,
+                    message: "Magic process was cancelled",
+                    underlyingDescription: error.localizedDescription
+                )
+            }
+            throw PEXError(
+                kind: .backendExecutionFailed,
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                backendID: backendID,
+                message: "Magic process failed to run",
+                underlyingDescription: error.localizedDescription
+            )
         } catch {
             throw PEXError(
                 kind: .backendExecutionFailed,
@@ -356,7 +379,7 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     }
 
     private func validateMagicResult(
-        _ result: ProcessRunner.ProcessResult,
+        _ result: TimedProcessResult,
         combinedOutput: String,
         plan: MagicPEXExecutionPlan,
         logURL: URL,

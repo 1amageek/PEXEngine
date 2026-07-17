@@ -146,7 +146,7 @@ let request = PEXRunRequest(
     topCell: "top",
     corners: [PEXCorner(id: "tt_25c_1v0")],
     technology: .jsonFile(techURL),
-    backendSelection: PEXBackendSelection(backendID: "mock"),
+    backendSelection: PEXBackendSelection(backendID: "magic"),
     options: .default
 )
 let result = try await engine.run(request)
@@ -216,7 +216,7 @@ pexengine extract \
     --netlist design.sp \
     --top-cell top \
     --technology tech.json \
-    --backend mock \
+    --backend magic \
     --corner tt --corner ss \
     --corner-deck tt=/pdk/libs.tech/magic/sky130A-tt.magicrc \
     --corner-deck ss=/pdk/libs.tech/magic/sky130A-ss.magicrc \
@@ -229,7 +229,7 @@ pexengine extract \
     --top-cell top \
     --technology sky130A.json \
     --corner-technology ss=sky130B.json \
-    --backend mock \
+    --backend magic \
     --corner tt --corner ss \
     --json
 
@@ -240,7 +240,7 @@ pexengine extract \
     --netlist design.sp \
     --top-cell top \
     --technology tech.json \
-    --backend mock \
+    --backend magic \
     --corner tt --corner ss \
     --summary \
     --summary-top-nets 5 \
@@ -394,10 +394,10 @@ flow integration:
 ../scripts/check-developer-cli.sh
 ```
 
-This builds `pexengine`, runs `extract` through the real executable with the mock
-backend, verifies that stdout is parseable JSON, checks that the run manifest and
-summary artifacts exist, and confirms that unknown CLI arguments fail instead of
-being ignored.
+This builds `pexengine`, runs `extract` through the real executable with the
+profile-discovered Magic backend, verifies that stdout is parseable JSON, checks
+that the run manifest and summary artifacts exist, and confirms that unknown CLI
+arguments fail instead of being ignored.
 
 When debugging manually, prefer the executable path that SwiftPM built:
 
@@ -408,7 +408,7 @@ PEX_BIN="$(swift build --show-bin-path)/pexengine"
   --netlist design.sp \
   --top-cell TOP \
   --technology tech.json \
-  --backend mock \
+  --backend magic \
   --out /tmp/pex-run \
   --summary \
   --json

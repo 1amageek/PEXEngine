@@ -16,7 +16,7 @@ let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileMan
     ? .package(path: "../CircuiteFoundation")
     : .package(
         url: "https://github.com/1amageek/CircuiteFoundation.git",
-        revision: "2ec6ee13a89ac6885be3c26b41a9ee0ef89948ac"
+        revision: "7abcac83517935c9b9f7553d7016d62cffde259d"
     )
 
 let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
@@ -25,7 +25,7 @@ let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileMan
     ? .package(path: "../SignoffToolSupport")
     : .package(
         url: "https://github.com/1amageek/SignoffToolSupport.git",
-        revision: "2c8ce00a8f873934e74e3f219e0cbd122a862fe9"
+        revision: "6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb"
     )
 
 let package = Package(
@@ -80,7 +80,8 @@ let package = Package(
                 "PEXCore",
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
-            ]
+            ],
+            resources: [.copy("Fixtures/pex-evidence-packet-v2.json")]
         ),
         .target(
             name: "PEXTestSupport",
