@@ -401,7 +401,11 @@ public actor PEXOrchestrator {
             ))
         }
         for cornerID in request.technologyByCorner.keys.sorted() {
-            let input = request.technologyByCorner[cornerID]!
+            guard let input = request.technologyByCorner[cornerID] else {
+                throw PEXError.internalInvariantViolation(
+                    "Per-corner technology input is missing for corner '\(cornerID)'"
+                )
+            }
             let artifactID = "input-technologyInput-\(sanitizeTechnologyCornerID(cornerID))"
             let filename = "technology-\(sanitizeTechnologyCornerID(cornerID)).json"
             switch input {

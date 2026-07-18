@@ -85,11 +85,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
         do {
             code = try DiagnosticCode(rawValue: "pex.\(warning.stage.rawValue)")
         } catch {
-            do {
-                code = try DiagnosticCode(rawValue: "pex.warning")
-            } catch {
-                preconditionFailure("The built-in PEX warning code must be valid.")
-            }
+            code = .trusted("pex.warning")
         }
         return DesignDiagnostic(
             code: code,
@@ -105,11 +101,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
         do {
             code = try DiagnosticCode(rawValue: "pex.\(diagnostic.code)")
         } catch {
-            do {
-                code = try DiagnosticCode(rawValue: "pex.invalid-diagnostic-code")
-            } catch {
-                preconditionFailure("The built-in PEX diagnostic code must be valid.")
-            }
+            code = .trusted("pex.invalid-diagnostic-code")
         }
         let severity: DiagnosticSeverity
         switch diagnostic.severity {

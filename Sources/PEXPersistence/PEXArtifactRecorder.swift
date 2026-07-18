@@ -112,8 +112,13 @@ public struct PEXArtifactRecorder: Sendable {
         )
         var capturedTechnologyByCorner: [String: TechnologyInput] = [:]
         for cornerID in request.technologyByCorner.keys.sorted() {
+            guard let technologyInput = request.technologyByCorner[cornerID] else {
+                throw PEXError.internalInvariantViolation(
+                    "Per-corner technology input is missing for corner '\(cornerID)'"
+                )
+            }
             capturedTechnologyByCorner[cornerID] = try capturedTechnologyInput(
-                request.technologyByCorner[cornerID]!,
+                technologyInput,
                 artifactID: "input-technologyInput-\(sanitizedIdentifier(cornerID))",
                 inputArtifacts: inputArtifacts
             )
