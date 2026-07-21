@@ -337,6 +337,7 @@ struct MagicPEXAdapterTests {
         C1 OUT IN 1f
         R0 OUT OUT_ext 5
         SPICE
+        echo "Magic 8.3.500"
         echo "PEX_DONE fake"
         """
     }

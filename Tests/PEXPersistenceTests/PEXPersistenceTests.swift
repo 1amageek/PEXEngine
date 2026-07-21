@@ -9,7 +9,7 @@ import CircuiteFoundation
 struct PEXPersistenceTests {
     @Test func canonicalManifestFixtureUsesCurrentSchema() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "pex-artifact-manifest-v3",
+            forResource: "pex-artifact-manifest-v4",
             withExtension: "json"
         ))
         let decoded = try JSONDecoder().decode(
@@ -22,11 +22,11 @@ struct PEXPersistenceTests {
 
     @Test func manifestDecoderRejectsPreviousSchema() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "pex-artifact-manifest-v3",
+            forResource: "pex-artifact-manifest-v4",
             withExtension: "json"
         ))
         let current = try String(contentsOf: url, encoding: .utf8)
-        let previous = current.replacingOccurrences(of: "\"version\" : 3", with: "\"version\" : 2")
+        let previous = current.replacingOccurrences(of: "\"version\" : 4", with: "\"version\" : 3")
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(PEXArtifactManifest.self, from: Data(previous.utf8))
         }
@@ -388,13 +388,15 @@ struct PEXPersistenceTests {
             cornerID: "tt",
             id: "ir-tt"
         )
+        let startedAt = Date()
+        let finishedAt = Date()
         let manifest = PEXArtifactManifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
             status: .success,
-            startedAt: Date(),
-            finishedAt: Date(),
+            startedAt: startedAt,
+            finishedAt: finishedAt,
             corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
             artifacts: [irRecord],
             warnings: []
@@ -955,19 +957,25 @@ struct PEXPersistenceTests {
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let irRecord = try recorder.recordExistingArtifact(url: workspace.cornerIRURL("tt"), kind: .parasiticIR, stage: .persistence, cornerID: "tt", id: "ir-tt")
         let rawRecord = try recorder.recordExistingArtifact(url: rawURL, kind: .rawOutput, stage: .backendExecution, cornerID: "ss")
+        let startedAt = Date()
+        let finishedAt = Date()
         let manifest = PEXArtifactManifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
             status: .partialSuccess,
-            startedAt: Date(),
-            finishedAt: Date(),
+            startedAt: startedAt,
+            finishedAt: finishedAt,
             corners: [
                 PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id]),
                 PEXArtifactCorner(cornerID: "ss", status: .failed, artifactIDs: [rawRecord.id], failure: PEXArtifactFailure(stage: .parsing, message: "parse failed")),
             ],
             artifacts: [irRecord, rawRecord],
-            warnings: [PEXWarning(stage: .parsing, cornerID: "ss", message: "parse failed")]
+            warnings: [PEXWarning(stage: .parsing, cornerID: "ss", message: "parse failed")],
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: startedAt,
+                finishedAt: finishedAt
+            )
         )
         try store.saveManifest(manifest)
 
@@ -1053,6 +1061,8 @@ struct PEXPersistenceTests {
     }
 
     private func makeTestResult() throws -> PEXRunResult {
+        let startedAt = Date()
+        let finishedAt = Date()
         let record = try makeArtifactRecord(
             id: "raw-tt",
             kind: .rawOutput,
@@ -1068,11 +1078,15 @@ struct PEXPersistenceTests {
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
             status: .success,
-            startedAt: Date(),
-            finishedAt: Date(),
+            startedAt: startedAt,
+            finishedAt: finishedAt,
             corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [record.id])],
             artifacts: [record],
-            warnings: []
+            warnings: [],
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: startedAt,
+                finishedAt: finishedAt
+            )
         )
         return try PEXRunResult(
             runID: manifest.runID,

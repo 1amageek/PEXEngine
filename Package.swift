@@ -85,7 +85,10 @@ let package = Package(
         ),
         .target(
             name: "PEXTestSupport",
-            dependencies: ["PEXCore", "PEXAdapters", "PEXParsers", "PEXRuntime"],
+            dependencies: [
+                "PEXCore", "PEXAdapters", "PEXParsers", "PEXRuntime",
+                .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            ],
             path: "Tests/PEXTestSupport",
             resources: [.copy("../PEXParsersTests/Fixtures/OpenROAD")]
         ),
@@ -120,7 +123,7 @@ let package = Package(
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             ],
-            resources: [.copy("Fixtures/pex-artifact-manifest-v3.json")]
+            resources: [.copy("Fixtures/pex-artifact-manifest-v4.json")]
         ),
         .testTarget(
             name: "PEXRuntimeTests",

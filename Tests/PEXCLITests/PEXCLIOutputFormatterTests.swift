@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import PEXTestSupport
 @testable import PEXCLICore
 @testable import PEXCore
 @testable import PEXEngine
@@ -139,7 +140,11 @@ struct PEXCLIOutputFormatterTests {
             finishedAt: finishedAt,
             corners: cornerEntries,
             artifacts: [],
-            warnings: warnings
+            warnings: warnings,
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: startedAt,
+                finishedAt: finishedAt
+            )
         )
         return try PEXRunResult(
             runID: runID,

@@ -6,6 +6,8 @@ public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case netlistInput
     case technologyInput
     case processProfileDeckInput
+    case processDriver
+    case processEvidence
     case sourceConnectivityReport
     case request
     case rawOutput
@@ -170,7 +172,7 @@ public struct PEXArtifactCorner: Sendable, Codable, Hashable {
 }
 
 public struct PEXArtifactManifest: Sendable, Codable, Hashable {
-    public static let currentVersion = 3
+    public static let currentVersion = 4
 
     public let version: Int
     public let runID: PEXRunID
@@ -184,6 +186,8 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
     public let warnings: [PEXWarning]
     public let extractorRun: PEXExtractorRunResult?
     public let resumedFromRunID: PEXRunID?
+    public let backendExecutions: [PEXBackendExecutionIdentity]
+    public let provenance: ExecutionProvenance?
 
     public init(
         version: Int = PEXArtifactManifest.currentVersion,
@@ -197,7 +201,9 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         artifacts: [PEXArtifactRecord],
         warnings: [PEXWarning],
         extractorRun: PEXExtractorRunResult? = nil,
-        resumedFromRunID: PEXRunID? = nil
+        resumedFromRunID: PEXRunID? = nil,
+        backendExecutions: [PEXBackendExecutionIdentity] = [],
+        provenance: ExecutionProvenance? = nil
     ) {
         self.version = version
         self.runID = runID
@@ -211,11 +217,14 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         self.warnings = warnings
         self.extractorRun = extractorRun
         self.resumedFromRunID = resumedFromRunID
+        self.backendExecutions = backendExecutions
+        self.provenance = provenance
     }
 
     private enum CodingKeys: String, CodingKey {
         case version, runID, requestHash, backendID, status, startedAt, finishedAt
         case corners, artifacts, warnings, extractorRun, resumedFromRunID
+        case backendExecutions, provenance
     }
 
     public init(from decoder: Decoder) throws {
@@ -240,6 +249,14 @@ public struct PEXArtifactManifest: Sendable, Codable, Hashable {
         warnings = try container.decode([PEXWarning].self, forKey: .warnings)
         extractorRun = try container.decodeIfPresent(PEXExtractorRunResult.self, forKey: .extractorRun)
         resumedFromRunID = try container.decodeIfPresent(PEXRunID.self, forKey: .resumedFromRunID)
+        backendExecutions = try container.decodeIfPresent(
+            [PEXBackendExecutionIdentity].self,
+            forKey: .backendExecutions
+        ) ?? []
+        provenance = try container.decodeIfPresent(
+            ExecutionProvenance.self,
+            forKey: .provenance
+        )
     }
 
     public func artifact(id: ArtifactID) -> PEXArtifactRecord? {

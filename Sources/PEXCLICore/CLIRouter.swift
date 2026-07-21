@@ -58,6 +58,12 @@ public enum CLIRouter {
                 if !satisfied {
                     _exit(exitCode(for: .irValidationFailed))
                 }
+            case "correlate-extractor-reports":
+                let cmd = try CorrelateExtractorReportsCommand(arguments: Array(arguments.dropFirst()))
+                let correlation = try await cmd.run()
+                if !correlation.passed {
+                    _exit(exitCode(for: .irValidationFailed))
+                }
             case "metric-recovery-objective":
                 let cmd = try MetricRecoveryObjectiveCommand(arguments: Array(arguments.dropFirst()))
                 try await cmd.run()
@@ -127,6 +133,8 @@ public enum CLIRouter {
             --primary-deck <path> Primary extraction deck (direct mode)
             --corner-deck <id>=<path>
                                   Corner-specific extraction deck (repeatable)
+            --required-view <role>=<path>
+                                  Backend-required standard view (repeatable)
             --strict              Enable strict validation (default)
             --non-strict          Report IR validation errors as warnings
             --source-connectivity <policy>
@@ -223,6 +231,16 @@ public enum CLIRouter {
             --audit-id <id>        Override audit ID
             --json                 Output audit as JSON
 
+          correlate-extractor-reports
+                          Correlate independent canonical extractor reports
+            --corpus <path>        Canonical extractor corpus JSON
+            --primary-report <path>
+                                  Canonical primary extractor report JSON
+            --oracle-report <path> Canonical independent oracle report JSON
+            --correlation-id <id>  Stable correlation identifier
+            --out <path>           Write canonical immutable correlation JSON
+            --json                 Output correlation JSON
+
           metric-recovery-objective
                           Create Agent-readable PEX recovery planning material
             --summary <path>        PEX summary JSON
@@ -276,6 +294,7 @@ public enum CLIRouter {
         case .technologyResolutionFailed: return 2
         case .adapterUnavailable: return 1
         case .backendExecutionFailed: return 3
+        case .timedOut: return 124
         case .cancelled: return 130
         case .parseFailed: return 4
         case .irValidationFailed: return 4

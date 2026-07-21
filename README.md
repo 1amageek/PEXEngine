@@ -33,12 +33,15 @@ A Swift package for parasitic extraction (PEX) of semiconductor layouts. PEXEngi
 
 ## Features
 
-- **Backend-agnostic pipeline** -- Abstracts extraction tools behind a unified adapter protocol
+- **Backend-agnostic pipeline** -- Executes extraction tools through the `PEXExtracting` protocol
 - **Canonical Parasitic IR** -- Tool-independent representation of resistors, capacitors, coupling capacitors, and inductors
 - **SPEF, DSPF, and Magic SPICE parsers** -- Standard parasitic output lowering with unit normalization, SPEF `*INDUC` and DSPF / extracted-SPICE `L*` inductor support, and consistent `PEXRunOptions` filtering
 - **Deterministic SPICE backannotation** -- Each successful corner emits a standalone `.cir` subcircuit with all canonical R/C/coupling/L elements and explicit node-map comments; source netlists are not silently rewritten
 - **Multi-corner extraction** -- Parallel corner processing with configurable job limits and `extractorRun.multiCorner` worst/spread summaries
 - **Real Magic extraction backend** -- Profile-declared Magic/PDK execution produces extracted SPICE and never fabricates parasitics when the toolchain is unavailable
+- **Production OpenRCX process boundary** -- Profile-declared routed DEF, technology/library LEFs, extraction rules, and an OpenROAD executable produce SPEF while retaining the Tcl driver and separate version/extraction stdout and stderr artifacts
+- **Measured backend identity** -- External backend results retain the observed semantic version, SHA-256 of the executable bytes before and after execution, exact invocation, sanitized-environment digest, and producer-bound output references
+- **Independent extractor correlation** -- Canonical corpus declarations are checked against two distinct canonical backend reports; corpus/report digests are computed from bytes and self-oracle, case-set, expectation, and tolerance mismatches fail closed
 - **Immutable artifact persistence** -- Manifest, raw outputs, normalized IR, and summary reports
 - **Typed failure provenance** -- Failed corner manifests retain `PEXErrorKind`, so host flow gates can distinguish unavailable infrastructure from extraction, parsing, validation, and persistence failures
 - **Selective retry/resume contract** -- Failed corners can be retried as a new run with `resumedFromRunID` provenance
@@ -113,7 +116,7 @@ PEXRunResult
 | Module | Responsibility |
 |---|---|
 | **PEXCore** | Domain models, IR types, protocols, typed errors, registries, validation |
-| **PEXAdapters** | Production backend integrations (MagicPEXAdapter, MagicToolchain, process execution) |
+| **PEXAdapters** | Production backend integrations (Magic and OpenRCX/OpenROAD process execution) |
 | **PEXTestSupport** | Test-only synthetic extractor and deterministic fixture generator |
 | **PEXParsers** | SPEF lexer / parser / lowering pipeline including `*INDUC`, DSPF lowering including `L*` elements, Magic SPICE parasitic lowering including `L*` elements, and deterministic SPICE backannotation writing |
 | **PEXPersistence** | Manifest, workspace layout, IR serializer, artifact store, report generator, run summary builder |
@@ -288,6 +291,15 @@ pexengine evidence-packet-from-corpus-report \
 pexengine evidence-packet-from-extractor-report \
     --report /tmp/pex-real-extractor-report.json \
     --out /tmp/pex-extractor-evidence-packet.json \
+    --json
+
+# Correlate two distinct-backend canonical extractor reports without overwriting evidence.
+pexengine correlate-extractor-reports \
+    --corpus /path/to/pex-extractor-corpus.json \
+    --primary-report /path/to/magic-report.json \
+    --oracle-report /path/to/openrcx-report.json \
+    --correlation-id magic-openrcx-sky130 \
+    --out /path/to/immutable-correlation.json \
     --json
 
 # Validate technology file (strict mode checks layer/via/map semantics, not only JSON shape)
@@ -482,6 +494,15 @@ artifact-backed reports, physical measurements, implementation identity, and
 correlation observations. `ToolQualification` verifies those records and owns
 trust decisions; `DesignFlowKernel` owns approval and flow policy.
 
+`OpenRCXPEXAdapter` is a real external-process backend, not retained-output
+replay. It accepts routed DEF only and requires `processProfile.primaryDeckPath`
+for the selected corner plus `requiredViewPaths["technologyLEF"]` and at least
+one `requiredViewPaths["libraryLEF:<library-id>"]`. `OPENROAD_BIN` or an explicit
+backend executable path must resolve to an executable. Missing tools/views,
+invalid version output, process timeout/cancellation, non-zero exit, and an
+empty SPEF all remain typed failures. A machine without OpenROAD is therefore
+blocked rather than reported as qualified.
+
 ## Metric Recovery Objective
 
 `pexengine metric-recovery-objective` converts retained PEX evidence into an
@@ -527,9 +548,15 @@ Each extraction run produces immutable artifacts:
   reports/source-connectivity/<corner-id>.json
 ```
 
-`manifest.json` uses `PEXArtifactManifest.currentVersion` (currently version 3)
+`manifest.json` uses `PEXArtifactManifest.currentVersion` (currently version 4)
 and is decoded strictly. The canonical package fixture is
-`Tests/PEXPersistenceTests/Fixtures/pex-artifact-manifest-v3.json`.
+`Tests/PEXPersistenceTests/Fixtures/pex-artifact-manifest-v4.json`.
+
+Version 4 records measured execution provenance and every backend invocation
+used by a completed run. `PEXRunResult` refuses to load a manifest without
+that provenance or synthesize a producer
+from the backend name or manifest schema. External producer `build` is the
+observed executable SHA-256 and is preserved on generated artifact references.
 
 Loading a run reconstructs corner results from the manifest rather than assuming default paths. Successful corners retain their IR, raw output files, log file paths, and extractor multi-corner comparison summaries; failed corners retain raw and log evidence even when no IR artifact exists.
 

@@ -47,7 +47,11 @@ struct PEXResumeTests {
             finishedAt: now,
             corners: [PEXArtifactCorner(cornerID: "ss", status: .failed, artifactIDs: [])],
             artifacts: [],
-            warnings: []
+            warnings: [],
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: now,
+                finishedAt: now
+            )
         )
         let parentResult = try PEXRunResult(
             runID: parentID,

@@ -170,6 +170,9 @@ public struct DefaultPEXService: PEXService, Sendable {
 
     private func detectLayoutFormat(_ url: URL) -> LayoutFormat {
         let ext = url.pathExtension.lowercased()
+        if ext == "def" {
+            return .def
+        }
         if ext == "oas" || ext == "oasis" {
             return .oas
         }

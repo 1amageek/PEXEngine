@@ -77,7 +77,8 @@ public final class DefaultPEXEngine: PEXExecuting, Sendable {
             processProfile: request.processProfile,
             backendSelection: request.backendSelection,
             options: request.options,
-            workingDirectory: request.workingDirectory
+            workingDirectory: request.workingDirectory,
+            executionInputArtifacts: request.executionInputArtifacts
         )
         return try await orchestrator.run(
             retryRequest,

@@ -11,6 +11,11 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
     /// distinct existing deck for every requested corner when the backend does
     /// not expose a native corner sweep.
     public let cornerDeckPaths: [String: String]
+    /// Immutable standard views required by the selected backend. Keys are
+    /// backend-defined semantic roles such as `technologyLEF` or
+    /// `libraryLEF:<library-id>`; values are local file paths captured with the
+    /// request and included in its stable identity.
+    public let requiredViewPaths: [String: String]
     public let metadata: [String: String]
 
     public init(
@@ -21,6 +26,7 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
         pdkRoot: String? = nil,
         primaryDeckPath: String? = nil,
         cornerDeckPaths: [String: String] = [:],
+        requiredViewPaths: [String: String] = [:],
         metadata: [String: String] = [:]
     ) {
         self.profileID = Self.nonEmpty(profileID)
@@ -30,6 +36,11 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
         self.pdkRoot = Self.nonEmpty(pdkRoot)
         self.primaryDeckPath = Self.nonEmpty(primaryDeckPath)
         self.cornerDeckPaths = cornerDeckPaths.reduce(into: [:]) { result, entry in
+            let key = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let value = Self.nonEmpty(entry.value), !key.isEmpty else { return }
+            result[key] = value
+        }
+        self.requiredViewPaths = requiredViewPaths.reduce(into: [:]) { result, entry in
             let key = entry.key.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let value = Self.nonEmpty(entry.value), !key.isEmpty else { return }
             result[key] = value
@@ -49,6 +60,7 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
         case pdkRoot
         case primaryDeckPath
         case cornerDeckPaths
+        case requiredViewPaths
         case metadata
     }
 
@@ -62,6 +74,7 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
             pdkRoot: try container.decodeIfPresent(String.self, forKey: .pdkRoot),
             primaryDeckPath: try container.decodeIfPresent(String.self, forKey: .primaryDeckPath),
             cornerDeckPaths: try container.decodeIfPresent([String: String].self, forKey: .cornerDeckPaths) ?? [:],
+            requiredViewPaths: try container.decodeIfPresent([String: String].self, forKey: .requiredViewPaths) ?? [:],
             metadata: try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
         )
     }

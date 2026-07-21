@@ -1,6 +1,7 @@
 import CircuiteFoundation
 import Foundation
 import PEXCore
+import PEXTestSupport
 import Testing
 
 @Suite("PEX Foundation boundary")
@@ -38,7 +39,11 @@ struct PEXFoundationBoundaryTests {
             finishedAt: now,
             corners: [],
             artifacts: [artifact],
-            warnings: []
+            warnings: [],
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: now,
+                finishedAt: now
+            )
         )
         let result = try PEXRunResult(
             runID: runID,

@@ -635,19 +635,25 @@ struct PEXCLITests {
             id: "report-summary"
         )
 
+        let startedAt = Date()
+        let finishedAt = Date()
         let manifest = PEXArtifactManifest(
             runID: runID,
             requestHash: PEXRequestHash("extract-summary"),
             backendID: "mock",
             status: .success,
-            startedAt: Date(),
-            finishedAt: Date(),
+            startedAt: startedAt,
+            finishedAt: finishedAt,
             corners: [
                 PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [ttRecord.id]),
                 PEXArtifactCorner(cornerID: "ss", status: .success, artifactIDs: [ssRecord.id]),
             ],
             artifacts: [ttRecord, ssRecord, reportRecord],
-            warnings: []
+            warnings: [],
+            provenance: try PEXTestExecutionIdentity.provenance(
+                startedAt: startedAt,
+                finishedAt: finishedAt
+            )
         )
         try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
 

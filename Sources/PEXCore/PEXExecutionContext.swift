@@ -6,6 +6,7 @@ public struct PEXExecutionContext: Sendable {
     public let runID: PEXRunID
     public let corner: PEXCorner
     public let layoutURL: URL
+    public let layoutFormat: LayoutFormat
     public let sourceNetlistURL: URL
     public let sourceNetlistFormat: NetlistFormat
     public let topCell: String
@@ -21,6 +22,7 @@ public struct PEXExecutionContext: Sendable {
         runID: PEXRunID,
         corner: PEXCorner,
         layoutURL: URL,
+        layoutFormat: LayoutFormat = .gds,
         sourceNetlistURL: URL,
         sourceNetlistFormat: NetlistFormat = .spice,
         topCell: String,
@@ -35,6 +37,7 @@ public struct PEXExecutionContext: Sendable {
         self.runID = runID
         self.corner = corner
         self.layoutURL = layoutURL
+        self.layoutFormat = layoutFormat
         self.sourceNetlistURL = sourceNetlistURL
         self.sourceNetlistFormat = sourceNetlistFormat
         self.topCell = topCell

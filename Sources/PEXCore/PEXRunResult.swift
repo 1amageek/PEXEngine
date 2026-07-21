@@ -44,23 +44,12 @@ public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
         self.metrics = metrics
         self.extractorRun = extractorRun
         self.resumedFromRunID = resumedFromRunID
-        self.provenance = try ExecutionProvenance(
-            producer: ProducerIdentity(
-                kind: .engine,
-                identifier: "pex.\(artifactManifest.backendID)",
-                version: String(PEXArtifactManifest.currentVersion)
-            ),
-            inputs: artifactManifest.artifacts.compactMap { record in
-                switch record.stage {
-                case .inputValidation, .technologyResolution:
-                    return record.reference
-                default:
-                    return nil
-                }
-            },
-            startedAt: startedAt,
-            completedAt: finishedAt
-        )
+        guard let provenance = artifactManifest.provenance else {
+            throw PEXError.persistenceFailed(
+                "PEX artifact manifest does not contain measured execution provenance"
+            )
+        }
+        self.provenance = provenance
     }
 
     public var artifacts: [ArtifactReference] {

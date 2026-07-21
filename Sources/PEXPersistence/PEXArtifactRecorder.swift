@@ -75,7 +75,8 @@ public struct PEXArtifactRecorder: Sendable {
 
     public func recordSourceConnectivityReport(
         _ report: PEXSourceConnectivityReport,
-        cornerID: PEXCornerID
+        cornerID: PEXCornerID,
+        producer: ProducerIdentity? = nil
     ) throws -> PEXArtifactRecord {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -97,7 +98,8 @@ public struct PEXArtifactRecorder: Sendable {
             stage: .irValidation,
             cornerID: cornerID,
             url: capturedURL,
-            provenance: PEXArtifactProvenance(note: "Source-netlist to extracted-pin connectivity comparison")
+            provenance: PEXArtifactProvenance(note: "Source-netlist to extracted-pin connectivity comparison"),
+            producer: producer
         )
     }
 
@@ -135,7 +137,8 @@ public struct PEXArtifactRecorder: Sendable {
             processProfile: request.processProfile,
             backendSelection: request.backendSelection,
             options: request.options,
-            workingDirectory: request.workingDirectory
+            workingDirectory: request.workingDirectory,
+            executionInputArtifacts: request.executionInputArtifacts
         )
     }
 
@@ -152,6 +155,7 @@ public struct PEXArtifactRecorder: Sendable {
             extractorRunRequest: PEXExtractorRunRequest(runRequest: capturedRequest),
             backendSelection: request.backendSelection,
             options: request.options,
+            executionInputArtifacts: request.executionInputArtifacts,
             inputArtifactIDs: inputArtifacts.map { $0.id.rawValue }
         )
         let encoder = JSONEncoder()
@@ -232,7 +236,8 @@ public struct PEXArtifactRecorder: Sendable {
                 stage: generated.stage,
                 cornerID: generated.cornerID,
                 url: capturedURL,
-                provenance: generated.provenance
+                provenance: generated.provenance,
+                producer: generated.producer
             )
         }
         return try unavailableRecord(
@@ -252,14 +257,16 @@ public struct PEXArtifactRecorder: Sendable {
         stage: PEXStage,
         cornerID: PEXCornerID? = nil,
         id: String? = nil,
-        provenance: PEXArtifactProvenance? = nil
+        provenance: PEXArtifactProvenance? = nil,
+        producer: ProducerIdentity? = nil
     ) throws -> PEXArtifactRecord {
         let generated = PEXGeneratedArtifact(
             kind: kind,
             stage: stage,
             cornerID: cornerID,
             url: url,
-            provenance: provenance
+            provenance: provenance,
+            producer: producer
         )
         return try recordGeneratedArtifact(generated, id: id)
     }
@@ -289,7 +296,8 @@ public struct PEXArtifactRecorder: Sendable {
         stage: PEXStage,
         cornerID: PEXCornerID?,
         url: URL,
-        provenance: PEXArtifactProvenance?
+        provenance: PEXArtifactProvenance?,
+        producer: ProducerIdentity? = nil
     ) throws -> PEXArtifactRecord {
         let data: Data
         do {
@@ -305,7 +313,8 @@ public struct PEXArtifactRecorder: Sendable {
                 algorithm: .sha256,
                 hexadecimalValue: Self.sha256(data: data)
             ),
-            byteCount: UInt64(data.count)
+            byteCount: UInt64(data.count),
+            producer: producer
         )
         return PEXArtifactRecord(
             payload: .available(reference),
@@ -359,7 +368,7 @@ public struct PEXArtifactRecorder: Sendable {
                 .appending(path: "reports")
                 .appending(path: "source-connectivity")
                 .appending(path: name.isEmpty ? "\(cornerID.value).json" : name)
-        case .rawOutput, .log:
+        case .processDriver, .processEvidence, .rawOutput, .log:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
             return workspace.cornerRawDirectory(cornerID).appending(path: name)
         case .parasiticIR:
@@ -481,7 +490,7 @@ public struct PEXArtifactRecorder: Sendable {
         switch kind {
         case .layoutInput, .netlistInput, .technologyInput, .processProfileDeckInput, .request:
             .input
-        case .sourceConnectivityReport, .rawOutput, .log, .parasiticIR,
+        case .processDriver, .processEvidence, .sourceConnectivityReport, .rawOutput, .log, .parasiticIR,
              .spefRoundTrip, .spiceBackannotation, .report:
             .output
         }
@@ -502,7 +511,7 @@ public struct PEXArtifactRecorder: Sendable {
             case .spefRoundTrip: ArtifactFormat.spef.rawValue
             case .spiceBackannotation, .netlistInput: ArtifactFormat.spice.rawValue
             case .layoutInput: ArtifactFormat.gdsii.rawValue
-            case .log: ArtifactFormat.text.rawValue
+            case .processDriver, .log: ArtifactFormat.text.rawValue
             default: ArtifactFormat.json.rawValue
             }
         }
@@ -640,6 +649,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
     let extractorRunRequest: PEXExtractorRunRequest
     let backendSelection: PEXBackendSelection
     let options: PEXRunOptions
+    let executionInputArtifacts: [ArtifactReference]
     let inputArtifactIDs: [String]
 
     init(
@@ -653,6 +663,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         extractorRunRequest: PEXExtractorRunRequest,
         backendSelection: PEXBackendSelection,
         options: PEXRunOptions,
+        executionInputArtifacts: [ArtifactReference],
         inputArtifactIDs: [String]
     ) {
         self.topCell = topCell
@@ -665,6 +676,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         self.extractorRunRequest = extractorRunRequest
         self.backendSelection = backendSelection
         self.options = options
+        self.executionInputArtifacts = executionInputArtifacts
         self.inputArtifactIDs = inputArtifactIDs
     }
 
@@ -679,6 +691,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         case extractorRunRequest
         case backendSelection
         case options
+        case executionInputArtifacts
         case inputArtifactIDs
     }
 
@@ -700,6 +713,10 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         self.extractorRunRequest = try container.decode(PEXExtractorRunRequest.self, forKey: .extractorRunRequest)
         self.backendSelection = try container.decode(PEXBackendSelection.self, forKey: .backendSelection)
         self.options = try container.decode(PEXRunOptions.self, forKey: .options)
+        self.executionInputArtifacts = try container.decode(
+            [ArtifactReference].self,
+            forKey: .executionInputArtifacts
+        )
         self.inputArtifactIDs = try container.decode([String].self, forKey: .inputArtifactIDs)
     }
 }

@@ -338,6 +338,9 @@ public struct ExtractCommand: Sendable {
             primaryDeckPath: config.string(forKey: "processProfile.primaryDeckPath").map { resolveURL($0, relativeTo: baseDir).path(percentEncoded: false) },
             cornerDeckPaths: config.stringDictionary(forKey: "processProfile.cornerDeckPaths").reduce(into: [:]) { result, entry in
                 result[entry.key] = resolveURL(entry.value, relativeTo: baseDir).path(percentEncoded: false)
+            },
+            requiredViewPaths: config.stringDictionary(forKey: "processProfile.requiredViewPaths").reduce(into: [:]) { result, entry in
+                result[entry.key] = resolveURL(entry.value, relativeTo: baseDir).path(percentEncoded: false)
             }
         )
     }
@@ -356,6 +359,7 @@ public struct ExtractCommand: Sendable {
             pdkRoot: override.pdkRoot ?? configProfile.pdkRoot,
             primaryDeckPath: override.primaryDeckPath ?? configProfile.primaryDeckPath,
             cornerDeckPaths: configProfile.cornerDeckPaths.merging(override.cornerDeckPaths) { _, override in override },
+            requiredViewPaths: configProfile.requiredViewPaths.merging(override.requiredViewPaths) { _, override in override },
             metadata: configProfile.metadata.merging(override.metadata) { _, override in override }
         )
     }
@@ -407,7 +411,9 @@ public struct ExtractCommand: Sendable {
 
         let layoutFormat: LayoutFormat
         let ext = layoutURL.pathExtension.lowercased()
-        if ext == "oas" || ext == "oasis" {
+        if ext == "def" {
+            layoutFormat = .def
+        } else if ext == "oas" || ext == "oasis" {
             layoutFormat = .oas
         } else {
             layoutFormat = .gds
@@ -454,6 +460,9 @@ public struct ExtractCommand: Sendable {
 
     private static func detectLayoutFormat(_ path: String) -> LayoutFormat {
         let lower = path.lowercased()
+        if lower.hasSuffix(".def") {
+            return .def
+        }
         if lower.hasSuffix(".oas") || lower.hasSuffix(".oasis") {
             return .oas
         }
@@ -467,13 +476,14 @@ public struct ExtractCommand: Sendable {
         requirementID: String?,
         pdkRoot: String?,
         primaryDeckPath: String?,
-        cornerDeckPaths: [String: String] = [:]
+        cornerDeckPaths: [String: String] = [:],
+        requiredViewPaths: [String: String] = [:]
     ) -> PEXProcessProfileReference? {
         let values = [profileID, pdkID, source, requirementID, pdkRoot, primaryDeckPath]
         guard values.contains(where: { value in
             guard let value else { return false }
             return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }) || !cornerDeckPaths.isEmpty else {
+        }) || !cornerDeckPaths.isEmpty || !requiredViewPaths.isEmpty else {
             return nil
         }
         return PEXProcessProfileReference(
@@ -483,7 +493,8 @@ public struct ExtractCommand: Sendable {
             requirementID: requirementID,
             pdkRoot: pdkRoot,
             primaryDeckPath: primaryDeckPath,
-            cornerDeckPaths: cornerDeckPaths
+            cornerDeckPaths: cornerDeckPaths,
+            requiredViewPaths: requiredViewPaths
         )
     }
 }
@@ -512,6 +523,7 @@ private struct ExtractCommandArguments {
     var pdkRoot: String?
     var primaryDeckPath: String?
     var cornerDeckPaths: [String: String] = [:]
+    var requiredViewPaths: [String: String] = [:]
     var strictOverride: Bool?
     var sourceConnectivityPolicyOverride: PEXSourceConnectivityPolicy?
 
@@ -596,6 +608,8 @@ private struct ExtractCommandArguments {
             primaryDeckPath = try cursor.requireValue(for: argument, description: "a path argument")
         case "--corner-deck":
             try recordCornerDeck(cursor.requireValue(for: argument, description: "<corner-id>=<deck-path>"))
+        case "--required-view":
+            try recordRequiredView(cursor.requireValue(for: argument, description: "<role>=<path>"))
         case "--strict":
             strictOverride = true
         case "--non-strict":
@@ -619,8 +633,25 @@ private struct ExtractCommandArguments {
             requirementID: processRequirementID,
             pdkRoot: pdkRoot,
             primaryDeckPath: primaryDeckPath,
-            cornerDeckPaths: cornerDeckPaths
+            cornerDeckPaths: cornerDeckPaths,
+            requiredViewPaths: requiredViewPaths
         )
+    }
+
+    private mutating func recordRequiredView(_ value: String) throws {
+        let parts = value.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else {
+            throw PEXError.invalidInput("--required-view requires <role>=<path>")
+        }
+        let role = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !role.isEmpty, !path.isEmpty else {
+            throw PEXError.invalidInput("--required-view requires a non-empty role and path")
+        }
+        guard requiredViewPaths[role] == nil else {
+            throw PEXError.invalidInput("--required-view was provided more than once for role '\(role)'")
+        }
+        requiredViewPaths[role] = path
     }
 
     private mutating func recordCornerDeck(_ value: String) throws {

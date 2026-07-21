@@ -89,6 +89,7 @@ public struct MockPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             logURL: nil,
             metadata: ["generator": "mock", "version": "1.0"]
         )
+        let executionIdentity = try PEXTestExecutionIdentity.make(backendID: backendID)
         return PEXAdapterExecutionResult(
             rawOutput: rawOutput,
             generatedArtifacts: [
@@ -97,9 +98,11 @@ public struct MockPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
                     stage: .backendExecution,
                     cornerID: context.corner.id,
                     url: outputURL,
-                    provenance: PEXArtifactProvenance(note: "mock SPEF output")
+                    provenance: PEXArtifactProvenance(note: "mock SPEF output"),
+                    producer: executionIdentity.producer
                 )
-            ]
+            ],
+            executionIdentity: executionIdentity
         )
     }
 

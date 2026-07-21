@@ -18,6 +18,10 @@ flowchart TD
 
     Report["Extractor corpus report"] --> Observations["Raw implementation and correlation observations"]
     Observations --> ToolQualification["ToolQualification trust decision"]
+
+    DEF["Routed DEF + exact LEF/rule bytes"] --> OpenRCX["OpenROAD / OpenRCX process"]
+    OpenRCX --> RawEvidence["Tcl + version logs + execution logs + SPEF"]
+    RawEvidence --> Parse
 ```
 
 ## Foundation integration
@@ -45,6 +49,42 @@ corner IDs and parasitic nodes remain PEX domain concepts.
 
 Foundation evidence is an interchange boundary, not a replacement for the
 PEX manifest or the canonical parasitic IR.
+
+## OpenRCX execution contract
+
+`OpenRCXPEXAdapter` directly implements `PEXExtracting`. It does not convert
+GDSII/OASIS to DEF or infer PDK views. The request must supply routed DEF,
+technology LEF, one or more library LEFs, and the selected corner's OpenRCX
+rules. The orchestrator captures every declared view into the immutable run
+before execution; resume resolves and verifies those captured bytes.
+
+The process boundary is `TimedProcessRunning`, which owns timeout,
+cancellation, and process-tree cleanup. PEX retains the generated Tcl driver,
+version-probe stdout/stderr, extraction stdout/stderr, and any non-empty SPEF
+present at failure. A zero-byte SPEF is not an artifact and cannot produce a
+successful run.
+
+Before an external extraction starts, the backend hashes the selected
+executable and observes its semantic version. It hashes the executable again
+after the process completes and rejects any change. The resulting
+`PEXBackendExecutionIdentity` retains the producer identifier/version/build,
+external invocation, sanitized-environment digest, and platform fingerprint.
+All successful corners must report the same producer and executable digest;
+otherwise the orchestrator rejects the run instead of merging inconsistent
+evidence. Per-corner environment fingerprints may differ because corner decks
+and output paths are invocation inputs. The manifest retains every corner invocation, while
+`ExecutionProvenance` carries the primary invocation and exact input artifacts.
+
+## Correlation contract
+
+`PEXExtractorCorrelationBuilder` consumes the canonical bytes of one
+`PEXExtractorCorpus` and two canonical `PEXExternalExtractorCorpusReport`
+values. It derives all SHA-256 identities internally. Both reports must name
+different backend IDs, cover the exact corpus case set, preserve coverage tags,
+and repeat every corpus expectation and tolerance exactly. The comparison is
+passing only when both observations and their difference are within the
+declared absolute tolerance. The CLI persists canonical correlation bytes once
+and refuses overwrite.
 
 ## Observation boundary
 

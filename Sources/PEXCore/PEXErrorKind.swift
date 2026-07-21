@@ -5,6 +5,7 @@ public enum PEXErrorKind: String, Sendable, Codable, Hashable, CustomStringConve
     case technologyResolutionFailed
     case adapterUnavailable
     case backendExecutionFailed
+    case timedOut
     case cancelled
     case parseFailed
     case irValidationFailed

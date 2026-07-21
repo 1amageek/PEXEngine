@@ -169,6 +169,12 @@ struct PEXRuntimeTests {
         #expect(result.extractorRun?.multiCorner.totalResistance.observedCornerCount == 2)
         #expect(result.artifactManifest.extractorRun?.readiness.status == .ready)
         #expect(result.artifactManifest.extractorRun?.multiCorner.comparisonStatus == .comparable)
+        #expect(result.provenance.producer.identifier == "pex-mock")
+        #expect(result.artifactManifest.backendExecutions.count == 2)
+        #expect(result.artifactManifest.provenance == result.provenance)
+        #expect(result.artifactManifest.artifacts.compactMap(\.reference).filter {
+            $0.locator.role == .output
+        }.allSatisfy { $0.producer == result.provenance.producer })
         #expect(result.artifactManifest.artifacts(kind: .spefRoundTrip).count == 2)
         #expect(result.artifactManifest.artifacts(kind: .spiceBackannotation).count == 2)
         #expect(result.artifactManifest.artifacts(kind: .sourceConnectivityReport).count == 2)
@@ -1165,6 +1171,7 @@ private struct PartialFailurePEXAdapter: PEXExtracting {
     }
 
     func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
+        let executionIdentity = try PEXTestExecutionIdentity.make(backendID: backendID)
         let rawURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spef")
         let logURL = context.rawOutputDirectory.appending(path: "extraction.log")
         try Data("*SPEF partial".utf8).write(to: rawURL)
@@ -1174,9 +1181,22 @@ private struct PartialFailurePEXAdapter: PEXExtracting {
             stage: .backendExecution,
             cornerID: context.corner.id,
             generatedArtifacts: [
-                PEXGeneratedArtifact(kind: .rawOutput, stage: .backendExecution, cornerID: context.corner.id, url: rawURL),
-                PEXGeneratedArtifact(kind: .log, stage: .backendExecution, cornerID: context.corner.id, url: logURL),
-            ]
+                PEXGeneratedArtifact(
+                    kind: .rawOutput,
+                    stage: .backendExecution,
+                    cornerID: context.corner.id,
+                    url: rawURL,
+                    producer: executionIdentity.producer
+                ),
+                PEXGeneratedArtifact(
+                    kind: .log,
+                    stage: .backendExecution,
+                    cornerID: context.corner.id,
+                    url: logURL,
+                    producer: executionIdentity.producer
+                ),
+            ],
+            executionIdentity: executionIdentity
         )
     }
 
@@ -1190,12 +1210,12 @@ private struct CornerUnavailablePEXAdapter: PEXExtracting {
     func prepare(_ context: PEXExecutionContext) async throws {}
 
     func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
-        throw PEXError(
-            kind: .adapterUnavailable,
+        throw PEXAdapterExecutionFailure(
+            message: "Corner extractor is unavailable.",
             stage: .backendExecution,
             cornerID: context.corner.id,
-            backendID: backendID,
-            message: "Corner extractor is unavailable."
+            failureKind: .adapterUnavailable,
+            executionIdentity: try PEXTestExecutionIdentity.make(backendID: backendID)
         )
     }
 
@@ -1383,11 +1403,19 @@ private struct UnsupportedFormatPEXAdapter: PEXExtracting {
         let rawURL = context.rawOutputDirectory.appending(path: "\(context.corner.id.value).spef")
         try Data("not a valid spef".utf8).write(to: rawURL)
         let rawOutput = PEXRawOutput(format: .custom, fileURLs: [rawURL])
+        let executionIdentity = try PEXTestExecutionIdentity.make(backendID: backendID)
         return PEXAdapterExecutionResult(
             rawOutput: rawOutput,
             generatedArtifacts: [
-                PEXGeneratedArtifact(kind: .rawOutput, stage: .backendExecution, cornerID: context.corner.id, url: rawURL),
-            ]
+                PEXGeneratedArtifact(
+                    kind: .rawOutput,
+                    stage: .backendExecution,
+                    cornerID: context.corner.id,
+                    url: rawURL,
+                    producer: executionIdentity.producer
+                ),
+            ],
+            executionIdentity: executionIdentity
         )
     }
 

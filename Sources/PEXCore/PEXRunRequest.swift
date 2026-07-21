@@ -1,3 +1,4 @@
+import CircuiteFoundation
 import Foundation
 
 public struct PEXRunRequest: Sendable, Codable, Hashable {
@@ -15,6 +16,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
     public let backendSelection: PEXBackendSelection
     public let options: PEXRunOptions
     public let workingDirectory: URL?
+    public let executionInputArtifacts: [ArtifactReference]
 
     public init(
         layoutURL: URL,
@@ -28,7 +30,8 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         processProfile: PEXProcessProfileReference? = nil,
         backendSelection: PEXBackendSelection,
         options: PEXRunOptions,
-        workingDirectory: URL? = nil
+        workingDirectory: URL? = nil,
+        executionInputArtifacts: [ArtifactReference] = []
     ) {
         self.layoutURL = layoutURL
         self.layoutFormat = layoutFormat
@@ -42,6 +45,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         self.backendSelection = backendSelection
         self.options = options
         self.workingDirectory = workingDirectory
+        self.executionInputArtifacts = executionInputArtifacts
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -57,6 +61,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         case backendSelection
         case options
         case workingDirectory
+        case executionInputArtifacts
     }
 
     public init(from decoder: Decoder) throws {
@@ -79,6 +84,10 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         self.backendSelection = try container.decode(PEXBackendSelection.self, forKey: .backendSelection)
         self.options = try container.decode(PEXRunOptions.self, forKey: .options)
         self.workingDirectory = try container.decodeIfPresent(URL.self, forKey: .workingDirectory)
+        self.executionInputArtifacts = try container.decodeIfPresent(
+            [ArtifactReference].self,
+            forKey: .executionInputArtifacts
+        ) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -95,5 +104,6 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         try container.encode(backendSelection, forKey: .backendSelection)
         try container.encode(options, forKey: .options)
         try container.encodeIfPresent(workingDirectory, forKey: .workingDirectory)
+        try container.encode(executionInputArtifacts, forKey: .executionInputArtifacts)
     }
 }

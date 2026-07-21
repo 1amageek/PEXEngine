@@ -1,0 +1,57 @@
+{
+  "artifacts" : [],
+  "backendExecutions" : [
+    {
+      "binaryDigest" : {
+        "algorithm" : "sha256",
+        "hexadecimalValue" : "1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      "environment" : {
+        "architecture" : "test",
+        "platform" : "test",
+        "toolchain" : "test"
+      },
+      "invocation" : {
+        "arguments" : [],
+        "entryPoint" : "PEXTestSupport.mock",
+        "mode" : "inProcess"
+      },
+      "producer" : {
+        "build" : "1111111111111111111111111111111111111111111111111111111111111111",
+        "identifier" : "pex-mock",
+        "kind" : "tool",
+        "version" : "test"
+      }
+    }
+  ],
+  "backendID" : "mock",
+  "corners" : [],
+  "finishedAt" : 782006401,
+  "provenance" : {
+    "completedAt" : 782006401,
+    "inputs" : [],
+    "invocation" : {
+      "arguments" : [],
+      "entryPoint" : "PEXTestSupport.mock",
+      "mode" : "inProcess"
+    },
+    "producer" : {
+      "build" : "1111111111111111111111111111111111111111111111111111111111111111",
+      "identifier" : "pex-mock",
+      "kind" : "tool",
+      "version" : "test"
+    },
+    "startedAt" : 782006400,
+    "supportingTools" : []
+  },
+  "requestHash" : {
+    "value" : "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "runID" : {
+    "value" : "00000000-0000-0000-0000-000000000001"
+  },
+  "startedAt" : 782006400,
+  "status" : "success",
+  "version" : 4,
+  "warnings" : []
+}

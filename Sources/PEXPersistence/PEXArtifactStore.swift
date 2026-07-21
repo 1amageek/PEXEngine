@@ -173,7 +173,8 @@ public struct PEXArtifactStore: Sendable {
             processProfile: processProfile,
             backendSelection: captured.backendSelection,
             options: captured.options,
-            workingDirectory: workspace.baseURL
+            workingDirectory: workspace.baseURL,
+            executionInputArtifacts: captured.executionInputArtifacts
         )
     }
 
@@ -320,6 +321,13 @@ public struct PEXArtifactStore: Sendable {
                 cornerDeckPaths[cornerID] = resolvedPath
             }
         }
+        var requiredViewPaths: [String: String] = [:]
+        for role in profile.requiredViewPaths.keys.sorted() {
+            let originalPath = profile.requiredViewPaths[role]
+            if let resolvedPath = try capturedPath(originalPath) {
+                requiredViewPaths[role] = resolvedPath
+            }
+        }
         return PEXProcessProfileReference(
             profileID: profile.profileID,
             pdkID: profile.pdkID,
@@ -328,6 +336,7 @@ public struct PEXArtifactStore: Sendable {
             pdkRoot: profile.pdkRoot,
             primaryDeckPath: try capturedPath(profile.primaryDeckPath),
             cornerDeckPaths: cornerDeckPaths,
+            requiredViewPaths: requiredViewPaths,
             metadata: profile.metadata
         )
     }

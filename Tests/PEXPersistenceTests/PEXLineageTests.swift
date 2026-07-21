@@ -1,4 +1,5 @@
 import Foundation
+import PEXTestSupport
 import Testing
 @testable import PEXCore
 @testable import PEXPersistence
@@ -15,13 +16,19 @@ struct PEXLineageTests {
         try parentWorkspace.createDirectories(corners: ["tt", "ss"])
         let parentStore = PEXArtifactStore(workspace: parentWorkspace)
         let parentRecorder = PEXArtifactRecorder(workspace: parentWorkspace)
+        let executionIdentity = try PEXTestExecutionIdentity.make(backendID: "mock")
+        let parentProvenance = try PEXTestExecutionIdentity.provenance(
+            startedAt: Date(timeIntervalSince1970: 1),
+            finishedAt: Date(timeIntervalSince1970: 2)
+        )
         try parentStore.saveIR(makeIR(cornerID: "tt"), for: "tt")
         let parentIRRecord = try parentRecorder.recordExistingArtifact(
             url: parentWorkspace.cornerIRURL("tt"),
             kind: .parasiticIR,
             stage: .persistence,
             cornerID: "tt",
-            id: "ir-parent-tt"
+            id: "ir-parent-tt",
+            producer: executionIdentity.producer
         )
         let parentLogURL = parentWorkspace.cornerLogURL("ss")
         try Data("backend failed".utf8).write(to: parentLogURL)
@@ -30,7 +37,8 @@ struct PEXLineageTests {
             kind: .log,
             stage: .backendExecution,
             cornerID: "ss",
-            id: "log-parent-ss"
+            id: "log-parent-ss",
+            producer: executionIdentity.producer
         )
         try parentStore.saveManifest(PEXArtifactManifest(
             runID: parentID,
@@ -49,7 +57,9 @@ struct PEXLineageTests {
                 ),
             ],
             artifacts: [parentIRRecord, parentLogRecord],
-            warnings: []
+            warnings: [],
+            backendExecutions: [executionIdentity],
+            provenance: parentProvenance
         ))
 
         let childID = PEXRunID()
@@ -57,13 +67,18 @@ struct PEXLineageTests {
         try childWorkspace.createDirectories(corners: ["ss"])
         let childStore = PEXArtifactStore(workspace: childWorkspace)
         let childRecorder = PEXArtifactRecorder(workspace: childWorkspace)
+        let childProvenance = try PEXTestExecutionIdentity.provenance(
+            startedAt: Date(timeIntervalSince1970: 3),
+            finishedAt: Date(timeIntervalSince1970: 4)
+        )
         try childStore.saveIR(makeIR(cornerID: "ss"), for: "ss")
         let childIRRecord = try childRecorder.recordExistingArtifact(
             url: childWorkspace.cornerIRURL("ss"),
             kind: .parasiticIR,
             stage: .persistence,
             cornerID: "ss",
-            id: "ir-child-ss"
+            id: "ir-child-ss",
+            producer: executionIdentity.producer
         )
         try childStore.saveManifest(PEXArtifactManifest(
             runID: childID,
@@ -75,7 +90,9 @@ struct PEXLineageTests {
             corners: [PEXArtifactCorner(cornerID: "ss", status: .success, artifactIDs: [childIRRecord.id])],
             artifacts: [childIRRecord],
             warnings: [],
-            resumedFromRunID: parentID
+            resumedFromRunID: parentID,
+            backendExecutions: [executionIdentity],
+            provenance: childProvenance
         ))
 
         let lineage = try childStore.loadLineage()

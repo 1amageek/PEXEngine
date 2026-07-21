@@ -1,4 +1,5 @@
 import Foundation
+import CircuiteFoundation
 import PEXCore
 import PEXAdapters
 import PEXParsers
@@ -78,6 +79,7 @@ public actor PEXOrchestrator {
             technologiesByCorner: technologiesByCorner,
             recorder: recorder
         )
+        try validateDeclaredExecutionInputs(effectiveRequest.executionInputArtifacts, request: effectiveRequest)
         let capturedRequest = try recorder.capturedRequest(
             effectiveRequest,
             inputArtifacts: inputArtifacts
@@ -100,6 +102,16 @@ public actor PEXOrchestrator {
             cancellationCheck: cancellationCheck
         )
         let cornerResults = cornerOutcomes.map(\.result)
+
+        let backendExecutions = try validatedBackendExecutions(from: cornerOutcomes)
+        guard let primaryExecution = backendExecutions.first else {
+            throw PEXError(
+                kind: .backendExecutionFailed,
+                stage: .backendExecution,
+                backendID: effectiveRequest.backendSelection.backendID,
+                message: "PEX produced no measured backend execution identity."
+            )
+        }
 
         let finishedAt = Date()
 
@@ -140,7 +152,8 @@ public actor PEXOrchestrator {
                 url: workspace.reportURL,
                 kind: .report,
                 stage: .reporting,
-                id: "report-summary"
+                id: "report-summary",
+                producer: primaryExecution.producer
             )
         } catch {
             allWarnings.append(PEXWarning(stage: .reporting, message: "Failed to save report: \(error)"))
@@ -155,6 +168,20 @@ public actor PEXOrchestrator {
 
         let cornerArtifacts = cornerOutcomes.flatMap(\.artifacts)
         let allArtifacts = inputArtifacts + cornerArtifacts + [reportArtifact]
+        let provenance = try ExecutionProvenance(
+            producer: primaryExecution.producer,
+            inputs: effectiveRequest.executionInputArtifacts.isEmpty
+                ? inputArtifacts.compactMap(\.reference)
+                : effectiveRequest.executionInputArtifacts,
+            invocation: primaryExecution.invocation,
+            environment: primaryExecution.environment,
+            configurationDigest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: requestHash.value
+            ),
+            startedAt: startedAt,
+            completedAt: finishedAt
+        )
         let extractorRun = makeExtractorRun(
             request: extractorRequest,
             readiness: extractorReadiness,
@@ -180,7 +207,9 @@ public actor PEXOrchestrator {
             artifacts: allArtifacts,
             warnings: allWarnings,
             extractorRun: extractorRun,
-            resumedFromRunID: resumedFromRunID
+            resumedFromRunID: resumedFromRunID,
+            backendExecutions: backendExecutions,
+            provenance: provenance
         )
         try store.saveManifest(manifest)
 
@@ -242,7 +271,8 @@ public actor PEXOrchestrator {
             processProfile: profile,
             backendSelection: request.backendSelection,
             options: request.options,
-            workingDirectory: request.workingDirectory
+            workingDirectory: request.workingDirectory,
+            executionInputArtifacts: request.executionInputArtifacts
         )
     }
 
@@ -437,6 +467,9 @@ public actor PEXOrchestrator {
             deckEntries.append(contentsOf: profile.cornerDeckPaths.map { entry in
                 (identifier: "corner-\(entry.key)", path: entry.value)
             })
+            deckEntries.append(contentsOf: profile.requiredViewPaths.map { entry in
+                (identifier: "view-\(entry.key)", path: entry.value)
+            })
             var capturedPaths: Set<String> = []
             var capturedDeckIDs: Set<String> = []
             for entry in deckEntries.sorted(by: { $0.identifier < $1.identifier }) {
@@ -463,6 +496,47 @@ public actor PEXOrchestrator {
         }
         artifacts.append(try recorder.recordRequest(request, inputArtifacts: artifacts))
         return artifacts
+    }
+
+    private func validateDeclaredExecutionInputs(
+        _ references: [ArtifactReference],
+        request: PEXRunRequest
+    ) throws {
+        guard !references.isEmpty else {
+            return
+        }
+        guard Set(references).count == references.count else {
+            throw PEXError.invalidInput("PEX execution input artifacts must be unique.")
+        }
+        try requireDeclaredInput(
+            request.layoutURL,
+            kind: .layout,
+            in: references
+        )
+        try requireDeclaredInput(
+            request.sourceNetlistURL,
+            kind: .netlist,
+            in: references
+        )
+    }
+
+    private func requireDeclaredInput(
+        _ url: URL,
+        kind: ArtifactKind,
+        in references: [ArtifactReference]
+    ) throws {
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        let digest = try SHA256ContentDigester().digest(data: data)
+        let matches = references.filter {
+            $0.kind == kind
+                && $0.digest == digest
+                && $0.byteCount == UInt64(data.count)
+        }
+        guard matches.count == 1 else {
+            throw PEXError.invalidInput(
+                "PEX \(kind.rawValue) input is not bound to one exact execution artifact."
+            )
+        }
     }
 
     private func executeCorners(
@@ -496,6 +570,7 @@ public actor PEXOrchestrator {
                     runID: runID,
                     corner: corner,
                     layoutURL: request.layoutURL,
+                    layoutFormat: request.layoutFormat,
                     sourceNetlistURL: request.sourceNetlistURL,
                     sourceNetlistFormat: request.sourceNetlistFormat,
                     topCell: request.topCell,
@@ -535,6 +610,34 @@ public actor PEXOrchestrator {
         return outcomes
     }
 
+    private func validatedBackendExecutions(
+        from outcomes: [PEXCornerExecutionOutcome]
+    ) throws -> [PEXBackendExecutionIdentity] {
+        let successful = outcomes.filter { $0.result.status == .success }
+        let successfulIdentities = successful.compactMap(\.executionIdentity)
+        guard successfulIdentities.count == successful.count else {
+            throw PEXError.internalInvariantViolation(
+                "A successful PEX corner omitted its measured backend execution identity"
+            )
+        }
+        let identities = outcomes.compactMap(\.executionIdentity)
+        guard let primary = identities.first else {
+            return []
+        }
+        guard identities.allSatisfy({ identity in
+            identity.producer == primary.producer
+                && identity.binaryDigest == primary.binaryDigest
+        }) else {
+            throw PEXError(
+                kind: .backendExecutionFailed,
+                stage: .backendExecution,
+                backendID: primary.producer.identifier,
+                message: "PEX backend identity changed between corner executions."
+            )
+        }
+        return identities
+    }
+
     private func sanitizeTechnologyCornerID(_ value: String) -> String {
         let base = value.isEmpty ? "corner" : value
         return base.map { character in
@@ -553,6 +656,7 @@ public actor PEXOrchestrator {
     ) async -> PEXCornerExecutionOutcome {
         let cornerStart = Date()
         var retainedArtifacts: [PEXArtifactRecord] = []
+        var retainedExecutionIdentity: PEXBackendExecutionIdentity?
         do {
             let outcome = try await executeSuccessfulCorner(
                 adapter: adapter,
@@ -561,7 +665,8 @@ public actor PEXOrchestrator {
                 recorder: recorder,
                 options: options,
                 cornerStart: cornerStart,
-                retainedArtifacts: &retainedArtifacts
+                retainedArtifacts: &retainedArtifacts,
+                retainedExecutionIdentity: &retainedExecutionIdentity
             )
             await adapter.cleanup(context)
             return outcome
@@ -571,7 +676,9 @@ public actor PEXOrchestrator {
                 retainedArtifacts: retainedArtifacts,
                 context: context,
                 recorder: recorder,
-                cornerStart: cornerStart
+                cornerStart: cornerStart,
+                executionIdentity: retainedExecutionIdentity
+                    ?? (error as? PEXAdapterExecutionFailure)?.executionIdentity
             )
             await adapter.cleanup(context)
             return outcome
@@ -585,10 +692,12 @@ public actor PEXOrchestrator {
         recorder: PEXArtifactRecorder,
         options: PEXRunOptions,
         cornerStart: Date,
-        retainedArtifacts: inout [PEXArtifactRecord]
+        retainedArtifacts: inout [PEXArtifactRecord],
+        retainedExecutionIdentity: inout PEXBackendExecutionIdentity?
     ) async throws -> PEXCornerExecutionOutcome {
         let cornerID = context.corner.id
         let execution = try await pipeline.executeCorner(adapter: adapter, context: context)
+        retainedExecutionIdentity = execution.executionIdentity
         let rawOutput = execution.rawOutput
         var artifacts = try recordBackendArtifacts(
             execution: execution,
@@ -617,7 +726,8 @@ public actor PEXOrchestrator {
             )
             artifacts.append(try recorder.recordSourceConnectivityReport(
                 connectivityReport,
-                cornerID: cornerID
+                cornerID: cornerID,
+                producer: execution.executionIdentity.producer
             ))
             retainedArtifacts = artifacts
             if options.sourceConnectivityPolicy == .strict && !connectivityReport.isSatisfied {
@@ -643,18 +753,21 @@ public actor PEXOrchestrator {
             context: context,
             store: store,
             recorder: recorder,
-            options: options
+            options: options,
+            producer: execution.executionIdentity.producer
         ))
         retainedArtifacts = artifacts
         let spiceOutcome = recordSPICEBackannotationArtifact(
             validatedIR,
             context: context,
-            recorder: recorder
+            recorder: recorder,
+            producer: execution.executionIdentity.producer
         )
         let spefOutcome = recordSPEFRoundTripArtifact(
             validatedIR,
             context: context,
-            recorder: recorder
+            recorder: recorder,
+            producer: execution.executionIdentity.producer
         )
         artifacts.append(contentsOf: spiceOutcome.artifacts)
         artifacts.append(contentsOf: spefOutcome.artifacts)
@@ -674,7 +787,11 @@ public actor PEXOrchestrator {
                 peakMemoryBytes: nil
             )
         )
-        return PEXCornerExecutionOutcome(result: result, artifacts: artifacts)
+        return PEXCornerExecutionOutcome(
+            result: result,
+            artifacts: artifacts,
+            executionIdentity: execution.executionIdentity
+        )
     }
 
     private func recordBackendArtifacts(
@@ -693,7 +810,8 @@ public actor PEXOrchestrator {
                     url: url,
                     kind: .rawOutput,
                     stage: .backendExecution,
-                    cornerID: cornerID
+                    cornerID: cornerID,
+                    producer: execution.executionIdentity.producer
                 ))
             }
         }
@@ -703,7 +821,8 @@ public actor PEXOrchestrator {
                 url: logURL,
                 kind: .log,
                 stage: .backendExecution,
-                cornerID: cornerID
+                cornerID: cornerID,
+                producer: execution.executionIdentity.producer
             ))
         }
         return artifacts
@@ -714,7 +833,8 @@ public actor PEXOrchestrator {
         context: PEXExecutionContext,
         store: PEXArtifactStore,
         recorder: PEXArtifactRecorder,
-        options: PEXRunOptions
+        options: PEXRunOptions,
+        producer: ProducerIdentity
     ) throws -> PEXArtifactRecord {
         let cornerID = context.corner.id
         let irURL = context.workingDirectory.appending(path: "ir").appending(path: "\(cornerID.value).json")
@@ -725,7 +845,8 @@ public actor PEXOrchestrator {
                 kind: .parasiticIR,
                 stage: .persistence,
                 cornerID: cornerID,
-                id: "ir-\(cornerID.value)"
+                id: "ir-\(cornerID.value)",
+                producer: producer
             )
         }
         return try recorder.recordOmittedArtifact(
@@ -741,7 +862,8 @@ public actor PEXOrchestrator {
     private func recordSPEFRoundTripArtifact(
         _ ir: ParasiticIR,
         context: PEXExecutionContext,
-        recorder: PEXArtifactRecorder
+        recorder: PEXArtifactRecorder,
+        producer: ProducerIdentity
     ) -> PEXCornerArtifactRecordingOutcome {
         let cornerID = context.corner.id
         let spefURL = context.workingDirectory.appending(path: "spef").appending(path: "\(cornerID.value).spef")
@@ -753,7 +875,8 @@ public actor PEXOrchestrator {
                 stage: .persistence,
                 cornerID: cornerID,
                 id: "spef-roundtrip-\(cornerID.value)",
-                provenance: PEXArtifactProvenance(note: "SPEF regenerated from canonical ParasiticIR")
+                provenance: PEXArtifactProvenance(note: "SPEF regenerated from canonical ParasiticIR"),
+                producer: producer
             )
             return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [])
         } catch {
@@ -769,7 +892,8 @@ public actor PEXOrchestrator {
     private func recordSPICEBackannotationArtifact(
         _ ir: ParasiticIR,
         context: PEXExecutionContext,
-        recorder: PEXArtifactRecorder
+        recorder: PEXArtifactRecorder,
+        producer: ProducerIdentity
     ) -> PEXCornerArtifactRecordingOutcome {
         let cornerID = context.corner.id
         let spiceURL = context.workingDirectory.appending(path: "spice").appending(path: "\(cornerID.value).cir")
@@ -783,7 +907,8 @@ public actor PEXOrchestrator {
                 stage: .persistence,
                 cornerID: cornerID,
                 id: "spice-backannotation-\(cornerID.value)",
-                provenance: PEXArtifactProvenance(note: "Deterministic SPICE fragment generated from canonical ParasiticIR")
+                provenance: PEXArtifactProvenance(note: "Deterministic SPICE fragment generated from canonical ParasiticIR"),
+                producer: producer
             )
             return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [])
         } catch {
@@ -854,7 +979,8 @@ public actor PEXOrchestrator {
         retainedArtifacts: [PEXArtifactRecord],
         context: PEXExecutionContext,
         recorder: PEXArtifactRecorder,
-        cornerStart: Date
+        cornerStart: Date,
+        executionIdentity: PEXBackendExecutionIdentity?
     ) -> PEXCornerExecutionOutcome {
         let cornerID = context.corner.id
         var artifactWarnings: [PEXWarning] = []
@@ -897,10 +1023,12 @@ public actor PEXOrchestrator {
             artifacts: artifacts,
             failure: PEXArtifactFailure(
                 stage: stage,
-                failureKind: (error as? PEXError)?.kind,
+                failureKind: (error as? PEXError)?.kind
+                    ?? (error as? PEXAdapterExecutionFailure)?.failureKind,
                 message: message,
                 suggestedActions: suggestedActions(for: stage)
-            )
+            ),
+            executionIdentity: executionIdentity
         )
     }
 
@@ -1012,15 +1140,18 @@ private struct PEXCornerExecutionOutcome: Sendable {
     let result: PEXCornerResult
     let artifacts: [PEXArtifactRecord]
     let failure: PEXArtifactFailure?
+    let executionIdentity: PEXBackendExecutionIdentity?
 
     init(
         result: PEXCornerResult,
         artifacts: [PEXArtifactRecord],
-        failure: PEXArtifactFailure? = nil
+        failure: PEXArtifactFailure? = nil,
+        executionIdentity: PEXBackendExecutionIdentity? = nil
     ) {
         self.result = result
         self.artifacts = artifacts
         self.failure = failure
+        self.executionIdentity = executionIdentity
     }
 }
 

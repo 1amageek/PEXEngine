@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import CircuiteFoundation
 import PEXCore
 import SignoffToolSupport
 
@@ -136,11 +137,55 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
 
     public func execute(_ context: PEXExecutionContext) async throws -> PEXAdapterExecutionResult {
         let plan = try makeExecutionPlan(for: context)
+        let executableDigestBefore = try executableDigest(plan.toolchain.magicExecutableURL)
         let result = try await runMagic(plan, context: context)
         let combinedOutput = result.standardOutput + "\n" + result.standardError
         let logURL = try writeProcessLog(combinedOutput, context: context)
-        try validateMagicResult(result, combinedOutput: combinedOutput, plan: plan, logURL: logURL, context: context)
-        return executionResult(plan: plan, logURL: logURL, context: context)
+        let executableDigestAfter = try executableDigest(plan.toolchain.magicExecutableURL)
+        guard executableDigestAfter == executableDigestBefore else {
+            throw PEXAdapterExecutionFailure(
+                message: "Magic executable changed during extraction.",
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                failureKind: .backendExecutionFailed,
+                generatedArtifacts: [logArtifact(logURL, context: context)]
+            )
+        }
+        let executionIdentity = try makeExecutionIdentity(
+            plan: plan,
+            combinedOutput: combinedOutput,
+            executableDigest: executableDigestBefore,
+            context: context
+        )
+        if let expected = context.backendSelection.expectedProducer,
+           expected != executionIdentity.producer {
+            throw PEXAdapterExecutionFailure(
+                message: "Observed Magic executable identity does not match the requested producer identity.",
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                failureKind: .backendExecutionFailed,
+                generatedArtifacts: [logArtifact(
+                    logURL,
+                    context: context,
+                    producer: executionIdentity.producer
+                )],
+                executionIdentity: executionIdentity
+            )
+        }
+        try validateMagicResult(
+            result,
+            combinedOutput: combinedOutput,
+            plan: plan,
+            logURL: logURL,
+            context: context,
+            executionIdentity: executionIdentity
+        )
+        return executionResult(
+            plan: plan,
+            logURL: logURL,
+            context: context,
+            executionIdentity: executionIdentity
+        )
     }
 
     private func makeExecutionPlan(for context: PEXExecutionContext) throws -> MagicPEXExecutionPlan {
@@ -297,7 +342,13 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         outputURL: URL,
         settings: MagicPEXExtractionSettings
     ) -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
+        let inherited = ProcessInfo.processInfo.environment
+        let inheritedKeys = ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR"]
+        var environment = inheritedKeys.reduce(into: [String: String]()) { result, key in
+            if let value = inherited[key] {
+                result[key] = value
+            }
+        }
         environment.merge(context.backendSelection.environmentOverrides) { _, selected in selected }
         environment["PDK_ROOT"] = context.backendSelection.environmentOverrides["PDK_ROOT"] ?? toolchain.pdkRoot
         environment["PEX_GDS"] = context.layoutURL.path(percentEncoded: false)
@@ -383,7 +434,8 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         combinedOutput: String,
         plan: MagicPEXExecutionPlan,
         logURL: URL,
-        context: PEXExecutionContext
+        context: PEXExecutionContext,
+        executionIdentity: PEXBackendExecutionIdentity
     ) throws {
         guard result.exitCode == 0,
               !combinedOutput.contains("PEX_ERROR"),
@@ -392,7 +444,12 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
                 message: "Magic extraction failed (exit \(result.exitCode))",
                 stage: .backendExecution,
                 cornerID: context.corner.id,
-                generatedArtifacts: [logArtifact(logURL, context: context)]
+                generatedArtifacts: [logArtifact(
+                    logURL,
+                    context: context,
+                    producer: executionIdentity.producer
+                )],
+                executionIdentity: executionIdentity
             )
         }
     }
@@ -400,7 +457,8 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     private func executionResult(
         plan: MagicPEXExecutionPlan,
         logURL: URL,
-        context: PEXExecutionContext
+        context: PEXExecutionContext,
+        executionIdentity: PEXBackendExecutionIdentity
     ) -> PEXAdapterExecutionResult {
         let rawOutput = PEXRawOutput(
             format: .spice,
@@ -415,30 +473,136 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         return PEXAdapterExecutionResult(
             rawOutput: rawOutput,
             generatedArtifacts: [
-                rawOutputArtifact(plan.outputURL, context: context),
-                logArtifact(logURL, context: context),
-            ]
+                rawOutputArtifact(
+                    plan.outputURL,
+                    context: context,
+                    producer: executionIdentity.producer
+                ),
+                logArtifact(logURL, context: context, producer: executionIdentity.producer),
+            ],
+            executionIdentity: executionIdentity
         )
     }
 
-    private func rawOutputArtifact(_ outputURL: URL, context: PEXExecutionContext) -> PEXGeneratedArtifact {
+    private func rawOutputArtifact(
+        _ outputURL: URL,
+        context: PEXExecutionContext,
+        producer: ProducerIdentity? = nil
+    ) -> PEXGeneratedArtifact {
         PEXGeneratedArtifact(
             kind: .rawOutput,
             stage: .backendExecution,
             cornerID: context.corner.id,
             url: outputURL,
-            provenance: PEXArtifactProvenance(note: "magic ext2spice parasitics")
+            provenance: PEXArtifactProvenance(note: "magic ext2spice parasitics"),
+            producer: producer
         )
     }
 
-    private func logArtifact(_ logURL: URL, context: PEXExecutionContext) -> PEXGeneratedArtifact {
+    private func logArtifact(
+        _ logURL: URL,
+        context: PEXExecutionContext,
+        producer: ProducerIdentity? = nil
+    ) -> PEXGeneratedArtifact {
         PEXGeneratedArtifact(
             kind: .log,
             stage: .backendExecution,
             cornerID: context.corner.id,
             url: logURL,
-            provenance: PEXArtifactProvenance(note: "magic process log")
+            provenance: PEXArtifactProvenance(note: "magic process log"),
+            producer: producer
         )
+    }
+
+    private func executableDigest(_ executableURL: URL) throws -> String {
+        do {
+            return SHA256.hash(data: try Data(contentsOf: executableURL, options: [.mappedIfSafe]))
+                .map { String(format: "%02x", $0) }
+                .joined()
+        } catch {
+            throw PEXAdapterExecutionFailure(
+                message: "Magic executable could not be hashed for execution identity.",
+                stage: .backendExecution,
+                failureKind: .backendExecutionFailed,
+                underlying: error
+            )
+        }
+    }
+
+    private func makeExecutionIdentity(
+        plan: MagicPEXExecutionPlan,
+        combinedOutput: String,
+        executableDigest: String,
+        context: PEXExecutionContext
+    ) throws -> PEXBackendExecutionIdentity {
+        let expression = #"(?i)\bMagic\b[^\r\n0-9]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)\b"#
+        let regularExpression = try NSRegularExpression(pattern: expression)
+        let fullRange = NSRange(combinedOutput.startIndex..<combinedOutput.endIndex, in: combinedOutput)
+        guard let match = regularExpression.firstMatch(in: combinedOutput, range: fullRange),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: combinedOutput) else {
+            throw PEXAdapterExecutionFailure(
+                message: "Magic execution did not emit a semantic version banner.",
+                stage: .backendExecution,
+                cornerID: context.corner.id,
+                failureKind: .backendExecutionFailed
+            )
+        }
+        let version = String(combinedOutput[range])
+        let digest = try ContentDigest(
+            algorithm: .sha256,
+            hexadecimalValue: executableDigest
+        )
+        let producer = try ProducerIdentity(
+            kind: .tool,
+            identifier: "pex-magic",
+            version: version,
+            build: digest.hexadecimalValue
+        )
+        let arguments = [
+            "-dnull", "-noconsole",
+            "-rcfile", plan.toolchain.rcFileURL.path(percentEncoded: false),
+            plan.driverURL.path(percentEncoded: false),
+        ]
+        let invocation = try ExecutionInvocation.externalProcess(
+            executable: plan.toolchain.magicExecutableURL.path(percentEncoded: false),
+            arguments: arguments,
+            workingDirectory: context.rawOutputDirectory.path(percentEncoded: false)
+        )
+        let environmentBytes = plan.environment.keys.sorted().reduce(into: Data()) { bytes, key in
+            bytes.append(contentsOf: key.utf8)
+            bytes.append(0)
+            bytes.append(contentsOf: (plan.environment[key] ?? "").utf8)
+            bytes.append(0)
+        }
+        let environmentDigest = try ContentDigest(
+            algorithm: .sha256,
+            hexadecimalValue: SHA256.hash(data: environmentBytes)
+                .map { String(format: "%02x", $0) }
+                .joined()
+        )
+        let environment = try ExecutionEnvironmentFingerprint(
+            platform: ProcessInfo.processInfo.operatingSystemVersionString,
+            architecture: Self.runtimeArchitecture,
+            toolchain: version,
+            environmentDigest: environmentDigest
+        )
+        return try PEXBackendExecutionIdentity(
+            producer: producer,
+            binaryDigest: digest,
+            invocation: invocation,
+            environment: environment
+        )
+    }
+
+    private static var runtimeArchitecture: String {
+        #if arch(arm64)
+        "arm64"
+        #elseif arch(x86_64)
+        "x86_64"
+        #else
+        "unknown"
+        #endif
     }
 
     public func cleanup(_ context: PEXExecutionContext) async {

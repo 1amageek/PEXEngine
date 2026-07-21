@@ -27,6 +27,9 @@ public struct PEXConfigMapper: Sendable {
                 cornerDeckPaths: profile.cornerDeckPaths.reduce(into: [String: String]()) { result, entry in
                     result[entry.key] = Self.resolvePath(entry.value, relativeTo: baseDir).path(percentEncoded: false)
                 },
+                requiredViewPaths: profile.requiredViewPaths.reduce(into: [String: String]()) { result, entry in
+                    result[entry.key] = Self.resolvePath(entry.value, relativeTo: baseDir).path(percentEncoded: false)
+                },
                 metadata: profile.metadata
             )
         }
@@ -90,6 +93,9 @@ public struct PEXConfigMapper: Sendable {
 
     private static func detectLayoutFormat(_ path: String) -> LayoutFormat {
         let lower = path.lowercased()
+        if lower.hasSuffix(".def") {
+            return .def
+        }
         if lower.hasSuffix(".oas") || lower.hasSuffix(".oasis") {
             return .oas
         }

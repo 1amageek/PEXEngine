@@ -50,6 +50,9 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         for (cornerID, path) in profile.cornerDeckPaths {
             paths["corner:\(cornerID)"] = path
         }
+        for (role, path) in profile.requiredViewPaths {
+            paths["view:\(role)"] = path
+        }
 
         var hashes: [String: String] = [:]
         for (key, path) in paths {

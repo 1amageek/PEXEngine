@@ -47,6 +47,26 @@ struct PEXPipeline: Sendable {
         if request.backendSelection.backendID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw PEXError.invalidInput("backendID must not be empty")
         }
+        if let expectedProducer = request.backendSelection.expectedProducer {
+            let expectedIdentifier = "pex-\(request.backendSelection.backendID)"
+            guard expectedProducer.kind == .tool,
+                  expectedProducer.identifier == expectedIdentifier else {
+                throw PEXError.invalidInput(
+                    "Expected PEX producer must be tool \(expectedIdentifier)"
+                )
+            }
+            guard let build = expectedProducer.build,
+                  build.utf8.count == 64,
+                  build.utf8.allSatisfy({ byte in
+                      (byte >= 48 && byte <= 57)
+                          || (byte >= 65 && byte <= 70)
+                          || (byte >= 97 && byte <= 102)
+                  }) else {
+                throw PEXError.invalidInput(
+                    "Expected PEX producer build must be the executable SHA-256 digest"
+                )
+            }
+        }
         if request.options.maxParallelJobs < 1 {
             throw PEXError.invalidInput("maxParallelJobs must be at least 1")
         }
