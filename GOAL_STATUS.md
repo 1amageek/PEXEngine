@@ -17,7 +17,7 @@
 | Existing extraction/parser/IR behavior | Retained |
 | Retry and lineage contracts | Retained |
 | Project/run orchestration | Out of scope; owned by higher layers |
-| Build after identity migration | Pending aggregate workspace validation |
+| Build after identity migration | Passed; workspace verifier run `20260725T212810865980Z` built the package and passed 371 tests across all 6 declared shards |
 
 Production trust is owned by `ToolQualification`. Backend-local corpus pass
 flags and evidence packets remain raw regression material and never self-promote
