@@ -16,7 +16,7 @@ let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileMan
     ? .package(path: "../CircuiteFoundation")
     : .package(
         url: "https://github.com/1amageek/CircuiteFoundation.git",
-        revision: "7abcac83517935c9b9f7553d7016d62cffde259d"
+        revision: "dc792c88e189c822c9f83ea86cf139ee68560dca"
     )
 
 let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
@@ -25,7 +25,7 @@ let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileMan
     ? .package(path: "../SignoffToolSupport")
     : .package(
         url: "https://github.com/1amageek/SignoffToolSupport.git",
-        revision: "6bf675eecb27e3bd3440c5ce8a85c85c510fc3cb"
+        revision: "2c36104106bdfc8c279629c162c3ced9d7401328"
     )
 
 let package = Package(
