@@ -172,8 +172,8 @@ struct PEXRuntimeTests {
         #expect(result.provenance.producer.identifier == "pex-mock")
         #expect(result.artifactManifest.backendExecutions.count == 2)
         #expect(result.artifactManifest.provenance == result.provenance)
-        #expect(result.artifactManifest.artifacts.compactMap(\.reference).filter {
-            $0.locator.role == .output
+        #expect(result.artifactManifest.artifacts.filter {
+            $0.descriptor.role == .output
         }.allSatisfy { $0.producer == result.provenance.producer })
         #expect(result.artifactManifest.artifacts(kind: .spefRoundTrip).count == 2)
         #expect(result.artifactManifest.artifacts(kind: .spiceBackannotation).count == 2)
@@ -314,10 +314,10 @@ struct PEXRuntimeTests {
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let manifestCorner = try #require(manifest.corners.first { $0.cornerID == PEXCornerID("tt") })
-        #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.locator.location.value == "raw/tt/tt.spef")
-        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.locator.location.value == "ir/tt.json")
-        #expect(manifest.artifacts(kind: .spefRoundTrip, cornerID: "tt").first?.locator.location.value == "spef/tt.spef")
-        #expect(manifest.artifacts(kind: .spiceBackannotation, cornerID: "tt").first?.locator.location.value == "spice/tt.cir")
+        #expect(manifest.artifacts(kind: .rawOutput, cornerID: "tt").first?.relativePath.stringValue == "raw/tt/tt.spef")
+        #expect(manifest.artifacts(kind: .parasiticIR, cornerID: "tt").first?.relativePath.stringValue == "ir/tt.json")
+        #expect(manifest.artifacts(kind: .spefRoundTrip, cornerID: "tt").first?.relativePath.stringValue == "spef/tt.spef")
+        #expect(manifest.artifacts(kind: .spiceBackannotation, cornerID: "tt").first?.relativePath.stringValue == "spice/tt.cir")
         #expect(manifestCorner.artifactIDs.contains("ir-tt"))
         #expect(manifestCorner.artifactIDs.contains("spef-roundtrip-tt"))
         #expect(manifestCorner.artifactIDs.contains("spice-backannotation-tt"))
@@ -456,7 +456,7 @@ struct PEXRuntimeTests {
             cornerID: "tt",
             id: "ir-tt"
         )
-        try store.saveManifest(PEXArtifactManifest(
+        try store.saveManifest(PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("module-root-query"),
             backendID: "mock",
@@ -517,7 +517,7 @@ struct PEXRuntimeTests {
                 && $0.reference?.digest.hexadecimalValue != nil
                 && $0.reference?.byteCount != nil
         })
-        #expect(deckArtifacts.allSatisfy { $0.locator.location.value.hasPrefix("inputs/process-profile-decks/") })
+        #expect(deckArtifacts.allSatisfy { $0.relativePath.stringValue.hasPrefix("inputs/process-profile-decks/") })
     }
 
     @Test func loadRunDoesNotRequireIRWhenIRJSONEmissionIsDisabled() async throws {
@@ -1108,10 +1108,10 @@ struct PEXRuntimeTests {
             let isRunSpecificReport = $0.matches(kind: .report)
             return CanonicalArtifactRecord(
                 id: $0.id.rawValue,
-                kind: $0.locator.kind.rawValue,
+                kind: $0.descriptor.kind.rawValue,
                 stage: $0.stage,
                 cornerID: $0.cornerID,
-                relativePath: $0.locator.location.value,
+                relativePath: $0.relativePath.stringValue,
                 sha256: isRunSpecificReport ? nil : $0.reference?.digest.hexadecimalValue,
                 byteCount: isRunSpecificReport ? nil : $0.reference?.byteCount,
                 availability: $0.availability

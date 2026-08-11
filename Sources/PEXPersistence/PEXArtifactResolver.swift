@@ -79,17 +79,15 @@ public struct PEXArtifactResolver: Sendable {
     }
 
     public func url(for record: PEXArtifactRecord) -> URL {
-        runDirectory.appending(path: record.locator.location.value)
+        runDirectory.appending(path: record.relativePath.stringValue)
     }
 
     public func validatedURL(for record: PEXArtifactRecord) throws -> URL {
-        if pathEscapesRunDirectory(record.locator.location) {
-            throw PEXError.persistenceFailed("Artifact path escapes the run directory: \(record.locator.location.value)")
-        }
-
         let artifactURL = url(for: record)
         if artifactTargetEscapesRunDirectory(artifactURL) {
-            throw PEXError.persistenceFailed("Artifact target escapes the run directory: \(record.locator.location.value)")
+            throw PEXError.persistenceFailed(
+                "Artifact target escapes the run directory: \(record.relativePath.stringValue)"
+            )
         }
         return artifactURL
     }
@@ -147,7 +145,7 @@ public struct PEXArtifactResolver: Sendable {
                     kind: .pathEscapesRunDirectory,
                     artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    location: record.locator.location,
+                    location: record.relativePath,
                     message: "Artifact path escapes the run directory"
                 ),
             ]
@@ -171,7 +169,7 @@ public struct PEXArtifactResolver: Sendable {
                     kind: .missingArtifact,
                     artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    location: record.locator.location,
+                    location: record.relativePath,
                     message: "Artifact file is missing"
                 ),
             ]
@@ -192,7 +190,7 @@ public struct PEXArtifactResolver: Sendable {
                     kind: .missingArtifact,
                     artifactID: record.id.rawValue,
                     cornerID: record.cornerID,
-                    location: record.locator.location,
+                    location: record.relativePath,
                     message: "Artifact file could not be read"
                 ),
             ]
@@ -215,7 +213,7 @@ public struct PEXArtifactResolver: Sendable {
                 kind: .invalidHash,
                 artifactID: record.id.rawValue,
                 cornerID: record.cornerID,
-                location: record.locator.location,
+                location: record.relativePath,
                 message: "Artifact hash or byte count does not match manifest"
             ),
         ]
@@ -249,7 +247,7 @@ public struct PEXArtifactResolver: Sendable {
                 kind: .missingCornerArtifactReference,
                 artifactID: record.id.rawValue,
                 cornerID: corner.cornerID,
-                location: record.locator.location,
+                location: record.relativePath,
                 message: "Corner-scoped artifact is not referenced by the corner artifact graph"
             ))
         }
@@ -336,12 +334,6 @@ public struct PEXArtifactResolver: Sendable {
 
     public static func sha256(data: Data) -> String {
         SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func pathEscapesRunDirectory(_ location: ArtifactLocation) -> Bool {
-        guard location.storage == .workspaceRelative else { return true }
-        return location.value.hasPrefix("/")
-            || location.value.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }
 
     private func artifactTargetEscapesRunDirectory(_ artifactURL: URL) -> Bool {

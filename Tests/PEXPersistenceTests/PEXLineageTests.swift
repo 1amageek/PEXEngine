@@ -40,7 +40,7 @@ struct PEXLineageTests {
             id: "log-parent-ss",
             producer: executionIdentity.producer
         )
-        try parentStore.saveManifest(PEXArtifactManifest(
+        try parentStore.saveManifest(PEXTestExecutionIdentity.manifest(
             runID: parentID,
             requestHash: PEXRequestHash("parent"),
             backendID: "mock",
@@ -80,7 +80,7 @@ struct PEXLineageTests {
             id: "ir-child-ss",
             producer: executionIdentity.producer
         )
-        try childStore.saveManifest(PEXArtifactManifest(
+        try childStore.saveManifest(PEXTestExecutionIdentity.manifest(
             runID: childID,
             requestHash: PEXRequestHash("child"),
             backendID: "mock",

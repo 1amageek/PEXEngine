@@ -30,8 +30,8 @@ public struct CompareIRCommand: Sendable {
             print(String(decoding: data, as: UTF8.self))
         } else {
             print("PEX IR comparison: \(report.status)")
-            print("Baseline: \(report.baseline.artifact.path)")
-            print("Candidate: \(report.candidate.artifact.path)")
+            print("Baseline: \(report.baseline.path)")
+            print("Candidate: \(report.candidate.path)")
             print("Matched nets: \(report.summary.matchedNetCount)")
             print("Added nets: \(report.summary.addedNetCount)")
             print("Removed nets: \(report.summary.removedNetCount)")
@@ -130,19 +130,19 @@ public struct CompareIRCommand: Sendable {
 
     private func makeInput(url: URL, data: Data, ir: ParasiticIR) throws -> PEXIRComparisonInput {
         PEXIRComparisonInput(
-            artifact: ArtifactReference(
-                locator: ArtifactLocator(
-                    location: try ArtifactLocation(fileURL: url),
-                    role: .input,
-                    kind: .parasitics,
-                    format: .json
-                ),
+            artifact: try ArtifactReference(
                 digest: try ContentDigest(
                     algorithm: .sha256,
                     hexadecimalValue: Self.sha256Hex(data)
                 ),
-                byteCount: UInt64(data.count)
+                byteCount: UInt64(data.count),
+                descriptor: ArtifactDescriptor(
+                    role: .input,
+                    kind: .parasitics,
+                    format: .json
+                )
             ),
+            path: url.path(percentEncoded: false),
             ir: ir
         )
     }

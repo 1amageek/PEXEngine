@@ -585,8 +585,8 @@ public struct PEXMetricRecoveryObjectiveBuilder: Sendable {
         layoutPath: String?,
         sourceNetlistPath: String?,
         technologyPath: String?
-    ) throws -> [ArtifactReference] {
-        var references: [ArtifactReference] = []
+    ) throws -> [PEXMetricRecoveryInputArtifact] {
+        var references: [PEXMetricRecoveryInputArtifact] = []
         if let reference = try inputArtifact(id: "pex-summary", kind: "pex-summary", path: summaryPath, required: true) {
             references.append(reference)
         }
@@ -632,21 +632,23 @@ public struct PEXMetricRecoveryObjectiveBuilder: Sendable {
         kind: String,
         path: String,
         required: Bool
-    ) throws -> ArtifactReference? {
+    ) throws -> PEXMetricRecoveryInputArtifact? {
         let url = URL(filePath: path)
         do {
             let data = try Data(contentsOf: url)
             let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-            return ArtifactReference(
-                id: try ArtifactID(rawValue: id),
-                locator: ArtifactLocator(
-                    location: try ArtifactLocation(fileURL: url),
-                    role: .input,
-                    kind: try ArtifactKind(rawValue: kind),
-                    format: try ArtifactFormat(rawValue: inputArtifactFormat(path: path))
+            return try PEXMetricRecoveryInputArtifact(
+                logicalID: id,
+                reference: ArtifactReference(
+                    digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: hash),
+                    byteCount: UInt64(data.count),
+                    descriptor: ArtifactDescriptor(
+                        role: .input,
+                        kind: try ArtifactKind(rawValue: kind),
+                        format: try ArtifactFormat(rawValue: inputArtifactFormat(path: path))
+                    )
                 ),
-                digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: hash),
-                byteCount: UInt64(data.count)
+                path: path
             )
         } catch {
             if required {

@@ -1,9 +1,56 @@
 import CircuiteFoundation
+import CircuiteFoundationCrypto
 import CryptoKit
 import Foundation
 import PEXCore
 
 public enum PEXTestExecutionIdentity {
+    public static func manifest(
+        version: Int = PEXArtifactManifest.currentVersion,
+        runID: PEXRunID,
+        requestHash: PEXRequestHash,
+        backendID: String,
+        status: PEXRunStatus,
+        startedAt: Date,
+        finishedAt: Date,
+        corners: [PEXArtifactCorner],
+        artifacts: [PEXArtifactRecord],
+        warnings: [PEXWarning],
+        extractorRun: PEXExtractorRunResult? = nil,
+        resumedFromRunID: PEXRunID? = nil,
+        backendExecutions: [PEXBackendExecutionIdentity] = [],
+        provenance: ExecutionProvenance? = nil
+    ) throws -> PEXArtifactManifest {
+        let resolvedProvenance = try provenance ?? self.provenance(
+            backendID: backendID,
+            inputs: artifacts.compactMap(\.reference),
+            startedAt: startedAt,
+            finishedAt: finishedAt
+        )
+        let evidence = try EvidenceManifest.contentAddressed(
+            provenance: resolvedProvenance,
+            artifacts: artifacts.compactMap(\.reference),
+            digester: SHA256ContentDigester()
+        )
+        return try PEXArtifactManifest(
+            version: version,
+            runID: runID,
+            requestHash: requestHash,
+            backendID: backendID,
+            status: status,
+            startedAt: startedAt,
+            finishedAt: finishedAt,
+            corners: corners,
+            artifacts: artifacts,
+            warnings: warnings,
+            extractorRun: extractorRun,
+            resumedFromRunID: resumedFromRunID,
+            backendExecutions: backendExecutions,
+            provenance: resolvedProvenance,
+            evidence: evidence
+        )
+    }
+
     public static func make(
         backendID: String,
         version: String = "test"

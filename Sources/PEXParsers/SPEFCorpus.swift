@@ -604,15 +604,27 @@ public enum SPEFCorpus {
         public var passed: Bool { failureCodes.isEmpty }
     }
 
+    public struct SourceArtifact: Sendable, Hashable, Codable {
+        public let logicalID: String
+        public let reference: ArtifactReference
+        public let path: String
+
+        public init(logicalID: String, reference: ArtifactReference, path: String) {
+            self.logicalID = logicalID
+            self.reference = reference
+            self.path = path
+        }
+    }
+
     public struct Report: Sendable, Hashable, Codable {
-        public static let currentSchemaVersion = 2
+        public static let currentSchemaVersion = 3
 
         public let schemaVersion: Int
         public let status: String
         public let manifestPath: String
         public let sourceRepository: String
         public let pinnedCommit: String
-        public let sourceArtifacts: [ArtifactReference]
+        public let sourceArtifacts: [SourceArtifact]
         public let summary: Summary
         public let evaluation: EvaluationResult
         public let observationSummary: EvaluationSummary
@@ -635,7 +647,7 @@ public enum SPEFCorpus {
             schemaVersion: Int = Report.currentSchemaVersion,
             manifestPath: String,
             manifest: Manifest,
-            sourceArtifacts: [ArtifactReference],
+            sourceArtifacts: [SourceArtifact],
             summary: Summary,
             evaluation: EvaluationResult,
             caseResults: [CaseResult]
@@ -693,7 +705,7 @@ public enum SPEFCorpus {
             manifestPath = try container.decode(String.self, forKey: .manifestPath)
             sourceRepository = try container.decode(String.self, forKey: .sourceRepository)
             pinnedCommit = try container.decode(String.self, forKey: .pinnedCommit)
-            sourceArtifacts = try container.decode([ArtifactReference].self, forKey: .sourceArtifacts)
+            sourceArtifacts = try container.decode([SourceArtifact].self, forKey: .sourceArtifacts)
             summary = try container.decode(Summary.self, forKey: .summary)
             evaluation = try container.decode(EvaluationResult.self, forKey: .evaluation)
             observationSummary = try container.decode(EvaluationSummary.self, forKey: .observationSummary)

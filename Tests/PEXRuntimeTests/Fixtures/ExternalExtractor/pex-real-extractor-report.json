@@ -3,102 +3,67 @@
     {
       "artifacts": [
         {
+          "logicalID": "sky130-plate-magic-pex:layoutPath",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062"
-            },
-            "id": "sky130-plate-magic-pex:layoutPath",
-            "locator": {
+            "descriptor": {
               "format": "gds",
               "kind": "layout",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002084399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec606200000000000000b6"
           },
           "sourceField": "layoutPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex:sourceNetlistPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir",
           "reference": {
-            "byteCount": 19,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130"
-            },
-            "id": "sky130-plate-magic-pex:sourceNetlistPath",
-            "locator": {
+            "descriptor": {
               "format": "spice",
               "kind": "source-netlist",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/source.cir"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a61300000000000000013"
           },
           "sourceField": "sourceNetlistPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex:technologyPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae"
-            },
-            "id": "sky130-plate-magic-pex:technologyPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "technology",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/technology.json"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae00000000000000b6"
           },
           "sourceField": "technologyPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex:manifestPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json",
           "reference": {
-            "byteCount": 8218,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "5a87dafdd3cf2a732e0c07d1c17ff1e1f848e45b37fab6e7eecae5a6d94b9b3a"
-            },
-            "id": "sky130-plate-magic-pex:manifestPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "pex-artifact-manifest",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/manifest.json"
-              },
               "role": "run-artifact"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600205a87dafdd3cf2a732e0c07d1c17ff1e1f848e45b37fab6e7eecae5a6d94b9b3a000000000000201a"
           },
           "sourceField": "manifestPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex:irPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/ir/tt.json",
           "reference": {
-            "byteCount": 886,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "2038b42b6d2798d04cf964a199c12662aae23c0345a6039988771d3ce45b610d"
-            },
-            "id": "sky130-plate-magic-pex:irPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "parasitic-ir",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex/run/4ABD7676-D69D-40DD-9138-31074A1340FF/ir/tt.json"
-              },
               "role": "normalized"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202038b42b6d2798d04cf964a199c12662aae23c0345a6039988771d3ce45b610d0000000000000376"
           },
           "sourceField": "irPath"
         }
@@ -305,102 +270,67 @@
     {
       "artifacts": [
         {
+          "logicalID": "sky130-plate-magic-pex-ss:layoutPath",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "84399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec6062"
-            },
-            "id": "sky130-plate-magic-pex-ss:layoutPath",
-            "locator": {
+            "descriptor": {
               "format": "gds",
               "kind": "layout",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/pex_plate.gds"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002084399133042383c99318f9c7c67cf34f71755dec3393b2e2da34c2982dec606200000000000000b6"
           },
           "sourceField": "layoutPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex-ss:sourceNetlistPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir",
           "reference": {
-            "byteCount": 19,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130"
-            },
-            "id": "sky130-plate-magic-pex-ss:sourceNetlistPath",
-            "locator": {
+            "descriptor": {
               "format": "spice",
               "kind": "source-netlist",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/source.cir"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a61300000000000000013"
           },
           "sourceField": "sourceNetlistPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex-ss:technologyPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae"
-            },
-            "id": "sky130-plate-magic-pex-ss:technologyPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "technology",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/technology.json"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae00000000000000b6"
           },
           "sourceField": "technologyPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex-ss:manifestPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json",
           "reference": {
-            "byteCount": 8227,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "d566fe689a64a05f66a3a4031cc6cb18188ddaa8cf3fbdccc10e62b48a0f988c"
-            },
-            "id": "sky130-plate-magic-pex-ss:manifestPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "pex-artifact-manifest",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/manifest.json"
-              },
               "role": "run-artifact"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020d566fe689a64a05f66a3a4031cc6cb18188ddaa8cf3fbdccc10e62b48a0f988c0000000000002023"
           },
           "sourceField": "manifestPath"
         },
         {
+          "logicalID": "sky130-plate-magic-pex-ss:irPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/ir/ss.json",
           "reference": {
-            "byteCount": 886,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "5fd8e74518d859c9382feec382825b76f77019aafe59b8e75fa66943bf05eeaa"
-            },
-            "id": "sky130-plate-magic-pex-ss:irPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "parasitic-ir",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-plate-magic-pex-ss/run/0D95084D-57C0-4869-8E2C-C8AD535960B8/ir/ss.json"
-              },
               "role": "normalized"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600205fd8e74518d859c9382feec382825b76f77019aafe59b8e75fa66943bf05eeaa0000000000000376"
           },
           "sourceField": "irPath"
         }
@@ -608,102 +538,67 @@
     {
       "artifacts": [
         {
+          "logicalID": "sky130-inverter-magic-pex:layoutPath",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
           "reference": {
-            "byteCount": 3632,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c11"
-            },
-            "id": "sky130-inverter-magic-pex:layoutPath",
-            "locator": {
+            "descriptor": {
               "format": "gds",
               "kind": "layout",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c110000000000000e30"
           },
           "sourceField": "layoutPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex:sourceNetlistPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir",
           "reference": {
-            "byteCount": 19,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130"
-            },
-            "id": "sky130-inverter-magic-pex:sourceNetlistPath",
-            "locator": {
+            "descriptor": {
               "format": "spice",
               "kind": "source-netlist",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/source.cir"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a61300000000000000013"
           },
           "sourceField": "sourceNetlistPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex:technologyPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae"
-            },
-            "id": "sky130-inverter-magic-pex:technologyPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "technology",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/technology.json"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae00000000000000b6"
           },
           "sourceField": "technologyPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex:manifestPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json",
           "reference": {
-            "byteCount": 8185,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "2056d0ef9b5fbbecda4b36684915594b11b0578682c14630fcc4c2f1f507c677"
-            },
-            "id": "sky130-inverter-magic-pex:manifestPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "pex-artifact-manifest",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/manifest.json"
-              },
               "role": "run-artifact"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600202056d0ef9b5fbbecda4b36684915594b11b0578682c14630fcc4c2f1f507c6770000000000001ff9"
           },
           "sourceField": "manifestPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex:irPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/ir/tt.json",
           "reference": {
-            "byteCount": 17645,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "6bd9ffda7de61e6dfc6a4d6ad41bf5ea93623bce5262f24d25e655b6d35a11dd"
-            },
-            "id": "sky130-inverter-magic-pex:irPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "parasitic-ir",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex/run/2C8D3F66-A74F-41A1-A98C-B09627ACB63A/ir/tt.json"
-              },
               "role": "normalized"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600206bd9ffda7de61e6dfc6a4d6ad41bf5ea93623bce5262f24d25e655b6d35a11dd00000000000044ed"
           },
           "sourceField": "irPath"
         }
@@ -909,102 +804,67 @@
     {
       "artifacts": [
         {
+          "logicalID": "sky130-inverter-magic-pex-ss:layoutPath",
+          "path": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds",
           "reference": {
-            "byteCount": 3632,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c11"
-            },
-            "id": "sky130-inverter-magic-pex-ss:layoutPath",
-            "locator": {
+            "descriptor": {
               "format": "gds",
               "kind": "layout",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXAdaptersTests/Fixtures/inv1.gds"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020a3f39d214b1cff9a5c3eb407eb5eb2d0746c8114cc5a37a4e98d3a2052155c110000000000000e30"
           },
           "sourceField": "layoutPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex-ss:sourceNetlistPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir",
           "reference": {
-            "byteCount": 19,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a6130"
-            },
-            "id": "sky130-inverter-magic-pex-ss:sourceNetlistPath",
-            "locator": {
+            "descriptor": {
               "format": "spice",
               "kind": "source-netlist",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/source.cir"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020c8f645a11db87d6d39096de98a1dcf218fdf1f591e0215ff18101ada936a61300000000000000013"
           },
           "sourceField": "sourceNetlistPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex-ss:technologyPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json",
           "reference": {
-            "byteCount": 182,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae"
-            },
-            "id": "sky130-inverter-magic-pex-ss:technologyPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "technology",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/technology.json"
-              },
               "role": "input"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020289a94dc5062dd5fe85df2633072830840ebc2a1d12820313b40662c242478ae00000000000000b6"
           },
           "sourceField": "technologyPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex-ss:manifestPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json",
           "reference": {
-            "byteCount": 8194,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "cc9e9c79e0847cdebb567e608614a7ab0ec95697e62cb9cbb89564d99e518594"
-            },
-            "id": "sky130-inverter-magic-pex-ss:manifestPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "pex-artifact-manifest",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/manifest.json"
-              },
               "role": "run-artifact"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020cc9e9c79e0847cdebb567e608614a7ab0ec95697e62cb9cbb89564d99e5185940000000000002002"
           },
           "sourceField": "manifestPath"
         },
         {
+          "logicalID": "sky130-inverter-magic-pex-ss:irPath",
+          "path": "/private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/ir/ss.json",
           "reference": {
-            "byteCount": 17645,
-            "digest": {
-              "algorithm": "sha256",
-              "hexadecimalValue": "914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c"
-            },
-            "id": "sky130-inverter-magic-pex-ss:irPath",
-            "locator": {
+            "descriptor": {
               "format": "json",
               "kind": "parasitic-ir",
-              "location": {
-                "storage": "absoluteFileURL",
-                "value": "file:///private/tmp/lsi-pex-corpus-expanded/external-oracle-corpus/pex/sky130-inverter-magic-pex-ss/run/38509DBC-29C2-4168-AB41-45DDA4AAB13B/ir/ss.json"
-              },
               "role": "normalized"
-            }
+            },
+            "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020914fb43b9be8ebb108b66f231391e0ec7cd9d64618b1f0616b146552305abb3c00000000000044ed"
           },
           "sourceField": "irPath"
         }
@@ -1228,7 +1088,7 @@
     }
   },
   "extractorBackendID": "magic",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "status": "passed",
   "summary": {
     "caseCount": 4,

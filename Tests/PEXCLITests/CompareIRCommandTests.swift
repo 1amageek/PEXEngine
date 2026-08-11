@@ -73,10 +73,10 @@ struct CompareIRCommandTests {
         ]).compare()
 
         #expect(report.status == "failed")
-        #expect(report.baseline.artifact.path == baselineURL.path(percentEncoded: false))
+        #expect(report.baseline.path == baselineURL.path(percentEncoded: false))
         #expect(report.baseline.artifact.digest.hexadecimalValue.count == 64)
         #expect(report.baseline.artifact.byteCount > 0)
-        #expect(report.candidate.artifact.path == candidateURL.path(percentEncoded: false))
+        #expect(report.candidate.path == candidateURL.path(percentEncoded: false))
         #expect(report.candidate.artifact.digest.hexadecimalValue.count == 64)
         #expect(report.summary.matchedNetCount == 1)
         #expect(report.summary.addedNetCount == 0)

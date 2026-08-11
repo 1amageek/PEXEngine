@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 @testable import PEXCore
 
 @Suite("PEXCore Model Tests")
@@ -101,27 +102,39 @@ struct PEXCoreModelTests {
     }
 
     @Test func artifactRecordUsesRunRelativePathAndHashMetadata() throws {
-        let reference = ArtifactReference(
-            id: try ArtifactID(rawValue: "raw-tt"),
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef"),
-                role: .output,
-                kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
-                format: .spef
-            ),
+        let descriptor = ArtifactDescriptor(
+            role: .output,
+            kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
+            format: .spef
+        )
+        let relativePath = try ArtifactRelativePath(segments: ["raw", "tt", "tt.spef"])
+        let reference = try ArtifactReference(
             digest: try ContentDigest(
                 algorithm: .sha256,
                 hexadecimalValue: String(repeating: "a", count: 64)
             ),
-            byteCount: 5
+            byteCount: 5,
+            descriptor: descriptor
         )
-        let record = PEXArtifactRecord(
-            payload: .available(reference),
+        let record = try PEXArtifactRecord(
+            declaration: PEXArtifactDeclaration(
+                id: try PEXArtifactRecordID(rawValue: "raw-tt"),
+                descriptor: descriptor,
+                relativePath: relativePath
+            ),
+            payload: .available(try PEXAvailableArtifact(
+                reference: reference,
+                availability: .local(
+                    artifactID: reference.id,
+                    rootID: try ArtifactRootID(rawValue: "pex-test-run"),
+                    relativePath: relativePath
+                )
+            )),
             stage: .backendExecution,
             cornerID: "tt",
             provenance: nil
         )
-        #expect(record.locator.location.value == "raw/tt/tt.spef")
+        #expect(record.relativePath.stringValue == "raw/tt/tt.spef")
         #expect(record.availability == .available)
         #expect(record.reference?.digest.hexadecimalValue == String(repeating: "a", count: 64))
         #expect(record.reference?.byteCount == 5)
@@ -129,18 +142,18 @@ struct PEXCoreModelTests {
 
     @Test func artifactPathRejectsAbsoluteOrEscapingPaths() {
         do {
-            _ = try ArtifactLocation(workspaceRelativePath: "/tmp/raw.spef")
+            _ = try ArtifactRelativePath(segments: ["", "tmp", "raw.spef"])
             #expect(Bool(false), "Should reject absolute paths")
-        } catch let error as ArtifactLocationError {
-            #expect(error == .invalidWorkspaceRelativePath("/tmp/raw.spef"))
+        } catch let error as ArtifactRelativePathError {
+            #expect(error == .emptySegment(index: 0))
         } catch {
             Issue.record("Unexpected artifact path error: \(error)")
         }
         do {
-            _ = try ArtifactLocation(workspaceRelativePath: "../raw.spef")
+            _ = try ArtifactRelativePath(segments: ["..", "raw.spef"])
             #expect(Bool(false), "Should reject escaping paths")
-        } catch let error as ArtifactLocationError {
-            #expect(error == .invalidWorkspaceRelativePath("../raw.spef"))
+        } catch let error as ArtifactRelativePathError {
+            #expect(error == .reservedSegment(index: 0, value: ".."))
         } catch {
             Issue.record("Unexpected artifact path error: \(error)")
         }
@@ -343,7 +356,7 @@ struct PEXCoreModelTests {
     @Test func evidencePacketRejectsMissingEvidenceCollections() throws {
         let json = """
         {
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "packetID": "incomplete-packet",
           "domain": "pex.parasitic-evidence",
           "subject": {
@@ -374,7 +387,7 @@ struct PEXCoreModelTests {
     @Test func evidencePacketDecodeRestoresCanonicalCollections() throws {
         let json = """
         {
-          "schemaVersion": 2,
+          "schemaVersion": 3,
           "packetID": "packet-1",
           "domain": "pex.parasitic-evidence",
           "subject": {
@@ -389,22 +402,14 @@ struct PEXCoreModelTests {
           },
           "inputs": [
             {
+              "logicalID": "manifest",
               "reference": {
-                "id": "manifest",
-                "locator": {
-                  "location": {
-                    "storage": "workspaceRelative",
-                    "value": "fixture-manifest.json"
-                  },
+                "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0000000000000001",
+                "descriptor": {
                   "role": "input",
                   "kind": "other",
                   "format": "json"
-                },
-                "digest": {
-                  "algorithm": "sha256",
-                  "hexadecimalValue": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                },
-                "byteCount": 1
+                }
               }
             }
           ],
@@ -481,8 +486,8 @@ struct PEXCoreModelTests {
         #expect(packet.intent.cornerIDs == ["ss", "tt"])
         #expect(packet.intent.targetNets == ["out", "vdd"])
         #expect(packet.intent.requestedObservations == ["artifact", "physical"])
-        #expect(packet.inputs.first?.reference.artifactID == "manifest")
-        #expect(packet.inputs.first?.reference.locator.role == .input)
+        #expect(packet.inputs.first?.logicalID == "manifest")
+        #expect(packet.inputs.first?.reference.descriptor.role == .input)
         #expect(packet.inputs.first?.reference.digest.algorithm == .sha256)
         #expect(packet.readiness.first?.artifactIDs == ["manifest"])
         #expect(packet.readiness.first?.suggestedActions == ["inspect_artifact", "rerun_packet_export"])

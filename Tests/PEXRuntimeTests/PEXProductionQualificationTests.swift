@@ -70,6 +70,22 @@ struct PEXExtractorEvidenceTests {
         }
     }
 
+    @Test("external report rejects a previous schema version")
+    func reportRejectsPreviousSchemaVersion() throws {
+        let current = try #require(String(data: makeReport().canonicalData(), encoding: .utf8))
+        let previous = current.replacingOccurrences(
+            of: "\"schemaVersion\":3",
+            with: "\"schemaVersion\":2"
+        )
+
+        #expect(throws: DecodingError.self) {
+            _ = try JSONDecoder().decode(
+                PEXExternalExtractorCorpusReport.self,
+                from: Data(previous.utf8)
+            )
+        }
+    }
+
     private func makeCorpus(caseIDs: [String] = ["inverter"]) -> PEXExtractorCorpus {
         PEXExtractorCorpus(
             corpusID: "extractor-corpus",

@@ -44,12 +44,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
         self.metrics = metrics
         self.extractorRun = extractorRun
         self.resumedFromRunID = resumedFromRunID
-        guard let provenance = artifactManifest.provenance else {
-            throw PEXError.persistenceFailed(
-                "PEX artifact manifest does not contain measured execution provenance"
-            )
-        }
-        self.provenance = provenance
+        self.provenance = artifactManifest.provenance
     }
 
     public var artifacts: [ArtifactReference] {
@@ -57,11 +52,7 @@ public struct PEXRunResult: Sendable, Codable, Hashable, ArtifactProducing,
     }
 
     public var evidence: EvidenceManifest {
-        EvidenceManifest(
-            id: runID.value,
-            provenance: provenance,
-            artifacts: artifacts
-        )
+        artifactManifest.evidence
     }
 
     public var diagnostics: [DesignDiagnostic] {

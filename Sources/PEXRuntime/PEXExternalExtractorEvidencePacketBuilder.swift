@@ -27,7 +27,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         let failureClassifications = sanitizeFailureClassifications(
             rawFailureClassifications,
             contexts: contexts,
-            retainedArtifactIDs: Set((inputs + artifacts).map { $0.reference.id.rawValue })
+            retainedArtifactIDs: Set((inputs + artifacts).map(\.logicalID))
         )
         return PEXEvidencePacket(
             packetID: packetID ?? defaultPacketID(report),
@@ -197,30 +197,31 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         allowedArtifactRootPath: String?
     ) {
         for artifact in context.result.artifacts ?? []
-        where roles.contains(artifact.reference.locator.role.rawValue) {
+        where roles.contains(artifact.reference.descriptor.role.rawValue) {
             let sourceField = sanitizedSourceField(artifact)
             guard !sourceField.isEmpty else {
                 result.diagnostics.append(artifactPathDiagnostic(
                     caseKey: context.caseKey,
                     sourceField: "declaredArtifact",
-                    rawPath: artifact.reference.path,
+                    rawPath: artifact.path,
                     reason: "declared artifact has no stable source field or artifact ID"
                 ))
                 continue
             }
             if let reason = artifactPathValidationFailure(
-                artifact.reference.path,
+                artifact.path,
                 allowedArtifactRootPath: allowedArtifactRootPath
             ) {
                 result.diagnostics.append(artifactPathDiagnostic(
                     caseKey: context.caseKey,
                     sourceField: sourceField,
-                    rawPath: artifact.reference.path,
+                    rawPath: artifact.path,
                     reason: reason
                 ))
                 continue
             }
             result.refs.append(PEXEvidenceArtifact(
+                logicalID: artifact.logicalID,
                 reference: artifact.reference,
                 cornerID: context.result.corner
             ))
@@ -228,12 +229,12 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
     }
 
     private func deduplicated(_ refs: [PEXEvidenceArtifact]) -> [PEXEvidenceArtifact] {
-        var byID: [ArtifactID: PEXEvidenceArtifact] = [:]
+        var byID: [String: PEXEvidenceArtifact] = [:]
         for ref in refs {
-            byID[ref.reference.id] = ref
+            byID[ref.logicalID] = ref
         }
         return byID.values.sorted {
-            $0.reference.id.rawValue < $1.reference.id.rawValue
+            $0.logicalID < $1.logicalID
         }
     }
 
@@ -344,7 +345,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
                 summaryAttributes: summaryAttributes,
                 sourceArtifactIDs: artifactEvidence
                     .filter { $0.reference.kind.rawValue == "parasitic-ir" }
-                    .map { $0.reference.id.rawValue }
+                    .map(\.logicalID)
             )
         ]
     }
@@ -479,10 +480,10 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         for context in contexts {
             let caseResult = context.result
             let caseArtifactIDs = Set(
-                (context.result.artifacts ?? []).map { $0.reference.id.rawValue }
+                (context.result.artifacts ?? []).map(\.logicalID)
             )
             let artifactIDs = artifactEvidence
-                .map { $0.reference.id.rawValue }
+                .map(\.logicalID)
                 .filter(caseArtifactIDs.contains)
             for (index, failure) in caseResult.failures.enumerated() {
                 diagnostics.append(PEXEvidenceDiagnostic(
@@ -799,7 +800,7 @@ public struct PEXExternalExtractorEvidencePacketBuilder: Sendable {
         if let sourceField, !sourceField.isEmpty {
             return sanitizedIdentifierToken(sourceField)
         }
-        return sanitizedIdentifierToken(artifact.reference.id.rawValue)
+        return sanitizedIdentifierToken(artifact.logicalID)
     }
 
     private func artifactIntegritySuggestedActions() -> [String] {

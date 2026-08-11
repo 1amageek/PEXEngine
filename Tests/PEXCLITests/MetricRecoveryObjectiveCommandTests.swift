@@ -1,5 +1,6 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 import Testing
 @testable import PEXCLICore
 @testable import PEXCore
@@ -101,9 +102,9 @@ struct MetricRecoveryObjectiveCommandTests {
         #expect(problem.summary.comparisonViolationCount == 1)
         #expect(problem.summary.metricFailureCount >= 3)
         #expect(problem.inputArtifacts.contains {
-            $0.id.rawValue == "pex-summary" && $0.digest.hexadecimalValue.count == 64
+            $0.logicalID == "pex-summary" && $0.reference.digest.hexadecimalValue.count == 64
         })
-        #expect(problem.inputArtifacts.contains { $0.id.rawValue == "layout-ref" })
+        #expect(problem.inputArtifacts.contains { $0.logicalID == "layout-ref" })
         #expect(problem.objectives.contains { $0.target == "resolve-parasitic-ir-regression" })
         #expect(problem.objectives.contains { $0.target == "post-layout-metric-gate-passed" })
         #expect(problem.objectives.contains { $0.target == "simulation-metric-within-tolerance" })
@@ -133,7 +134,7 @@ struct MetricRecoveryObjectiveCommandTests {
         )
 
         let action = try #require(problem.candidateActions.first)
-        #expect(!problem.inputArtifacts.contains { $0.id.rawValue == "post-layout-metric-report" })
+        #expect(!problem.inputArtifacts.contains { $0.logicalID == "post-layout-metric-report" })
         #expect(!action.requiredInputRefs.contains("post-layout-metric-report"))
         #expect(!problem.verificationGates.contains("simulation-metric-gate"))
     }
@@ -266,11 +267,13 @@ struct MetricRecoveryObjectiveCommandTests {
         return PEXIRComparisonReport(
             status: "failed",
             baseline: PEXIRComparisonInput(
-                artifact: try comparisonArtifact(path: "/tmp/base.json", digest: String(repeating: "a", count: 64)),
+                artifact: try comparisonArtifact(digest: String(repeating: "a", count: 64)),
+                path: "/baseline.json",
                 ir: baselineIR
             ),
             candidate: PEXIRComparisonInput(
-                artifact: try comparisonArtifact(path: "/tmp/candidate.json", digest: String(repeating: "b", count: 64)),
+                artifact: try comparisonArtifact(digest: String(repeating: "b", count: 64)),
+                path: "/candidate.json",
                 ir: candidateIR
             ),
             thresholds: PEXIRComparisonThresholds(maxCapDeltaF: 1e-13),
@@ -313,16 +316,11 @@ struct MetricRecoveryObjectiveCommandTests {
         )
     }
 
-    private func comparisonArtifact(path: String, digest: String) throws -> ArtifactReference {
-        ArtifactReference(
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(fileURL: URL(filePath: path)),
-                role: .input,
-                kind: .parasitics,
-                format: .json
-            ),
+    private func comparisonArtifact(digest: String) throws -> ArtifactReference {
+        try ArtifactReference(
             digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: digest),
-            byteCount: 32
+            byteCount: 32,
+            descriptor: ArtifactDescriptor(role: .input, kind: .parasitics, format: .json)
         )
     }
 

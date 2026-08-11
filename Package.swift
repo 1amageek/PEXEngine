@@ -50,6 +50,7 @@ let package = Package(
             name: "PEXCore",
             dependencies: [
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ]
         ),
         .target(
@@ -64,6 +65,8 @@ let package = Package(
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
+            .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
         ]),
         .target(name: "PEXEngine", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence", "PEXRuntime",
@@ -80,14 +83,16 @@ let package = Package(
                 "PEXCore",
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ],
-            resources: [.copy("Fixtures/pex-evidence-packet-v2.json")]
+            resources: [.copy("Fixtures/pex-evidence-packet-v3.json")]
         ),
         .target(
             name: "PEXTestSupport",
             dependencies: [
                 "PEXCore", "PEXAdapters", "PEXParsers", "PEXRuntime",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
             ],
             path: "Tests/PEXTestSupport",
             resources: [.copy("../PEXParsersTests/Fixtures/OpenROAD")]
@@ -113,6 +118,7 @@ let package = Package(
                 "PEXCore",
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ]
         ),
         .testTarget(
@@ -122,8 +128,9 @@ let package = Package(
                 "PEXCore",
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ],
-            resources: [.copy("Fixtures/pex-artifact-manifest-v4.json")]
+            resources: [.copy("Fixtures/pex-artifact-manifest-v5.json")]
         ),
         .testTarget(
             name: "PEXRuntimeTests",
@@ -131,6 +138,7 @@ let package = Package(
                 "PEXRuntime", "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
                 "PEXTestSupport",
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+                .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ],
             resources: [
                 .copy("Fixtures/ExternalExtractor"),
@@ -140,6 +148,7 @@ let package = Package(
         .testTarget(name: "PEXCLITests", dependencies: [
             "PEXCLICore", "PEXEngine", "PEXCore", "PEXTestSupport",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
         ]),
     ]
 )

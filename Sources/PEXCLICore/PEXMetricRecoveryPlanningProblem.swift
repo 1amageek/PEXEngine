@@ -6,7 +6,7 @@ public struct PEXMetricRecoveryPlanningProblem: Codable, Sendable, Equatable {
     public let kind: String
     public let problemID: String
     public let status: String
-    public let inputArtifacts: [ArtifactReference]
+    public let inputArtifacts: [PEXMetricRecoveryInputArtifact]
     public let summary: PEXMetricRecoverySummary
     public let objectives: [PEXMetricRecoveryObjective]
     public let hotspots: [PEXMetricRecoveryHotspot]
@@ -15,11 +15,11 @@ public struct PEXMetricRecoveryPlanningProblem: Codable, Sendable, Equatable {
     public let diagnostics: [PEXMetricRecoveryDiagnostic]
 
     public init(
-        schemaVersion: Int = 2,
+        schemaVersion: Int = 3,
         kind: String = "pex-metric-recovery-planning-problem",
         problemID: String,
         status: String,
-        inputArtifacts: [ArtifactReference],
+        inputArtifacts: [PEXMetricRecoveryInputArtifact],
         summary: PEXMetricRecoverySummary,
         objectives: [PEXMetricRecoveryObjective],
         hotspots: [PEXMetricRecoveryHotspot],

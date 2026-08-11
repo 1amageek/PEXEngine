@@ -235,9 +235,9 @@ struct PEXSourceConnectivityTests {
         #expect(result.status == .failed)
         let reportRecord = result.artifactManifest.artifacts(kind: .sourceConnectivityReport, cornerID: "tt").first
         let record = try #require(reportRecord)
-        let reportURL = try record.locator.location.resolvedFileURL(
-            relativeTo: result.manifestURL.deletingLastPathComponent()
-        )
+        let reportURL = result.manifestURL
+            .deletingLastPathComponent()
+            .appending(path: record.relativePath.stringValue)
         let report = try JSONDecoder().decode(PEXSourceConnectivityReport.self, from: Data(contentsOf: reportURL))
         #expect(report.status == .failed)
         #expect(result.extractorRun?.cornerResults.first?.sourceConnectivityArtifactID == record.id.rawValue)

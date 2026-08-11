@@ -467,155 +467,91 @@
   ],
   "inputs": [
     {
+      "logicalID": "derived-79232eb00f8495977fe838c149287db1a89ce0954970e9e26e1643d6ddc324e1",
       "reference": {
-        "byteCount": 10610,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "5bee512d44057b77d7e9ffa79f88a24d217fba58724811fd7c73d0a53b8e59a6"
-        },
-        "id": "derived-79232eb00f8495977fe838c149287db1a89ce0954970e9e26e1643d6ddc324e1",
-        "locator": {
+        "descriptor": {
           "format": "json",
           "kind": "other",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/fixture-manifest.json"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600205bee512d44057b77d7e9ffa79f88a24d217fba58724811fd7c73d0a53b8e59a60000000000002972"
       }
     },
     {
+      "logicalID": "derived-720b57e0eb404bad8af6086b43743a61ca78531c0a28151531d14607e98bb89e",
       "reference": {
-        "byteCount": 358867,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "264512161111a9e6fe6ab1e389e3fefc168ba10ff17aebe84a3e8de436d5683c"
-        },
-        "id": "derived-720b57e0eb404bad8af6086b43743a61ca78531c0a28151531d14607e98bb89e",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/45_gcd.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020264512161111a9e6fe6ab1e389e3fefc168ba10ff17aebe84a3e8de436d5683c00000000000579d3"
       }
     },
     {
+      "logicalID": "derived-d76429488bd3a1f3ba21c7e284a5c0e62fb5f937f3673107ea4617095c6e58a7",
       "reference": {
-        "byteCount": 448059,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "37213c37df2c9d1326a6bb8e8d5052c31fdacc652a1322bcaf52265996c53d01"
-        },
-        "id": "derived-d76429488bd3a1f3ba21c7e284a5c0e62fb5f937f3673107ea4617095c6e58a7",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/coordinates.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e740000010006736861323536002037213c37df2c9d1326a6bb8e8d5052c31fdacc652a1322bcaf52265996c53d01000000000006d63b"
       }
     },
     {
+      "logicalID": "derived-a3803c45e41604f809ecc6611f14e88aab1b52a822f99fc94b01d0bfb3332e37",
       "reference": {
-        "byteCount": 5733,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab02"
-        },
-        "id": "derived-a3803c45e41604f809ecc6611f14e88aab1b52a822f99fc94b01d0bfb3332e37",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/ext_pattern.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020de9c2d1913f5761a12f43aea082b799845edb302442f0c644c1c5725b751ab020000000000001665"
       }
     },
     {
+      "logicalID": "derived-4351c1918fc558bf039f7385e34625eb9e905754aff0671e60ce4508b0504ef2",
       "reference": {
-        "byteCount": 504204,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "3f42eb50caf2a8990663f4e477ced79f220d56bc69856522d04c2c107cf9ada7"
-        },
-        "id": "derived-4351c1918fc558bf039f7385e34625eb9e905754aff0671e60ce4508b0504ef2",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/gcd.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600203f42eb50caf2a8990663f4e477ced79f220d56bc69856522d04c2c107cf9ada7000000000007b18c"
       }
     },
     {
+      "logicalID": "derived-be288dd6d6c86da96906031b3d787f153d006c3ab9090b12ac75bd4769ab9b0c",
       "reference": {
-        "byteCount": 968,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd"
-        },
-        "id": "derived-be288dd6d6c86da96906031b3d787f153d006c3ab9090b12ac75bd4769ab9b0c",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/net_name_consistency.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020570e3ef6d49f7ccc913b07055f329f898ff9e40c86fa1bb85c4f2527baf9c4dd00000000000003c8"
       }
     },
     {
+      "logicalID": "derived-6b24fc04769863d027c7b73ca3bc88b1d76509692df2860634bc1dff3d98e205",
       "reference": {
-        "byteCount": 569303,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "5d05ab216b75f0c39a7345900a51c89241abf90a28eea05677b7aa64cf67eb1d"
-        },
-        "id": "derived-6b24fc04769863d027c7b73ca3bc88b1d76509692df2860634bc1dff3d98e205",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/no_merging.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e74000001000673686132353600205d05ab216b75f0c39a7345900a51c89241abf90a28eea05677b7aa64cf67eb1d000000000008afd7"
       }
     },
     {
+      "logicalID": "derived-de79938eb6a651a5331882d44fdbb425da92646ae163e2a06afb22110881a823",
       "reference": {
-        "byteCount": 418572,
-        "digest": {
-          "algorithm": "sha256",
-          "hexadecimalValue": "e03647c62e2d7b67f08f9726bdd14354011d7f01785a34edce969436ae4eda4f"
-        },
-        "id": "derived-de79938eb6a651a5331882d44fdbb425da92646ae163e2a06afb22110881a823",
-        "locator": {
+        "descriptor": {
           "format": "spef",
           "kind": "parasitics",
-          "location": {
-            "storage": "workspaceRelative",
-            "value": "Tests/PEXParsersTests/Fixtures/OpenROAD/short_resover.spefok"
-          },
           "role": "input"
-        }
+        },
+        "id": "43697263756974654172746966616374436f6e74656e7400000100067368613235360020e03647c62e2d7b67f08f9726bdd14354011d7f01785a34edce969436ae4eda4f000000000006630c"
       }
     }
   ],
@@ -898,7 +834,7 @@
   "relatedEvidenceIDs": [
     "pex-external-extractor:magic"
   ],
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "subject": {
     "backendID": "magic",
     "identifier": "/Users/1amageek/Desktop/LSI/PEXEngine/Tests/PEXRuntimeTests/Fixtures/ExternalExtractor/pex-magic-corpus.json",

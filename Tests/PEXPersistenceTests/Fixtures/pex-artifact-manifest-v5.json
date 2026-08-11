@@ -26,6 +26,32 @@
   ],
   "backendID" : "mock",
   "corners" : [],
+  "evidence" : {
+    "artifacts" : [],
+    "id" : "0d94b40b59c705294d9def67f5ddac53",
+    "provenance" : {
+      "completedAt" : 782006401,
+      "inputs" : [],
+      "invocation" : {
+        "arguments" : [],
+        "entryPoint" : "PEXTestSupport.mock",
+        "mode" : "inProcess"
+      },
+      "producer" : {
+        "build" : "1111111111111111111111111111111111111111111111111111111111111111",
+        "identifier" : "pex-mock",
+        "kind" : "tool",
+        "version" : "test"
+      },
+      "startedAt" : 782006400,
+      "supportingTools" : []
+    },
+    "schemaVersion" : {
+      "major" : 3,
+      "minor" : 0,
+      "patch" : 0
+    }
+  },
   "finishedAt" : 782006401,
   "provenance" : {
     "completedAt" : 782006401,
@@ -52,6 +78,6 @@
   },
   "startedAt" : 782006400,
   "status" : "success",
-  "version" : 4,
+  "version" : 5,
   "warnings" : []
 }

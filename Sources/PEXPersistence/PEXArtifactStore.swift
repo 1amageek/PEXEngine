@@ -120,7 +120,7 @@ public struct PEXArtifactStore: Sendable {
             throw PEXError.persistenceFailed("Failed to decode captured request artifact", underlying: error)
         }
 
-        let inputArtifactIDs = try captured.inputArtifactIDs.map(ArtifactID.init(rawValue:))
+        let inputArtifactIDs = try captured.inputArtifactIDs.map(PEXArtifactRecordID.init(rawValue:))
         let inputRecords = inputArtifactIDs.compactMap { manifest.artifact(id: $0) }
         guard let layoutRecord = inputRecords.first(where: {
                   $0.matches(kind: .layoutInput) && $0.availability == .available
@@ -191,7 +191,7 @@ public struct PEXArtifactStore: Sendable {
             let normalizedCapturedURL = capturedURL.standardizedFileURL
             guard let record = inputRecords.first(where: { record in
                 guard record.matches(kind: .technologyInput), record.availability == .available else { return false }
-                let recordURL = workspace.runDirectory.appending(path: record.locator.location.value)
+                let recordURL = workspace.runDirectory.appending(path: record.relativePath.stringValue)
                 return recordURL.standardizedFileURL == normalizedCapturedURL
             }) else {
                 throw PEXError.persistenceFailed(

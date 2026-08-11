@@ -1,5 +1,7 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
+import CircuiteFoundationCrypto
 import PEXCore
 import PEXAdapters
 import PEXParsers
@@ -189,7 +191,12 @@ public actor PEXOrchestrator {
             cornerOutcomes: cornerOutcomes,
             artifactIDs: allArtifacts.map { $0.id.rawValue }
         )
-        let manifest = PEXArtifactManifest(
+        let evidence = try EvidenceManifest.contentAddressed(
+            provenance: provenance,
+            artifacts: allArtifacts.compactMap(\.reference),
+            digester: SHA256ContentDigester()
+        )
+        let manifest = try PEXArtifactManifest(
             runID: runID,
             requestHash: requestHash,
             backendID: request.backendSelection.backendID,
@@ -209,7 +216,8 @@ public actor PEXOrchestrator {
             extractorRun: extractorRun,
             resumedFromRunID: resumedFromRunID,
             backendExecutions: backendExecutions,
-            provenance: provenance
+            provenance: provenance,
+            evidence: evidence
         )
         try store.saveManifest(manifest)
 
@@ -1097,7 +1105,7 @@ public actor PEXOrchestrator {
     ) -> [URL] {
         artifacts
             .filter { $0.matches(kind: kind) && $0.availability == .available }
-            .map { context.workingDirectory.appending(path: $0.locator.location.value) }
+            .map { context.workingDirectory.appending(path: $0.relativePath.stringValue) }
     }
 
     private func failureStage(for error: any Error) -> PEXStage {

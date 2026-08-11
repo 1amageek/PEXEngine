@@ -78,14 +78,15 @@ public struct SPEFCorpusRunner: Sendable {
         manifestData: Data,
         fixtureDirectory: URL,
         manifest: SPEFCorpus.Manifest
-    ) throws -> [ArtifactReference] {
+    ) throws -> [SPEFCorpus.SourceArtifact] {
         var artifacts = [try artifactReference(
+            logicalID: "corpus-manifest",
             url: manifestURL,
             data: manifestData,
             kind: .other,
             format: .json
         )]
-        for fixture in manifest.fixtures {
+        for (index, fixture) in manifest.fixtures.enumerated() {
             let fixtureURL = fixtureDirectory.appending(path: fixture.fileName)
             let fixtureData: Data
             do {
@@ -94,6 +95,7 @@ public struct SPEFCorpusRunner: Sendable {
                 continue
             }
             artifacts.append(try artifactReference(
+                logicalID: "corpus-input-\(index + 1)",
                 url: fixtureURL,
                 data: fixtureData,
                 kind: .parasitics,
@@ -104,21 +106,25 @@ public struct SPEFCorpusRunner: Sendable {
     }
 
     private func artifactReference(
+        logicalID: String,
         url: URL,
         data: Data,
         kind: ArtifactKind,
         format: ArtifactFormat
-    ) throws -> ArtifactReference {
+    ) throws -> SPEFCorpus.SourceArtifact {
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        return ArtifactReference(
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(fileURL: url),
+        return SPEFCorpus.SourceArtifact(
+            logicalID: logicalID,
+            reference: try ArtifactReference(
+                digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: digest),
+                byteCount: UInt64(data.count),
+                descriptor: ArtifactDescriptor(
                 role: .input,
                 kind: kind,
                 format: format
+                )
             ),
-            digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: digest),
-            byteCount: UInt64(data.count)
+            path: url.path(percentEncoded: false)
         )
     }
 

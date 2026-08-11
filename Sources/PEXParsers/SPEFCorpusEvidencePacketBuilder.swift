@@ -13,12 +13,11 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
         let contexts = caseContexts(report.caseResults)
         let inputBuild = artifactEvidence(from: report.sourceArtifacts, allowedArtifactRootPath: allowedArtifactRootPath)
         let inputRefs = inputBuild.refs
-        let manifestArtifactID = inputRefs.first?.reference.id.rawValue
+        let manifestArtifactID = inputRefs.first?.logicalID
         let diagnostics = inputBuild.diagnostics
             + contexts.flatMap(\.diagnostics)
             + diagnostics(
                 from: report,
-                inputRefs: inputRefs,
                 contexts: contexts
             )
         let decisionHints = decisionHints(from: report, diagnostics: diagnostics, manifestArtifactID: manifestArtifactID)
@@ -119,7 +118,7 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     }
 
     private func artifactEvidence(
-        from refs: [ArtifactReference],
+        from refs: [SPEFCorpus.SourceArtifact],
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
         var result = ArtifactRefBuildResult()
@@ -135,18 +134,24 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
     }
 
     private func artifactRef(
-        from ref: ArtifactReference,
+        from source: SPEFCorpus.SourceArtifact,
         allowedArtifactRootPath: String?
     ) -> ArtifactRefBuildResult {
         var result = ArtifactRefBuildResult()
-        if let reason = artifactPathValidationFailure(ref.path, allowedArtifactRootPath: allowedArtifactRootPath) {
+        if let reason = artifactPathValidationFailure(
+            source.path,
+            allowedArtifactRootPath: allowedArtifactRootPath
+        ) {
             result.diagnostics.append(artifactPathDiagnostic(
-                artifactID: ref.id.rawValue,
-                rawPath: ref.path,
+                artifactID: source.logicalID,
+                rawPath: source.path,
                 reason: reason
             ))
         } else {
-            result.refs.append(PEXEvidenceArtifact(reference: ref))
+            result.refs.append(PEXEvidenceArtifact(
+                logicalID: source.logicalID,
+                reference: source.reference
+            ))
         }
         return result
     }
@@ -245,18 +250,17 @@ public struct SPEFCorpusEvidencePacketBuilder: Sendable {
 
     private func diagnostics(
         from report: SPEFCorpus.Report,
-        inputRefs: [PEXEvidenceArtifact],
         contexts: [EvidenceCaseContext]
     ) -> [PEXEvidenceDiagnostic] {
         var diagnostics: [PEXEvidenceDiagnostic] = []
 
         for (caseResult, context) in zip(report.caseResults, contexts) {
-            let artifactIDs = inputRefs
+            let artifactIDs = report.sourceArtifacts
                 .filter {
-                    $0.reference.path == caseResult.fileName
-                        || $0.reference.path.hasSuffix("/\(caseResult.fileName)")
+                    $0.path == caseResult.fileName
+                        || $0.path.hasSuffix("/\(caseResult.fileName)")
                 }
-                .map { $0.reference.id.rawValue }
+                .map(\.logicalID)
             for (index, failure) in caseResult.failures.enumerated() {
                 diagnostics.append(PEXEvidenceDiagnostic(
                     diagnosticID: "case:\(context.caseKey):\(sanitizedIdentifierToken(failure.code)):\(index)",

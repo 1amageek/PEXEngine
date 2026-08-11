@@ -3,7 +3,7 @@ import CircuiteFoundation
 import PEXCore
 
 public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public let schemaVersion: Int
     public let corpusSpec: String
@@ -43,6 +43,37 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             throw PEXEvidenceValidationError.reportDecodeFailed("non-canonical")
         }
         return report
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case corpusSpec
+        case extractorBackendID
+        case status
+        case summary
+        case evaluation
+        case cases
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported external extractor report schema version: \(schemaVersion)."
+            )
+        }
+        self.init(
+            schemaVersion: schemaVersion,
+            corpusSpec: try container.decode(String.self, forKey: .corpusSpec),
+            extractorBackendID: try container.decode(String.self, forKey: .extractorBackendID),
+            status: try container.decode(String.self, forKey: .status),
+            summary: try container.decode(Summary.self, forKey: .summary),
+            evaluation: try container.decode(Evaluation.self, forKey: .evaluation),
+            cases: try container.decode([CaseResult].self, forKey: .cases)
+        )
     }
 
     public struct Summary: Sendable, Hashable, Codable {
@@ -128,14 +159,20 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
 
     public struct CaseResult: Sendable, Hashable, Codable {
         public struct Artifact: Sendable, Hashable, Codable {
+            public let logicalID: String
             public let reference: ArtifactReference
+            public let path: String
             public let sourceField: String?
 
             public init(
+                logicalID: String,
                 reference: ArtifactReference,
+                path: String,
                 sourceField: String? = nil
             ) {
+                self.logicalID = logicalID
                 self.reference = reference
+                self.path = path
                 self.sourceField = sourceField
             }
         }
@@ -253,7 +290,7 @@ public struct PEXExternalExtractorCorpusReport: Sendable, Hashable, Codable {
             self.netCount = netCount
             self.elementCount = elementCount
             self.artifacts = artifacts?.sorted {
-                $0.reference.id.rawValue < $1.reference.id.rawValue
+                $0.logicalID < $1.logicalID
             }
             self.failures = failures
         }

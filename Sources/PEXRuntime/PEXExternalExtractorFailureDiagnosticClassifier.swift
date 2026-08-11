@@ -120,7 +120,7 @@ public struct PEXExternalExtractorFailureDiagnosticClassifier: Sendable {
     }
 
     private func artifactIDs(_ caseResult: PEXExternalExtractorCorpusReport.CaseResult) -> [String] {
-        var ids = caseResult.artifacts?.map { $0.reference.id.rawValue } ?? []
+        var ids = caseResult.artifacts?.map(\.logicalID) ?? []
         if caseResult.manifestPath != nil {
             ids.append("\(caseResult.caseID):manifestPath")
         }

@@ -6,7 +6,7 @@ import Testing
 struct PEXEvidencePacketFixtureTests {
     @Test func currentFixtureDecodesAndRoundTrips() throws {
         let fixtureURL = try #require(
-            Bundle.module.url(forResource: "pex-evidence-packet-v2", withExtension: "json")
+            Bundle.module.url(forResource: "pex-evidence-packet-v3", withExtension: "json")
         )
         let packet = try JSONDecoder().decode(
             PEXEvidencePacket.self,

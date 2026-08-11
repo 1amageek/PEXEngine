@@ -1,5 +1,6 @@
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 import Testing
 @testable import PEXCore
 @testable import PEXParsers
@@ -35,10 +36,10 @@ struct SPEFCorpusEvidencePacketBuilderTests {
             allowedArtifactRootPath: root.path(percentEncoded: false)
         )
 
-        #expect(packet.inputs.contains { $0.reference.artifactID == "corpus-manifest" })
-        #expect(packet.inputs.contains { $0.reference.artifactID == "corpus-input-1" })
-        #expect(!packet.inputs.contains { $0.reference.artifactID == "corpus-input-2" })
-        #expect(!packet.inputs.contains { $0.reference.artifactID == "corpus-input-3" })
+        #expect(packet.inputs.contains { $0.logicalID == "corpus-manifest" })
+        #expect(packet.inputs.contains { $0.logicalID == "corpus-input-1" })
+        #expect(!packet.inputs.contains { $0.logicalID == "corpus-input-2" })
+        #expect(!packet.inputs.contains { $0.logicalID == "corpus-input-3" })
         #expect(packet.artifacts.isEmpty)
 
         #expect(throws: (any Error).self) {
@@ -132,36 +133,32 @@ private func makeReport(
 private func makeArtifactReferences(
     root: URL,
     fixtures: [SPEFCorpus.Fixture]
-) throws -> [ArtifactReference] {
-    var references = [ArtifactReference(
-        id: try ArtifactID(rawValue: "corpus-manifest"),
-        locator: ArtifactLocator(
-            location: try ArtifactLocation(fileURL: root.appending(path: "fixture-manifest.json")),
-            role: .input,
-            kind: .other,
-            format: .json
+) throws -> [SPEFCorpus.SourceArtifact] {
+    var references = [SPEFCorpus.SourceArtifact(
+        logicalID: "corpus-manifest",
+        reference: try ArtifactReference(
+            digest: try ContentDigest(
+                algorithm: .sha256,
+                hexadecimalValue: String(repeating: "a", count: 64)
+            ),
+            byteCount: 128,
+            descriptor: ArtifactDescriptor(role: .input, kind: .other, format: .json)
         ),
-        digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: String(repeating: "a", count: 64)),
-        byteCount: 128
+        path: root.appending(path: "fixture-manifest.json").path(percentEncoded: false)
     )]
     for (index, fixture) in fixtures.enumerated() {
         guard !fixture.sourcePath.contains("://") else { continue }
-        let location = fixture.sourcePath.hasPrefix("/")
-            ? try ArtifactLocation(fileURL: URL(filePath: fixture.sourcePath))
-            : try ArtifactLocation(fileURL: root.appending(path: fixture.fileName))
-        references.append(ArtifactReference(
-            id: try ArtifactID(rawValue: "corpus-input-\(index + 1)"),
-            locator: ArtifactLocator(
-                location: location,
-                role: .input,
-                kind: .parasitics,
-                format: .spef
+        references.append(SPEFCorpus.SourceArtifact(
+            logicalID: "corpus-input-\(index + 1)",
+            reference: try ArtifactReference(
+                digest: try ContentDigest(
+                    algorithm: .sha256,
+                    hexadecimalValue: String(repeating: String(index % 10), count: 64)
+                ),
+                byteCount: UInt64(fixture.byteCount),
+                descriptor: ArtifactDescriptor(role: .input, kind: .parasitics, format: .spef)
             ),
-            digest: try ContentDigest(
-                algorithm: .sha256,
-                hexadecimalValue: String(repeating: String(index % 10), count: 64)
-            ),
-            byteCount: UInt64(fixture.byteCount)
+            path: fixture.sourcePath
         ))
     }
     return references

@@ -2,6 +2,7 @@ import Testing
 import PEXTestSupport
 import Foundation
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 @testable import PEXCore
 @testable import PEXPersistence
 
@@ -9,7 +10,7 @@ import CircuiteFoundation
 struct PEXPersistenceTests {
     @Test func canonicalManifestFixtureUsesCurrentSchema() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "pex-artifact-manifest-v4",
+            forResource: "pex-artifact-manifest-v5",
             withExtension: "json"
         ))
         let decoded = try JSONDecoder().decode(
@@ -18,15 +19,31 @@ struct PEXPersistenceTests {
         )
         #expect(decoded.version == PEXArtifactManifest.currentVersion)
         #expect(decoded.runID.description == "00000000-0000-0000-0000-000000000001")
+        let regenerated = try PEXTestExecutionIdentity.manifest(
+            runID: decoded.runID,
+            requestHash: decoded.requestHash,
+            backendID: decoded.backendID,
+            status: decoded.status,
+            startedAt: decoded.startedAt,
+            finishedAt: decoded.finishedAt,
+            corners: decoded.corners,
+            artifacts: decoded.artifacts,
+            warnings: decoded.warnings,
+            extractorRun: decoded.extractorRun,
+            resumedFromRunID: decoded.resumedFromRunID,
+            backendExecutions: decoded.backendExecutions,
+            provenance: decoded.provenance
+        )
+        #expect(decoded.evidence.id == regenerated.evidence.id)
     }
 
     @Test func manifestDecoderRejectsPreviousSchema() throws {
         let url = try #require(Bundle.module.url(
-            forResource: "pex-artifact-manifest-v4",
+            forResource: "pex-artifact-manifest-v5",
             withExtension: "json"
         ))
         let current = try String(contentsOf: url, encoding: .utf8)
-        let previous = current.replacingOccurrences(of: "\"version\" : 4", with: "\"version\" : 3")
+        let previous = current.replacingOccurrences(of: "\"version\" : 5", with: "\"version\" : 4")
         #expect(throws: DecodingError.self) {
             try JSONDecoder().decode(PEXArtifactManifest.self, from: Data(previous.utf8))
         }
@@ -78,7 +95,7 @@ struct PEXPersistenceTests {
         decoder.dateDecodingStrategy = .iso8601
         let decoded = try decoder.decode(PEXArtifactManifest.self, from: data)
         #expect(decoded.version == PEXArtifactManifest.currentVersion)
-        #expect(decoded.artifacts.allSatisfy { !$0.locator.location.value.hasPrefix("/") })
+        #expect(decoded.artifacts.allSatisfy { !$0.relativePath.stringValue.hasPrefix("/") })
         #expect(decoded.artifacts.allSatisfy {
             $0.availability != .available
                 || ($0.reference?.digest.hexadecimalValue != nil && $0.reference?.byteCount != nil)
@@ -102,8 +119,8 @@ struct PEXPersistenceTests {
             #expect(record.availability == .available)
             #expect(record.reference?.digest.hexadecimalValue != nil)
             #expect(record.reference?.byteCount ?? 0 > 0)
-            #expect(!record.locator.location.value.hasPrefix("/"))
-            #expect(FileManager.default.fileExists(atPath: workspace.runDirectory.appending(path: record.locator.location.value).path(percentEncoded: false)))
+            #expect(!record.relativePath.stringValue.hasPrefix("/"))
+            #expect(FileManager.default.fileExists(atPath: workspace.runDirectory.appending(path: record.relativePath.stringValue).path(percentEncoded: false)))
         }
         #expect(layout.provenance?.sourcePath == inputs.layoutURL.path(percentEncoded: false))
     }
@@ -162,7 +179,7 @@ struct PEXPersistenceTests {
             cornerID: "tt",
             id: "ir-tt"
         )
-        try store.saveManifest(PEXArtifactManifest(
+        try store.saveManifest(PEXTestExecutionIdentity.manifest(
             runID: workspace.runID,
             requestHash: PEXRequestHash("load-request"),
             backendID: request.backendSelection.backendID,
@@ -205,11 +222,11 @@ struct PEXPersistenceTests {
             path: deckURL.path(percentEncoded: false),
             identifier: "corner/tt"
         )
-        let capturedURL = workspace.runDirectory.appending(path: record.locator.location.value)
+        let capturedURL = workspace.runDirectory.appending(path: record.relativePath.stringValue)
 
         #expect(record.id.rawValue == "input-process-profile-deck-corner-tt")
         #expect(record.matches(kind: .processProfileDeckInput))
-        #expect(record.locator.location.value == "inputs/process-profile-decks/corner-tt-sky130_tt.magicrc")
+        #expect(record.relativePath.stringValue == "inputs/process-profile-decks/corner-tt-sky130_tt.magicrc")
         #expect(String(data: try Data(contentsOf: capturedURL), encoding: .utf8) == "deck-content")
         #expect(record.provenance?.sourcePath == deckURL.path(percentEncoded: false))
     }
@@ -266,10 +283,10 @@ struct PEXPersistenceTests {
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let first = try recorder.captureInput(url: firstURL, kind: .layoutInput)
         let second = try recorder.captureInput(url: secondURL, kind: .netlistInput)
-        let firstCapturedURL = workspace.runDirectory.appending(path: first.locator.location.value)
-        let secondCapturedURL = workspace.runDirectory.appending(path: second.locator.location.value)
+        let firstCapturedURL = workspace.runDirectory.appending(path: first.relativePath.stringValue)
+        let secondCapturedURL = workspace.runDirectory.appending(path: second.relativePath.stringValue)
 
-        #expect(first.locator.location != second.locator.location)
+        #expect(first.relativePath != second.relativePath)
         #expect(try String(contentsOf: firstCapturedURL, encoding: .utf8) == "first")
         #expect(try String(contentsOf: secondCapturedURL, encoding: .utf8) == "second")
     }
@@ -310,7 +327,7 @@ struct PEXPersistenceTests {
         try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: targetURL)
 
         let record = try PEXArtifactRecorder(workspace: workspace).captureInput(url: linkURL, kind: .layoutInput)
-        let capturedURL = workspace.runDirectory.appending(path: record.locator.location.value)
+        let capturedURL = workspace.runDirectory.appending(path: record.relativePath.stringValue)
         try Data("mutated-layout".utf8).write(to: targetURL)
 
         #expect(record.availability == .available)
@@ -333,11 +350,11 @@ struct PEXPersistenceTests {
         let netlist = try recorder.captureInput(url: inputs.netlistURL, kind: .netlistInput)
 
         let firstRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout])
-        let firstRequestURL = workspace.runDirectory.appending(path: firstRequest.locator.location.value)
+        let firstRequestURL = workspace.runDirectory.appending(path: firstRequest.relativePath.stringValue)
         let firstRequestData = try Data(contentsOf: firstRequestURL)
         let secondRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout, netlist])
 
-        #expect(firstRequest.locator.location != secondRequest.locator.location)
+        #expect(firstRequest.relativePath != secondRequest.relativePath)
         #expect(
             PEXArtifactResolver.sha256(data: try Data(contentsOf: firstRequestURL))
                 == firstRequest.reference?.digest.hexadecimalValue
@@ -352,7 +369,7 @@ struct PEXPersistenceTests {
             defaultExtractionRules: .default,
             backendHints: [:]
         ))
-        let firstTechnologyURL = workspace.runDirectory.appending(path: firstTechnology.locator.location.value)
+        let firstTechnologyURL = workspace.runDirectory.appending(path: firstTechnology.relativePath.stringValue)
         let firstTechnologyData = try Data(contentsOf: firstTechnologyURL)
         let secondTechnology = try recorder.captureInlineTechnology(TechnologyIR(
             processName: "second",
@@ -363,7 +380,7 @@ struct PEXPersistenceTests {
             backendHints: [:]
         ))
 
-        #expect(firstTechnology.locator.location != secondTechnology.locator.location)
+        #expect(firstTechnology.relativePath != secondTechnology.relativePath)
         #expect(
             PEXArtifactResolver.sha256(data: try Data(contentsOf: firstTechnologyURL))
                 == firstTechnology.reference?.digest.hexadecimalValue
@@ -390,7 +407,7 @@ struct PEXPersistenceTests {
         )
         let startedAt = Date()
         let finishedAt = Date()
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -426,7 +443,7 @@ struct PEXPersistenceTests {
             cornerID: "tt",
             id: "ir-tt"
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -492,7 +509,7 @@ struct PEXPersistenceTests {
             cornerID: "ss",
             id: "spef-roundtrip-ss"
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("summary"),
             backendID: "mock",
@@ -552,7 +569,7 @@ struct PEXPersistenceTests {
             cornerID: "tt",
             id: "ir-tt"
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("summary-missing-ir"),
             backendID: "mock",
@@ -584,49 +601,16 @@ struct PEXPersistenceTests {
         #expect(report.summary.multiCorner.totalCapacitance.maxCornerID == "tt")
     }
 
-    @Test func resolverRejectsEscapingIRPathBeforeRead() throws {
+    @Test func artifactDeclarationRejectsAbsoluteIRPathBeforeRead() throws {
         let tempDir = makeTemporaryDirectory("pex_escape")
         defer { removeTemporaryItem(tempDir) }
 
-        let runID = PEXRunID()
-        let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
-        try workspace.createDirectories(corners: ["tt"])
         let outsideDirectory = tempDir.appending(path: "outside")
         try FileManager.default.createDirectory(at: outsideDirectory, withIntermediateDirectories: true)
         let outsideIRURL = outsideDirectory.appending(path: "tt.json")
-        let irData = try PEXIRSerializer().encode(makeTestIR())
-        try irData.write(to: outsideIRURL)
-
-        let irRecord = try makeArtifactRecord(
-            id: "ir-tt",
-            kind: .parasiticIR,
-            stage: .persistence,
-            cornerID: "tt",
-            relativePath: try ArtifactLocation(fileURL: outsideIRURL),
-            sha256: PEXArtifactResolver.sha256(data: irData),
-            byteCount: irData.count,
-            status: .available
-        )
-        let manifest = PEXArtifactManifest(
-            runID: runID,
-            requestHash: PEXRequestHash("hash"),
-            backendID: "mock",
-            status: .success,
-            startedAt: Date(),
-            finishedAt: Date(),
-            corners: [PEXArtifactCorner(cornerID: "tt", status: .success, artifactIDs: [irRecord.id])],
-            artifacts: [irRecord],
-            warnings: []
-        )
-        try PEXArtifactStore(workspace: workspace).saveManifest(manifest)
-
-        let resolver = try PEXArtifactResolver(workspace: workspace)
-        #expect(throws: PEXError.self) {
-            _ = try resolver.loadIR(cornerID: "tt")
+        #expect(throws: ArtifactRelativePathError.self) {
+            try makeArtifactRelativePath(outsideIRURL.path(percentEncoded: false))
         }
-        let report = resolver.completenessReport()
-        #expect(report.status == .invalid)
-        #expect(report.issues.contains { $0.kind == .pathEscapesRunDirectory && $0.artifactID == "ir-tt" })
     }
 
     @Test func completenessReportRejectsSymlinkEscapingRunDirectory() throws {
@@ -647,12 +631,12 @@ struct PEXPersistenceTests {
             kind: .log,
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try ArtifactLocation(workspaceRelativePath: "raw/tt/escape.log"),
+            relativePath: try makeArtifactRelativePath("raw/tt/escape.log"),
             sha256: PEXArtifactResolver.sha256(data: outsideData),
             byteCount: outsideData.count,
             status: .available
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -688,12 +672,12 @@ struct PEXPersistenceTests {
             kind: .log,
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try ArtifactLocation(workspaceRelativePath: "raw/tt/dangling.log"),
+            relativePath: try makeArtifactRelativePath("raw/tt/dangling.log"),
             sha256: String(repeating: "a", count: 64),
             byteCount: 1,
             status: .available
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -731,7 +715,7 @@ struct PEXPersistenceTests {
         try Data("*SPEF".utf8).write(to: rawURL)
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let rawRecord = try recorder.recordExistingArtifact(url: rawURL, kind: .rawOutput, stage: .backendExecution, cornerID: "tt")
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -763,7 +747,7 @@ struct PEXPersistenceTests {
             stage: .backendExecution,
             cornerID: "tt"
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: workspace.runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -820,7 +804,7 @@ struct PEXPersistenceTests {
             kind: .rawOutput,
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef"),
+            relativePath: try makeArtifactRelativePath("raw/tt/tt.spef"),
             sha256: PEXArtifactResolver.sha256(data: rawData),
             byteCount: rawData.count,
             status: .available
@@ -830,12 +814,12 @@ struct PEXPersistenceTests {
             kind: .log,
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef"),
+            relativePath: try makeArtifactRelativePath("raw/tt/tt.spef"),
             sha256: PEXArtifactResolver.sha256(data: rawData),
             byteCount: rawData.count,
             status: .available
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -870,7 +854,7 @@ struct PEXPersistenceTests {
             cornerID: "tt",
             id: "ir-tt"
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -899,7 +883,7 @@ struct PEXPersistenceTests {
         try Data("*SPEF partial".utf8).write(to: rawURL)
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let rawRecord = try recorder.recordExistingArtifact(url: rawURL, kind: .rawOutput, stage: .backendExecution, cornerID: "tt")
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -924,7 +908,7 @@ struct PEXPersistenceTests {
         let runID = PEXRunID()
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
         try workspace.createDirectories(corners: ["tt"])
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -959,7 +943,7 @@ struct PEXPersistenceTests {
         let rawRecord = try recorder.recordExistingArtifact(url: rawURL, kind: .rawOutput, stage: .backendExecution, cornerID: "ss")
         let startedAt = Date()
         let finishedAt = Date()
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -994,7 +978,7 @@ struct PEXPersistenceTests {
     }
 
     private func makeManifest() throws -> PEXArtifactManifest {
-        let path = try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef")
+        let path = try makeArtifactRelativePath("raw/tt/tt.spef")
         let record = try makeArtifactRecord(
             id: "raw-tt",
             kind: .rawOutput,
@@ -1005,7 +989,7 @@ struct PEXPersistenceTests {
             byteCount: 5,
             status: .available
         )
-        return PEXArtifactManifest(
+        return try PEXTestExecutionIdentity.manifest(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("abc123"),
             backendID: "mock",
@@ -1068,12 +1052,12 @@ struct PEXPersistenceTests {
             kind: .rawOutput,
             stage: .backendExecution,
             cornerID: "tt",
-            relativePath: try ArtifactLocation(workspaceRelativePath: "raw/tt/tt.spef"),
+            relativePath: try makeArtifactRelativePath("raw/tt/tt.spef"),
             sha256: String(repeating: "a", count: 64),
             byteCount: 5,
             status: .available
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: PEXRunID(),
             requestHash: PEXRequestHash("hash"),
             backendID: "mock",
@@ -1125,7 +1109,7 @@ private func makeArtifactRecord(
     kind: PEXArtifactKind,
     stage: PEXStage,
     cornerID: PEXCornerID? = nil,
-    relativePath: ArtifactLocation,
+    relativePath: ArtifactRelativePath,
     sha256: String? = nil,
     byteCount: Int? = nil,
     createdAt: Date = Date(),
@@ -1138,28 +1122,45 @@ private func makeArtifactRecord(
     guard let sha256, let byteCount else {
         throw ArtifactRecordFixtureError.availableArtifactRequiresIntegrity
     }
-    let format: ArtifactFormat = switch relativePath.value.split(separator: ".").last?.lowercased() {
+    let format: ArtifactFormat = switch relativePath.stringValue.split(separator: ".").last?.lowercased() {
     case "spef": .spef
     case "log", "txt": .text
     default: .json
     }
-    let reference = ArtifactReference(
-        id: try ArtifactID(rawValue: id),
-        locator: ArtifactLocator(
-            location: relativePath,
-            role: .output,
-            kind: try ArtifactKind(rawValue: kind.foundationRawValue),
-            format: format
-        ),
-        digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: sha256),
-        byteCount: UInt64(byteCount)
+    let descriptor = ArtifactDescriptor(
+        role: .output,
+        kind: try ArtifactKind(rawValue: kind.foundationRawValue),
+        format: format
     )
-    return PEXArtifactRecord(
-        payload: .available(reference),
+    let reference = try ArtifactReference(
+        digest: try ContentDigest(algorithm: .sha256, hexadecimalValue: sha256),
+        byteCount: UInt64(byteCount),
+        descriptor: descriptor
+    )
+    return try PEXArtifactRecord(
+        declaration: PEXArtifactDeclaration(
+            id: try PEXArtifactRecordID(rawValue: id),
+            descriptor: descriptor,
+            relativePath: relativePath
+        ),
+        payload: .available(try PEXAvailableArtifact(
+            reference: reference,
+            availability: .local(
+                artifactID: reference.id,
+                rootID: try ArtifactRootID(rawValue: "pex-persistence-test"),
+                relativePath: relativePath
+            )
+        )),
         stage: stage,
         cornerID: cornerID,
         createdAt: createdAt,
         provenance: provenance
+    )
+}
+
+private func makeArtifactRelativePath(_ path: String) throws -> ArtifactRelativePath {
+    try ArtifactRelativePath(
+        segments: path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
     )
 }
 

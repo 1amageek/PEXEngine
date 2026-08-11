@@ -131,7 +131,7 @@ struct PEXCLIOutputFormatterTests {
                 artifactIDs: []
             )
         }
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: requestHash,
             backendID: "mock",

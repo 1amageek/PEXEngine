@@ -770,7 +770,7 @@ struct SPEFParserTests {
         #expect(packet.packetID == "negative-packet")
         #expect(packet.confidence.level == .medium)
         #expect(packet.inputs.contains {
-            $0.reference.locator.kind.rawValue == "parasitics"
+            $0.reference.descriptor.kind.rawValue == "parasitics"
                 && $0.reference.digest.algorithm == .sha256
         })
         #expect(packet.diagnostics.contains { $0.category == "parse_failure" && $0.caseID == "malformed.spef" })

@@ -1,7 +1,7 @@
 import CircuiteFoundation
 
 public struct PEXEvidencePacket: Sendable, Hashable, Codable {
-    public static let currentSchemaVersion = 2
+    public static let currentSchemaVersion = 3
 
     public let schemaVersion: Int
     public let packetID: String
@@ -199,13 +199,16 @@ public struct PEXEvidenceIntent: Sendable, Hashable, Codable {
 }
 
 public struct PEXEvidenceArtifact: Sendable, Hashable, Codable {
+    public let logicalID: String
     public let reference: ArtifactReference
     public let cornerID: String?
 
     public init(
+        logicalID: String,
         reference: ArtifactReference,
         cornerID: String? = nil
     ) {
+        self.logicalID = logicalID
         self.reference = reference
         self.cornerID = cornerID
     }

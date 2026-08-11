@@ -1,4 +1,5 @@
 import CircuiteFoundation
+import CircuiteFoundationFoundation
 import Foundation
 import PEXCore
 import PEXTestSupport
@@ -10,27 +11,39 @@ struct PEXFoundationBoundaryTests {
     func preservesDomainArtifactIdentifier() throws {
         let now = Date(timeIntervalSince1970: 1)
         let runID = PEXRunID()
-        let reference = ArtifactReference(
-            id: try ArtifactID(rawValue: "plate:raw-spef"),
-            locator: ArtifactLocator(
-                location: try ArtifactLocation(workspaceRelativePath: "reports/output.spef"),
-                role: .output,
-                kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
-                format: .spef
-            ),
+        let descriptor = ArtifactDescriptor(
+            role: .output,
+            kind: try ArtifactKind(rawValue: PEXArtifactKind.rawOutput.foundationRawValue),
+            format: .spef
+        )
+        let relativePath = try ArtifactRelativePath(segments: ["reports", "output.spef"])
+        let reference = try ArtifactReference(
             digest: try ContentDigest(
                 algorithm: .sha256,
                 hexadecimalValue: String(repeating: "a", count: 64)
             ),
-            byteCount: 1
+            byteCount: 1,
+            descriptor: descriptor
         )
-        let artifact = PEXArtifactRecord(
-            payload: .available(reference),
+        let artifact = try PEXArtifactRecord(
+            declaration: PEXArtifactDeclaration(
+                id: try PEXArtifactRecordID(rawValue: "plate:raw-spef"),
+                descriptor: descriptor,
+                relativePath: relativePath
+            ),
+            payload: .available(try PEXAvailableArtifact(
+                reference: reference,
+                availability: .local(
+                    artifactID: reference.id,
+                    rootID: try ArtifactRootID(rawValue: "pex-test-run"),
+                    relativePath: relativePath
+                )
+            )),
             stage: .reporting,
             createdAt: now,
             provenance: nil
         )
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("request"),
             backendID: "mock",
@@ -62,7 +75,27 @@ struct PEXFoundationBoundaryTests {
                 failureCount: 0
             )
         )
-        #expect(result.evidence.artifacts.map(\.id.rawValue) == ["plate:raw-spef"])
-        #expect(result.evidence.artifacts.map(\.locator.role) == [.output])
+        #expect(artifact.id.rawValue == "plate:raw-spef")
+        #expect(result.evidence.artifacts.map(\.id) == [reference.id])
+        #expect(result.evidence.artifacts.map(\.descriptor.role) == [.output])
+        #expect(throws: PEXArtifactManifestError.evidenceArtifactsMismatch) {
+            _ = try PEXArtifactManifest(
+                runID: runID,
+                requestHash: PEXRequestHash("request"),
+                backendID: "mock",
+                status: .success,
+                startedAt: now,
+                finishedAt: now,
+                corners: [],
+                artifacts: [artifact],
+                warnings: [],
+                provenance: manifest.provenance,
+                evidence: EvidenceManifest(
+                    id: manifest.evidence.id,
+                    provenance: manifest.provenance,
+                    artifacts: []
+                )
+            )
+        }
     }
 }

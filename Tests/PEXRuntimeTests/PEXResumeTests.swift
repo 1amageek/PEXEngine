@@ -38,7 +38,7 @@ struct PEXResumeTests {
 
         let parentID = PEXRunID()
         let now = Date()
-        let parentManifest = PEXArtifactManifest(
+        let parentManifest = try PEXTestExecutionIdentity.manifest(
             runID: parentID,
             requestHash: PEXRequestHash("parent"),
             backendID: "mock",

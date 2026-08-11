@@ -637,7 +637,7 @@ struct PEXCLITests {
 
         let startedAt = Date()
         let finishedAt = Date()
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("extract-summary"),
             backendID: "mock",
@@ -873,9 +873,9 @@ struct PEXCLITests {
         #expect(decoded.packetID == "packet-write-test")
         #expect(decoded.subject.backendID == "openrcx")
         #expect(decoded.inputs.contains {
-            $0.reference.locator.role == .input
-                && $0.reference.locator.kind == .other
-                && $0.reference.locator.format == .json
+            $0.reference.descriptor.role == .input
+                && $0.reference.descriptor.kind == .other
+                && $0.reference.descriptor.format == .json
         })
         #expect(decoded.artifacts.isEmpty)
         #expect(decoded.metrics.contains { $0.name == "caseCount" && $0.unit == "count" })
@@ -1491,7 +1491,7 @@ struct PEXCLITests {
             id: "ir-tt"
         )
 
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("summary"),
             backendID: "mock",
@@ -1532,7 +1532,7 @@ struct PEXCLITests {
         let runID = PEXRunID()
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: runID)
         try workspace.createDirectories(corners: ["tt"])
-        let manifest = PEXArtifactManifest(
+        let manifest = try PEXTestExecutionIdentity.manifest(
             runID: runID,
             requestHash: PEXRequestHash("summary"),
             backendID: "mock",
