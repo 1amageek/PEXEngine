@@ -1,32 +1,16 @@
 // swift-tools-version: 6.3
 
 import PackageDescription
-import Foundation
 
-let workspaceRoot = URL(fileURLWithPath: #filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-let isLSIWorkspace = FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("docs/workspace-packages.json").path
+let circuiteFoundationDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/CircuiteFoundation.git",
+    exact: "26.812.0"
 )
 
-let circuiteFoundationDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("CircuiteFoundation/Package.swift").path
+let signoffToolSupportDependency: Package.Dependency = .package(
+    url: "https://github.com/1amageek/SignoffToolSupport.git",
+    exact: "26.812.0"
 )
-    ? .package(path: "../CircuiteFoundation")
-    : .package(
-        url: "https://github.com/1amageek/CircuiteFoundation.git",
-        revision: "1dd75ecf2b8758c54c4e008ff5fd59e263cce0e6"
-    )
-
-let signoffToolSupportDependency: Package.Dependency = isLSIWorkspace && FileManager.default.fileExists(
-    atPath: workspaceRoot.appendingPathComponent("SignoffToolSupport/Package.swift").path
-)
-    ? .package(path: "../SignoffToolSupport")
-    : .package(
-        url: "https://github.com/1amageek/SignoffToolSupport.git",
-        revision: "2c36104106bdfc8c279629c162c3ced9d7401328"
-    )
 
 let package = Package(
     name: "PEXEngine",
