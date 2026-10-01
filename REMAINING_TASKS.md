@@ -1,24 +1,23 @@
 # PEXEngine Remaining Tasks
 
-Updated: 2026-07-26
+Updated: 2026-10-01
 
-The native/parser paths, Magic adapter, OpenRCX process boundary, raw
-correlation, retry, lineage, and artifact verification contracts are
-implemented.
-No package-owned P1 implementation remains; the remaining qualification gate
-requires installed extractors and foundry-authorized process views.
+Parser, Magic/OpenRCX adapter, correlation, retry, lineage and artifact-verification
+slices are implemented. The default engine registers only external extractors;
+it does not implement standalone native extraction. The active cross-package
+graph is [LSI PROGRESS.md](../PROGRESS.md).
 
 ## Remaining tasks
 
 | ID | Priority | Owner | Task | Exit criteria |
 |---|---|---|---|---|
-No package-owned P1 implementation remains.
+| PEX-N1 | P1 | PEXEngine | Implement native process/corner-bound extraction. | Native geometry/connectivity produces canonical RC with analytical success/failure fixtures, exact input provenance, bounded resource behavior and independent extractor correlation. |
 
 ## Completed P1 work
 
 | ID | Completed | Evidence |
 |---|---|---|
-| PEX-1 | 2026-07-26 | Workspace verifier run `20260725T212810865980Z` built `PEXEngine-Package` and passed 371 tests across `PEXCoreTests`, `PEXAdaptersTests`, `PEXParsersTests`, `PEXPersistenceTests`, `PEXRuntimeTests`, and `PEXCLITests` in 27.6 seconds. |
+| PEX-1 | 2026-07-26 | Historical parser/adapter verification: workspace run `20260725T212810865980Z` passed 371 tests in 27.6 seconds. This is not current native extraction or production qualification evidence. |
 
 ## External prerequisites
 
