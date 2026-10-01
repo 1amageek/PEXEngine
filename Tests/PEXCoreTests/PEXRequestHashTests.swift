@@ -86,6 +86,38 @@ struct PEXRequestHashTests {
         #expect(first != second)
     }
 
+    @Test func processFileRelocationPreservesIdentityAndViewChangesInvalidateIt() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "pex_role_hash_\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            do { try FileManager.default.removeItem(at: directory) }
+            catch { Issue.record("Failed to remove role hash fixture: \(error)") }
+        }
+        let first = directory.appending(path: "first.rc")
+        let second = directory.appending(path: "second.rc")
+        let firstView = directory.appending(path: "first.lef")
+        let secondView = directory.appending(path: "second.lef")
+        for url in [first, second] { try Data("same rules".utf8).write(to: url) }
+        for url in [firstView, secondView] { try Data("same view".utf8).write(to: url) }
+        func request(deck: URL, view: URL) -> PEXRunRequest {
+            PEXRunRequest(
+                layoutURL: URL(filePath: "/tmp/layout.gds"), layoutFormat: .gds,
+                sourceNetlistURL: URL(filePath: "/tmp/netlist.sp"), sourceNetlistFormat: .spice,
+                topCell: "TOP", corners: [PEXCorner(id: "tt")],
+                technology: .inline(TechnologyIR(processName: "test", stack: [], logicalToPhysicalLayerMap: [:],
+                                               vias: [], defaultExtractionRules: .default, backendHints: [:])),
+                processProfile: PEXProcessProfileReference(profileID: "process", primaryDeckPath: deck.path,
+                                cornerDeckPaths: ["tt": deck.path], requiredViewPaths: ["technologyLEF": view.path]),
+                backendSelection: .mock(), options: .default
+            )
+        }
+        let original = try PEXRequestHash.compute(for: request(deck: first, view: firstView), inputArtifacts: [])
+        let relocated = try PEXRequestHash.compute(for: request(deck: second, view: secondView), inputArtifacts: [])
+        #expect(original == relocated)
+        try Data("changed view".utf8).write(to: secondView)
+        #expect(try PEXRequestHash.compute(for: request(deck: second, view: secondView), inputArtifacts: []) != original)
+    }
+
     @Test func perCornerTechnologyParticipatesInRequestHash() throws {
         let base = TechnologyIR(
             processName: "base",

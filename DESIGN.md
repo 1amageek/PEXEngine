@@ -10,7 +10,9 @@ and lineage.
 ```mermaid
 flowchart TD
     Input["PEXRunRequest"] --> Validate["Input / technology gate"]
-    Validate --> Execute["Backend per corner"]
+    Validate --> Capture["Capture declared input bytes"]
+    Capture --> Resolve["Decode captured technology and freeze request identity"]
+    Resolve --> Execute["Backend reads captured files per corner"]
     Execute --> Parse["SPEF / DSPF / SPICE parser"]
     Parse --> IR["ParasiticIR validation"]
     IR --> Persist["Immutable PEX manifest"]
@@ -104,3 +106,36 @@ flow gate, or authorize release. Those decisions belong to `ToolQualification`,
 | Missing or changed artifact bytes | Integrity finding |
 | Magic primary and Magic comparison | Regression observation only |
 | Independent implementations and correlated reports | Input for ToolQualification evaluation |
+
+## Captured input execution contract
+
+`PEXPersistence.PEXArtifactRecorder.capturedRequest` is the common boundary
+for initial execution and request recording. It requires available layout,
+netlist, JSON technology and declared process-file artifacts. All corresponding
+execution paths point into the run directory and are verified against their
+recorded byte count and SHA-256. `PEXArtifactStore.loadRequest` restores those
+same file-role associations for retry. `PEXProcessProfileReference.mapInputPaths`
+owns traversal of primary deck, corner decks and required views; neither
+caller guesses which profile fields represent files.
+
+The orchestrator resolves technology from captured JSON, computes the request
+hash before any backend callback, and executes the captured request. Source
+mutation or removal after capture must not change layout, netlist, selected
+technology, primary/corner deck, required view or request identity. The hash
+uses process identity and semantic file roles with content digests; temporary
+capture locations are availability, not process identity. `pdkRoot` remains an
+explicit backend discovery context; capturing declared files does not qualify
+undeclared transitive includes or arbitrary files read by an external tool.
+
+| Invariant | Behavioral evidence owner |
+|---|---|
+| Initial execution consumes recorded bytes despite changed/deleted originals | `PEXRuntimeTests/PEXCapturedInputExecutionTests` |
+| Technology values are decoded after capture | Same runtime suite, readiness callback changes source JSON before capture |
+| Missing or tampered captured inputs fail before execution | `PEXPersistenceTests` |
+| Process-role content affects identity; file relocation does not | `PEXCoreTests/PEXRequestHashTests` |
+
+This change has no shared mutable storage: the orchestrator's registries and
+resolver are immutable actor-owned properties; capture/profile/hash values
+are immutable `Sendable` values and all intermediate mutation is call-local.
+No target-dependent synchronization branch is introduced. Verification is
+macOS native; no WASM or Embedded runtime result is inferred.

@@ -314,30 +314,11 @@ public struct PEXArtifactStore: Sendable {
             return try resolver.validatedURL(for: record).path(percentEncoded: false)
         }
 
-        var cornerDeckPaths: [String: String] = [:]
-        for cornerID in profile.cornerDeckPaths.keys.sorted() {
-            let originalPath = profile.cornerDeckPaths[cornerID]
-            if let resolvedPath = try capturedPath(originalPath) {
-                cornerDeckPaths[cornerID] = resolvedPath
+        return try profile.mapInputPaths { path in
+            guard let resolvedPath = try capturedPath(path) else {
+                throw PEXError.persistenceFailed("Captured process-profile input is missing for \(path)")
             }
+            return resolvedPath
         }
-        var requiredViewPaths: [String: String] = [:]
-        for role in profile.requiredViewPaths.keys.sorted() {
-            let originalPath = profile.requiredViewPaths[role]
-            if let resolvedPath = try capturedPath(originalPath) {
-                requiredViewPaths[role] = resolvedPath
-            }
-        }
-        return PEXProcessProfileReference(
-            profileID: profile.profileID,
-            pdkID: profile.pdkID,
-            source: profile.source,
-            requirementID: profile.requirementID,
-            pdkRoot: profile.pdkRoot,
-            primaryDeckPath: try capturedPath(profile.primaryDeckPath),
-            cornerDeckPaths: cornerDeckPaths,
-            requiredViewPaths: requiredViewPaths,
-            metadata: profile.metadata
-        )
     }
 }

@@ -201,7 +201,7 @@ struct OpenRCXPEXAdapterTests {
         let context = makeContext(fixture: fixture)
         let adapter = OpenRCXPEXAdapter(
             toolchain: makeToolchain(fixture: fixture),
-            processRunner: TimedProcessRunner(timeoutSeconds: 0.5)
+            processRunner: ExtractionTimeoutRunner()
         )
 
         try await adapter.prepare(context)
@@ -211,6 +211,7 @@ struct OpenRCXPEXAdapterTests {
         } catch let failure as PEXAdapterExecutionFailure {
             #expect(failure.failureKind == .timedOut)
             #expect(failure.message.contains("timed out"))
+            #expect(failure.executionIdentity != nil)
             #expect(failure.generatedArtifacts.filter { $0.kind == .log }.count == 4)
         }
     }
@@ -375,5 +376,18 @@ private func removeOpenRCXFixture(_ url: URL) {
         try FileManager.default.removeItem(at: url)
     } catch {
         Issue.record("Failed to remove OpenRCX test fixture: \(error)")
+    }
+}
+
+/// Keeps version qualification independent of the extraction-timeout counterexample.
+private struct ExtractionTimeoutRunner: TimedProcessRunning {
+    func run(
+        process: Process,
+        cancellationCheck: (@Sendable () async throws -> Bool)?
+    ) async throws -> TimedProcessResult {
+        let runner = process.arguments == ["-version"]
+            ? TimedProcessRunner()
+            : TimedProcessRunner(timeoutSeconds: 0.5)
+        return try await runner.run(process: process, cancellationCheck: cancellationCheck)
     }
 }

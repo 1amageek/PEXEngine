@@ -48,11 +48,6 @@ public actor PEXOrchestrator {
 
         try pipeline.validateRequest(request)
 
-        let technology = try technologyResolver.resolve(request.technology)
-        let technologiesByCorner = try request.technologyByCorner.reduce(into: [:]) { result, entry in
-            result[entry.key] = try technologyResolver.resolve(entry.value)
-        }
-
         let adapter = try pipeline.resolveAdapter(for: request.backendSelection.backendID)
         try pipeline.validateInputFiles(request)
         let extractorReadiness = toolReadiness(
@@ -77,23 +72,26 @@ public actor PEXOrchestrator {
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let inputArtifacts = try captureInputs(
             request: effectiveRequest,
-            technology: technology,
-            technologiesByCorner: technologiesByCorner,
             recorder: recorder
         )
-        try validateDeclaredExecutionInputs(effectiveRequest.executionInputArtifacts, request: effectiveRequest)
         let capturedRequest = try recorder.capturedRequest(
             effectiveRequest,
             inputArtifacts: inputArtifacts
         )
+        try validateDeclaredExecutionInputs(capturedRequest.executionInputArtifacts, request: capturedRequest)
+        let technology = try technologyResolver.resolve(capturedRequest.technology)
+        let technologiesByCorner = try capturedRequest.technologyByCorner.reduce(into: [:]) { result, entry in
+            result[entry.key] = try technologyResolver.resolve(entry.value)
+        }
+        let requestHash = try PEXRequestHash.compute(for: capturedRequest, inputArtifacts: inputArtifacts)
         let extractorRequest = PEXExtractorRunRequest(
             runRequest: capturedRequest,
-            processProfile: effectiveRequest.processProfile,
+            processProfile: capturedRequest.processProfile,
             capabilities: adapter.capabilities
         )
 
         let cornerOutcomes = await executeCorners(
-            request: effectiveRequest,
+            request: capturedRequest,
             adapter: adapter,
             technology: technology,
             technologiesByCorner: technologiesByCorner,
@@ -127,8 +125,6 @@ public actor PEXOrchestrator {
         } else {
             status = .failed
         }
-
-        let requestHash = try PEXRequestHash.compute(for: effectiveRequest, inputArtifacts: inputArtifacts)
 
         let metrics = PEXRunMetrics(
             totalDurationSeconds: finishedAt.timeIntervalSince(startedAt),
@@ -416,8 +412,6 @@ public actor PEXOrchestrator {
 
     private func captureInputs(
         request: PEXRunRequest,
-        technology: TechnologyIR,
-        technologiesByCorner: [String: TechnologyIR],
         recorder: PEXArtifactRecorder
     ) throws -> [PEXArtifactRecord] {
         var artifacts: [PEXArtifactRecord] = []
@@ -431,7 +425,7 @@ public actor PEXOrchestrator {
                 id: "input-technologyInput",
                 destinationFilename: "technology.json"
             ))
-        case .inline:
+        case .inline(let technology):
             artifacts.append(try recorder.captureInlineTechnology(
                 technology,
                 id: "input-technologyInput",
@@ -454,12 +448,7 @@ public actor PEXOrchestrator {
                     id: artifactID,
                     destinationFilename: filename
                 ))
-            case .inline:
-                guard let cornerTechnology = technologiesByCorner[cornerID] else {
-                    throw PEXError.internalInvariantViolation(
-                        "Resolved per-corner technology is missing for corner '\(cornerID)'"
-                    )
-                }
+            case .inline(let cornerTechnology):
                 artifacts.append(try recorder.captureInlineTechnology(
                     cornerTechnology,
                     id: artifactID,

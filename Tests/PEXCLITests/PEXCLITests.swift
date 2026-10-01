@@ -889,7 +889,6 @@ struct PEXCLITests {
         defer { removeTemporaryItem(tempDir) }
 
         let report = PEXExternalExtractorCorpusReport(
-            schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
             extractorBackendID: "magic",
             status: "failed",
@@ -990,7 +989,6 @@ struct PEXCLITests {
         defer { removeTemporaryItem(tempDir) }
 
         let report = PEXExternalExtractorCorpusReport(
-            schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
             extractorBackendID: "magic",
             status: "failed",
@@ -1095,7 +1093,6 @@ struct PEXCLITests {
         defer { removeTemporaryItem(tempDir) }
 
         let report = PEXExternalExtractorCorpusReport(
-            schemaVersion: 1,
             corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
             extractorBackendID: "magic",
             status: "passed",
@@ -1630,7 +1627,6 @@ private func makePhysicalBoundsCLIReport(
     let passRate = cases.isEmpty ? 0 : Double(passedCaseCount) / Double(cases.count)
 
     return PEXExternalExtractorCorpusReport(
-        schemaVersion: 1,
         corpusSpec: "Fixtures/ExternalExtractor/pex-magic-corpus.json",
         extractorBackendID: "magic",
         status: failedCaseCount == 0 ? "passed" : "failed",

@@ -48,6 +48,21 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
         self.metadata = metadata.filter { !$0.key.isEmpty && !$0.value.isEmpty }
     }
 
+    /// Transforms every declared file input while preserving process identity and discovery context.
+    public func mapInputPaths(_ transform: (String) throws -> String) rethrows -> Self {
+        Self(
+            profileID: profileID,
+            pdkID: pdkID,
+            source: source,
+            requirementID: requirementID,
+            pdkRoot: pdkRoot,
+            primaryDeckPath: try primaryDeckPath.map(transform),
+            cornerDeckPaths: try cornerDeckPaths.mapValues(transform),
+            requiredViewPaths: try requiredViewPaths.mapValues(transform),
+            metadata: metadata
+        )
+    }
+
     public func deckPath(for cornerID: PEXCornerID) -> String? {
         cornerDeckPaths[cornerID.value] ?? primaryDeckPath
     }

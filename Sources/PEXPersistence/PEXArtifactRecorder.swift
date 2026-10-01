@@ -125,16 +125,25 @@ public struct PEXArtifactRecorder: Sendable {
                 inputArtifacts: inputArtifacts
             )
         }
+        let capturedProfile = try request.processProfile.map { profile in
+            try profile.mapInputPaths { path in
+                try capturedInputURL(
+                    kind: .processProfileDeckInput,
+                    sourcePath: path,
+                    inputArtifacts: inputArtifacts
+                ).path(percentEncoded: false)
+            }
+        }
         return PEXRunRequest(
-            layoutURL: request.layoutURL,
+            layoutURL: try capturedInputURL(kind: .layoutInput, inputArtifacts: inputArtifacts),
             layoutFormat: request.layoutFormat,
-            sourceNetlistURL: request.sourceNetlistURL,
+            sourceNetlistURL: try capturedInputURL(kind: .netlistInput, inputArtifacts: inputArtifacts),
             sourceNetlistFormat: request.sourceNetlistFormat,
             topCell: request.topCell,
             corners: request.corners,
             technology: capturedTechnology,
             technologyByCorner: capturedTechnologyByCorner,
-            processProfile: request.processProfile,
+            processProfile: capturedProfile,
             backendSelection: request.backendSelection,
             options: request.options,
             workingDirectory: request.workingDirectory,
@@ -185,18 +194,39 @@ public struct PEXArtifactRecorder: Sendable {
         case .inline(let technology):
             return .inline(technology)
         case .jsonFile:
-            guard let record = inputArtifacts.first(where: {
-                $0.id.rawValue == artifactID && $0.availability == .available
-            }) else {
-                throw PEXError.persistenceFailed(
-                    "Captured technology artifact '\(artifactID)' is missing"
-                )
-            }
-            let path = workspace.runDirectory
-                .appending(path: record.relativePath.stringValue)
-                .path(percentEncoded: false)
-            return .jsonFile(URL(filePath: path))
+            return .jsonFile(try capturedInputURL(
+                kind: .technologyInput,
+                artifactID: artifactID,
+                inputArtifacts: inputArtifacts
+            ))
         }
+    }
+
+    private func capturedInputURL(
+        kind: PEXArtifactKind,
+        artifactID: String? = nil,
+        sourcePath: String? = nil,
+        inputArtifacts: [PEXArtifactRecord]
+    ) throws -> URL {
+        let matches = inputArtifacts.filter {
+            $0.matches(kind: kind) && $0.availability == .available
+                && (artifactID == nil || $0.id.rawValue == artifactID)
+                && (sourcePath == nil || $0.provenance?.sourcePath == sourcePath)
+        }
+        guard matches.count == 1, let record = matches.first, let reference = record.reference else {
+            throw PEXError.persistenceFailed("Expected one captured input for \(artifactID ?? sourcePath ?? kind.rawValue)")
+        }
+        let url = workspace.runDirectory.appending(path: record.relativePath.stringValue)
+        try ensureExistingFileTargetIsInsideRunDirectory(url)
+        let data: Data
+        do { data = try Data(contentsOf: url) }
+        catch { throw PEXError.persistenceFailed("Captured input is unreadable: \(record.id)", underlying: error) }
+        guard reference.digest.algorithm == .sha256,
+              UInt64(data.count) == reference.byteCount,
+              Self.sha256(data: data) == reference.digest.hexadecimalValue else {
+            throw PEXError.persistenceFailed("Captured input integrity mismatch: \(record.id)")
+        }
+        return url
     }
 
     public func recordMissingArtifact(

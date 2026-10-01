@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import CircuiteFoundation
 
 public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertible {
     public let value: String
@@ -20,9 +21,16 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         for request: PEXRunRequest,
         inputArtifacts: [PEXArtifactRecord]
     ) throws -> PEXRequestHash {
-        let canonicalArtifacts = inputArtifacts
+        // The recorded request is derived metadata; hashing it would bind identity to capture locations.
+        let canonicalArtifacts = try inputArtifacts
+            .filter { !$0.matches(kind: .request) }
             .sorted { $0.id.rawValue < $1.id.rawValue }
-            .map(\.payload)
+            .map { record in
+                guard let reference = record.reference else {
+                    throw PEXError.persistenceFailed("Request input is not available: \(record.id)")
+                }
+                return PEXCanonicalInputArtifact(id: record.id, reference: reference)
+            }
         let snapshot = PEXCanonicalRequestHashInput(
             topCell: request.topCell,
             layoutFormat: request.layoutFormat,
@@ -30,7 +38,7 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
             corners: request.corners,
             technology: PEXCanonicalTechnologyInput(input: request.technology),
             technologyByCorner: request.technologyByCorner.mapValues(PEXCanonicalTechnologyInput.init(input:)),
-            processProfile: request.processProfile,
+            processProfile: request.processProfile.map { $0.mapInputPaths { _ in "captured-input" } },
             processProfileDeckSHA256: try processProfileDeckSHA256(request.processProfile),
             backendSelection: PEXCanonicalBackendSelection(request.backendSelection),
             options: request.options,
@@ -84,7 +92,12 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
     let processProfileDeckSHA256: [String: String]
     let backendSelection: PEXCanonicalBackendSelection
     let options: PEXRunOptions
-    let inputArtifacts: [PEXArtifactPayload]
+    let inputArtifacts: [PEXCanonicalInputArtifact]
+}
+
+private struct PEXCanonicalInputArtifact: Sendable, Codable, Hashable {
+    let id: PEXArtifactRecordID
+    let reference: ArtifactReference
 }
 
 private struct PEXCanonicalTechnologyInput: Sendable, Codable, Hashable {

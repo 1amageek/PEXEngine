@@ -125,6 +125,34 @@ struct PEXPersistenceTests {
         #expect(layout.provenance?.sourcePath == inputs.layoutURL.path(percentEncoded: false))
     }
 
+    @Test(arguments: ["missing", "duplicate", "tampered"])
+    func capturedRequestRejectsInvalidInputEvidence(failure: String) throws {
+        let directory = makeTemporaryDirectory("pex_capture_reject")
+        defer { removeTemporaryItem(directory) }
+        let workspace = PEXRunWorkspace(baseURL: directory, runID: PEXRunID())
+        try workspace.createDirectories(corners: ["tt"])
+        let inputs = try makeInputFiles(in: directory.appending(path: "external"))
+        let recorder = PEXArtifactRecorder(workspace: workspace)
+        let layout = try recorder.captureInput(url: inputs.layoutURL, kind: .layoutInput)
+        let netlist = try recorder.captureInput(url: inputs.netlistURL, kind: .netlistInput)
+        var records = [layout, netlist]
+        switch failure {
+        case "missing": records.removeLast()
+        case "duplicate": records.append(layout)
+        case "tampered":
+            try Data("tampered captured netlist".utf8).write(
+                to: workspace.runDirectory.appending(path: netlist.relativePath.stringValue)
+            )
+        default: Issue.record("Unknown capture failure fixture")
+        }
+        do {
+            _ = try recorder.capturedRequest(makeRequest(inputs: inputs, workspace: directory), inputArtifacts: records)
+            Issue.record("Invalid captured input evidence must be rejected")
+        } catch let error as PEXError {
+            #expect(error.kind == .persistenceFailed)
+        }
+    }
+
     @Test func storeReconstructsRunnableRequestFromCapturedInputs() throws {
         let tempDir = makeTemporaryDirectory("pex_load_request")
         defer { removeTemporaryItem(tempDir) }
@@ -349,10 +377,17 @@ struct PEXPersistenceTests {
         let layout = try recorder.captureInput(url: inputs.layoutURL, kind: .layoutInput)
         let netlist = try recorder.captureInput(url: inputs.netlistURL, kind: .netlistInput)
 
-        let firstRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout])
+        #expect(throws: PEXError.self) {
+            try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout])
+        }
+        let firstRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout, netlist])
         let firstRequestURL = workspace.runDirectory.appending(path: firstRequest.relativePath.stringValue)
         let firstRequestData = try Data(contentsOf: firstRequestURL)
-        let secondRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout, netlist])
+        let extraTechnology = try recorder.captureInlineTechnology(TechnologyIR(
+            processName: "test", stack: [], logicalToPhysicalLayerMap: [:], vias: [],
+            defaultExtractionRules: .default, backendHints: [:]
+        ))
+        let secondRequest = try recorder.recordRequest(makeRequest(inputs: inputs, workspace: tempDir), inputArtifacts: [layout, netlist, extraTechnology])
 
         #expect(firstRequest.relativePath != secondRequest.relativePath)
         #expect(
