@@ -325,4 +325,36 @@ struct NativePEXCalculationTests {
         #expect(a.snapshot.footprints == source.footprints)
         #expect(close(a.metersPerDatabaseUnit, 1e-9))
     }
+
+    @Test func refinedPathUnitsPreservePhysicalRCComparedWithRectangle() throws {
+        let stroke = LayoutShape(layer: fixture.m1,
+            geometry: .path(.init(points: [.zero, .init(x: 2, y: 0)], width: 1, endCap: .truncate)))
+        let pathResult = try network(LayoutCell(name: "PATH", shapes: [stroke]), span: 1_000)
+        let rectResult = try network(LayoutCell(name: "RECT", shapes: [fixture.rect(0, -0.5, 2, 1)]), span: 500)
+        #expect(pathResult.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer == 2_000)
+        #expect(pathResult.snapshot.hierarchy.units.scale.databaseUnitsPerMicrometer == 1_000)
+        #expect(close(pathResult.metersPerDatabaseUnit, 0.5e-9))
+        #expect(close(capacitance(pathResult, .ground), 8e-16))
+        #expect(close(capacitance(pathResult, .ground), capacitance(rectResult, .ground)))
+        #expect(pathResult.resistors == rectResult.resistors)
+        #expect(pathResult.nodes.count == rectResult.nodes.count)
+    }
+
+    @Test func oddWidthStrokeHasAnalyticalRCWithoutHalfWidthRounding() throws {
+        let stroke = LayoutShape(layer: fixture.m1,
+            geometry: .path(.init(points: [.zero, .init(x: 0.003, y: 0)], width: 0.001, endCap: .extend)))
+        let result = try network(LayoutCell(name: "ODD", shapes: [stroke]), span: 2)
+        #expect(result.nodes.count == 4 && result.resistors.count == 3)
+        #expect(result.resistors.allSatisfy { close($0.ohms, 0.02) })
+        #expect(close(capacitance(result, .ground), 1.0004e-18))
+        #expect(close(result.metersPerDatabaseUnit, 0.5e-9))
+    }
+
+    @Test func orthogonalMiterUsesUnionAreaAndActualExposedPerimeter() throws {
+        let stroke = LayoutShape(layer: fixture.m1,
+            geometry: .path(.init(points: [.zero, .init(x: 2, y: 0), .init(x: 2, y: 2)], width: 1, endCap: .truncate)))
+        let result = try network(LayoutCell(name: "TURN", shapes: [stroke]), span: 1_000)
+        #expect(close(capacitance(result, .ground), 1.4e-15))
+        #expect(result.snapshot.components.count == 1 && result.resistors.allSatisfy { $0.kind == .sheet })
+    }
 }

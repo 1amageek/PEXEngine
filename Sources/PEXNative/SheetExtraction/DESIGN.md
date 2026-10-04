@@ -42,6 +42,10 @@ explicit positive maximum span in database units. Occupancy is sparse; no array 
 allocated for the Cartesian product of all coordinates. Overlapping source footprints
 write one physical cell and must agree on the captured component. Source bands and
 holes remain exact; subdivision changes numerical resolution, not physical coverage.
+Band coordinates and the explicit cell span use `snapshot.coordinateUnits`.
+Raw hierarchy units describe source data and cannot convert refined path bands.
+Changing the capture grid must preserve physical dimensions and numerical values
+after conversion through this owned scale.
 
 Sheet nodes represent cell-center potentials. A shared positive-length face gives
 `Rsheet * centerNormalDistance / sharedFaceLength`; corners do not conduct. Conductor

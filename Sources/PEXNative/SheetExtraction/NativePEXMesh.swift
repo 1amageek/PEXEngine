@@ -68,7 +68,7 @@ struct NativePEXMesh {
         do { model = try technology.electricalModel(for: corner) }
         catch { throw .electricalModel(error) }
         guard !snapshot.footprints.isEmpty else { throw .emptyGeometry }
-        let meters = 1e-6 / snapshot.hierarchy.units.scale.databaseUnitsPerMicrometer
+        let meters = 1e-6 / snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer
         guard meters.isFinite, meters > 0 else { throw .invalidUnits }
         let metal = Dictionary(uniqueKeysWithValues: model.conductors.map { ($0.layerName, $0) })
         guard Set(layerNames.values) == Set(technology.stack.map(\.name)),

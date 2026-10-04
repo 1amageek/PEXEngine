@@ -35,7 +35,9 @@ flowchart LR
 ## Contracts and Invariants
 
 The graph contains the actual union of captured metal and individual cut regions.
-Coordinate scale comes from `snapshot.hierarchy.units`, not caller-supplied units.
+Coordinate scale comes from `snapshot.coordinateUnits`, not caller-supplied units
+or the raw hierarchy grid. The capture owner may refine the band grid for stroke
+half-width boundaries while retaining the original hierarchy units.
 Every floating region and disconnected labeled component remains distinct. A graph
 does not invent physical connections to satisfy a net label or pin name.
 
