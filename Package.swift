@@ -18,6 +18,7 @@ let package = Package(
     products: [
         .library(name: "PEXCore", targets: ["PEXCore"]),
         .library(name: "PEXAdapters", targets: ["PEXAdapters"]),
+        .library(name: "PEXNative", targets: ["PEXNative"]),
         .library(name: "PEXParsers", targets: ["PEXParsers"]),
         .library(name: "PEXPersistence", targets: ["PEXPersistence"]),
         .library(name: "PEXRuntime", targets: ["PEXRuntime"]),
@@ -28,6 +29,8 @@ let package = Package(
     dependencies: [
         circuiteFoundationDependency,
         signoffToolSupportDependency,
+        .package(url: "https://github.com/1amageek/semiconductor-layout.git",
+                 revision: "2d86563bd8f3762fdf3e2d0c9e4f3014e71f8412"),
     ],
     targets: [
         .target(
@@ -46,6 +49,11 @@ let package = Package(
             ]
         ),
         .target(name: "PEXParsers", dependencies: ["PEXCore"]),
+        .target(name: "PEXNative", dependencies: [
+            "PEXCore",
+            .product(name: "LayoutCore", package: "semiconductor-layout"),
+            .product(name: "LayoutVerify", package: "semiconductor-layout"),
+        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md"]),
         .target(name: "PEXPersistence", dependencies: ["PEXCore"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
@@ -72,6 +80,13 @@ let package = Package(
             ],
             resources: [.copy("Fixtures/pex-evidence-packet-v3.json")]
         ),
+        .testTarget(name: "PEXNativeTests", dependencies: [
+            "PEXNative", "PEXCore",
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            .product(name: "LayoutCore", package: "semiconductor-layout"),
+            .product(name: "LayoutTech", package: "semiconductor-layout"),
+            .product(name: "LayoutVerify", package: "semiconductor-layout"),
+        ]),
         .target(
             name: "PEXTestSupport",
             dependencies: [

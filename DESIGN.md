@@ -7,11 +7,16 @@ whose [ElectricalModel](Sources/PEXCore/ElectricalModel/DESIGN.md) child owns SI
 exact-corner admission, calibration identity and applicability. Runtime resolution
 validates supplied models before backend execution; request hashing retains their
 complete encoded meaning. This does not establish native extraction or process trust.
+The [PEXNative](Sources/PEXNative/DESIGN.md) child now provides a bounded numeric
+graph from captured layout facts. Run-backend composition and terminal electrode
+observables remain separate unfinished contracts; graph construction does not
+establish a successful canonical extraction run.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [LSI](../DESIGN.md) | parent | Platform ownership and evidence | Native extraction owner | External completion is not native completion |
 | [PEXCore](Sources/PEXCore/DESIGN.md) | child | Typed request, technology and electrical values | Public extraction inputs | Native model admission is mandatory |
+| [PEXNative](Sources/PEXNative/DESIGN.md) | child | Bounded native numeric graph | Layout-backed calculation | Electrode projection and qualification are separate |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
 | [ToolQualification](../ToolQualification/DESIGN.md) | used by | Raw measured observations | Independent trust decision | PEX does not self-qualify a process |
 
