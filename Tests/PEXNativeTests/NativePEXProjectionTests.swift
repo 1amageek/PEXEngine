@@ -18,8 +18,11 @@ struct NativePEXProjectionTests {
         .init(name: name, position: .init(x: x + 0.5, y: 0.5), size: .init(width: 1, height: 1), layer: fixture.m1, netID: net)
     }
     private func network(_ cell: LayoutCell, children: [LayoutCell] = []) throws -> NativePEXNetwork {
-        try RectilinearPEXCalculator().calculate(snapshot: fixture.snapshot(cell, children: children), technology: fixture.technology(),
-            corner: PEXCorner(id: "tt"), layerNames: fixture.bindings, maximumCellSpanDatabaseUnits: 500)
+        let captured = try fixture.snapshot(cell, children: children)
+        // The fixture resolution is 0.5 micrometer, independently of the native lattice.
+        let span = try #require(Int32(exactly: 0.5 * captured.coordinateUnits.scale.databaseUnitsPerMicrometer))
+        return try RectilinearPEXCalculator().calculate(snapshot: captured, technology: fixture.technology(),
+            corner: PEXCorner(id: "tt"), layerNames: fixture.bindings, maximumCellSpanDatabaseUnits: span)
     }
     private func electrodes(_ network: NativePEXNetwork, terminals: [NodeRef], faces: [[NativePEXElectrodeFace]]? = nil)
         throws -> NativePEXElectrodeNetwork {
@@ -100,8 +103,8 @@ struct NativePEXProjectionTests {
             pins: [pin(0, net: a), pin(2, net: b)]))
         let ports = [terminal("A"), terminal("B")]
         let graph = try electrodes(source, terminals: ports, faces: [
-            [.init(side: .minX, coordinate: 0, begin: 0, end: 1000)],
-            [.init(side: .maxX, coordinate: 3000, begin: 0, end: 1000)]])
+            [.init(side: .minX, coordinate: 0, begin: 0, end: 2000)],
+            [.init(side: .maxX, coordinate: 6000, begin: 0, end: 2000)]])
         let result = try project(graph, netBindings(source) { $0.netID == a ? "A" : "B" })
         #expect(source.snapshot.shortComponentIndices == [0] && result.electrodes.network.snapshot.shortComponentIndices == [0])
         #expect(Set(result.numericNodeReferences.map(\.netName)).count == 1)

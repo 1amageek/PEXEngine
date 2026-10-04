@@ -46,6 +46,32 @@ extension NativePEXCalculation {
             let via = candidates[0]
             guard let bottom = layerIndices[via.bottomLayerName], let top = layerIndices[via.topLayerName],
                   let lower = mesh.layers[bottom].conductor, let upper = mesh.layers[top].conductor else { throw .invalidLayerMapping }
+            // A two-electrode cut law cannot omit another actually contacted selected material.
+            for contact in mesh.snapshot.contacts {
+                try mesh.budget.visit(isCancelled)
+                guard mesh.snapshot.footprints.indices.contains(contact.firstFootprint),
+                      mesh.snapshot.footprints.indices.contains(contact.secondFootprint) else { throw .inconsistentSnapshot }
+                let first = mesh.snapshot.footprints[contact.firstFootprint]
+                let second = mesh.snapshot.footprints[contact.secondFootprint]
+                let cutIndex: Int, materialIndex: Int
+                if first.isCut && first.layer == mesh.layers[seed.layer].id {
+                    cutIndex = contact.firstFootprint; materialIndex = contact.secondFootprint
+                } else if second.isCut && second.layer == mesh.layers[seed.layer].id {
+                    cutIndex = contact.secondFootprint; materialIndex = contact.firstFootprint
+                } else { continue }
+                let cut = mesh.snapshot.footprints[cutIndex], material = mesh.snapshot.footprints[materialIndex]
+                guard !material.isCut, mesh.snapshot.conductiveLayers.contains(material.layer),
+                      material.layer != mesh.layers[bottom].id, material.layer != mesh.layers[top].id,
+                      cut.band.minX < mesh.x[x1], cut.band.maxX > mesh.x[x0],
+                      cut.band.minY < mesh.y[y1], cut.band.maxY > mesh.y[y0] else { continue }
+                try mesh.budget.visit(isCancelled)
+                let hasContact: Bool
+                do {
+                    hasContact = try mesh.snapshot.hasElectricalContact(footprintAt: cutIndex,
+                        with: mesh.snapshot, footprintAt: materialIndex)
+                } catch { throw .inconsistentSnapshot }
+                guard !hasContact else { throw .ambiguousCutModel }
+            }
             let component = mesh.cells[seed]!.componentIndex
             // Check complete electrodes before emitting any per-cut operator.
             for key in group {

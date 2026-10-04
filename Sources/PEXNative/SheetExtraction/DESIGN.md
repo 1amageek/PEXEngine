@@ -62,6 +62,19 @@ node connects each contacted metal cell with `Rcut / 2 * cutArea / contactArea`,
 preserving total per-cut conductance. Partial contact, conflicting/unknown definitions,
 nonrectangular cut regions and ambiguous raw-cut model selection fail explicitly.
 
+The capture contract permits one cut/top landing with alternative bottom materials.
+Those alternatives conduct only at actual positive-area incidence. PEX retains the
+selected model's exact conductor set, and its current cut law has exactly one modeled
+bottom/top pair. Before emitting a cut operator, every actual captured contact for
+that cut must belong to that modeled pair. An additional selected material with
+actual electrical contact fails with `ambiguousCutModel`; it cannot disappear from
+the numeric network. This admission uses public footprint/contact facts and
+`LayoutConductorSnapshot.hasElectricalContact`, never capture adjacency internals.
+The snapshot must already be admitted by the lower selected-topology contract.
+Unselected geometry lies outside this admitted numerical input; edge-only or
+nonincident selected material does not constitute an additional cut contact. Contact probes are charged to the
+existing aggregate work budget. No electrical equation or second topology is added.
+
 Coplanar coupling pairs nearest exposed opposing edges along each grid row/column;
 metal in the gap screens more distant edges. Interlayer plate coupling uses adjacent
 occupied metal planes in each projected cell; intermediate metal screens deeper planes.
@@ -98,5 +111,10 @@ independent cut conductance, visible plate/sidewall C, shielding, floating/islan
 pin incidence, exact corner/units, deterministic mesh and typed limits/cancellation.
 Mesh/physics changes invalidate native graph evidence; backend terminal projection and
 qualification additionally require their own end-to-end and independent evidence.
+`NativePEXContactAdmissionTests` prepares the real selected configuration, captures
+same-cut/same-top alternative contacts, checks public actual-contact queries and runs
+the calculator. Metal-only selection preserves the analytical cut R and ground C;
+selected third-material positive incidence rejects without publishing a network,
+while edge-only incidence leaves that material as a separate captured component.
 
 `standardOASISSignedCapsPreserveAnalyticalRC` enters through LayoutIO using independent standard bytes, then actual conductor capture and numeric calculation. Signed endpoint retention and refined units must reproduce the analytical rectangle capacitance and sheet operators. This does not qualify complete terminal resistance, native run composition or a foundry process.

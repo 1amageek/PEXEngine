@@ -221,7 +221,9 @@ struct NativePEXCalculationTests {
 
     @Test func pinAcrossIslandsDoesNotAddResistorsOrChangeCapturedOpen() throws {
         let pin = LayoutPin(name: "P", position: .init(x: 2, y: 0.5), size: .init(width: 4, height: 1), layer: fixture.m1, netID: UUID())
-        let result = try network(LayoutCell(name: "PIN", shapes: [shape(fixture.m1), shape(fixture.m1, 3)], pins: [pin]))
+        let result = try network(LayoutCell(name: "PIN", shapes: [shape(fixture.m1), shape(fixture.m1, 3)], pins: [pin]), span: 2_000)
+        #expect(result.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer == 2_000)
+        #expect(abs(result.metersPerDatabaseUnit - 0.5e-9) <= (0.5e-9).ulp)
         #expect(result.nodes.count == 2 && result.resistors.isEmpty)
         #expect(result.pinContacts.count == 1 && result.pinContacts[0].nodeIndices.count == 2)
         #expect(result.snapshot.opens.count == 1 && result.snapshot.components.count == 2)

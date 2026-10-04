@@ -30,6 +30,8 @@ struct NativePEXConfigurationTests {
         #expect(decoded == config && decoded.captureLimits.geometryLimits == config.captureLimits.geometryLimits)
         let prepared = try LayoutPEXInputPreparer().prepare(document: imported, topCell: "TOP", configuration: decoded)
         #expect(prepared.snapshot.hierarchy.shapes.count == 1 && prepared.snapshot.pins.count == 2)
+        #expect(prepared.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer == 2000)
+        #expect(prepared.snapshot.hierarchy.units.scale.databaseUnitsPerMicrometer == 1000)
         #expect(prepared.snapshot.hierarchy.rootCellID == imported.cells.first?.id)
         let graph = try project(prepared)
         #expect(graph.electrodes.network.nodes.count == 1 && graph.electrodes.network.resistors.isEmpty)
@@ -54,7 +56,7 @@ struct NativePEXConfigurationTests {
             NativePEXElectrodeBinding(pinIndex: index,
                 terminal: .init(netName: NetName("U\(index / 2)/SIGNAL"), nodeName: NodeName(index % 2 == 0 ? "A" : "B")),
                 faces: [.init(side: index % 2 == 0 ? .minX : .maxX,
-                              coordinate: Int32((index / 2) * 3000 + (index % 2) * 1000), begin: 0, end: 1000)])
+                              coordinate: Int32((index / 2) * 6000 + (index % 2) * 2000), begin: 0, end: 2000)])
         }
         schema["netBindings"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(bindings))
         schema["electrodeBindings"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(electrodes))
@@ -158,7 +160,7 @@ struct NativePEXConfigurationTests {
         source.cells[0].shapes = [LayoutShape(layer: fixture.m1, geometry: .path(.init(
             points: [.init(x: 0, y: 0), .init(x: 1, y: 0)], width: 0.1, endCap: .truncate)))]
         #expect(throws: NativePEXInputError.coordinateUnitsMismatch) {
-            try LayoutPEXInputPreparer().prepare(document: source, topCell: "TOP", configuration: configuration())
+            try LayoutPEXInputPreparer().prepare(document: source, topCell: "TOP", configuration: configuration(expectedCoordinateUnits: .defaultUnits))
         }
     }
 
@@ -192,7 +194,7 @@ struct NativePEXConfigurationTests {
             labels: [LayoutLabel(text: "A", position: .init(x: 0.5, y: 0.5), layer: fixture.m1)])
         return LayoutDocument(name: "native-schema", cells: [cell], topCellID: cell.id)
     }
-    private func configuration(pins: [NativePEXPinDefinition]? = nil) throws -> NativePEXConfiguration {
+    private func configuration(pins: [NativePEXPinDefinition]? = nil, expectedCoordinateUnits: LayoutUnits? = nil) throws -> NativePEXConfiguration {
         let net = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
         return try NativePEXConfiguration(layoutTechnology: .standard(), layers: [
             .init(layerID: fixture.m1, electricalName: "M1", isConductive: true),
@@ -202,9 +204,9 @@ struct NativePEXConfigurationTests {
                 position: .init(x: 0.5, y: 0.5), size: .init(width: 1, height: 1), layer: fixture.m1, netID: net)) },
             netBindings: [.init(occurrenceIndex: 0, netID: net, netName: NetName("SIGNAL"))],
             electrodeBindings: [
-                .init(pinIndex: 0, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("A")), faces: [.init(side: .minX, coordinate: 0, begin: 0, end: 1000)]),
-                .init(pinIndex: 1, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("B")), faces: [.init(side: .maxX, coordinate: 1000, begin: 0, end: 1000)])],
-            expectedCoordinateUnits: .defaultUnits, maximumCellSpanDatabaseUnits: 1000,
+                .init(pinIndex: 0, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("A")), faces: [.init(side: .minX, coordinate: 0, begin: 0, end: 2000)]),
+                .init(pinIndex: 1, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("B")), faces: [.init(side: .maxX, coordinate: 2000, begin: 0, end: 2000)])],
+            expectedCoordinateUnits: expectedCoordinateUnits ?? LayoutUnits(scale: try .init(databaseUnitsPerMicrometer: 2000)), maximumCellSpanDatabaseUnits: 2000,
             calculationLimits: .init(maximumMeshCells: 1), electrodeLimits: .init(maximumContacts: 2), projectionLimits: .init(maximumNodes: 3))
     }
     private func project(_ prepared: NativePEXPreparedInput) throws -> NativePEXProjection {

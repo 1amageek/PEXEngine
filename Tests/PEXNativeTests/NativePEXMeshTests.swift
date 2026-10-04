@@ -53,18 +53,22 @@ struct NativePEXMeshTests {
 
     @Test func pinLabelsKeepDisconnectedIslandsSeparate() throws {
         let pin = LayoutPin(name: "P", position: .init(x: 2, y: 0.5), size: .init(width: 4, height: 1), layer: fixture.m1, netID: UUID())
-        let result = try fixture.mesh(LayoutCell(name: "PIN", shapes: [fixture.rect(0, 0, 1, 1), fixture.rect(3, 0, 1, 1)], pins: [pin]))
+        let result = try fixture.mesh(LayoutCell(name: "PIN", shapes: [fixture.rect(0, 0, 1, 1), fixture.rect(3, 0, 1, 1)], pins: [pin]), span: 2_000)
         #expect(result.cells.count == 2 && result.pinContacts[0].count == 2)
         #expect(Set(result.pinContacts[0].compactMap { result.cells[$0]?.componentIndex }).count == 2)
         #expect(result.snapshot.opens.count == 1)
+        #expect(result.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer == 2_000)
+        #expect(result.snapshot.hierarchy.units.scale.databaseUnitsPerMicrometer == 1_000)
     }
 
     @Test func edgeAndCornerPinAnnotationsDoNotBecomePhysicalContacts() throws {
         let edge = LayoutPin(name: "EDGE", position: .init(x: 1.5, y: 0.5), size: .init(width: 1, height: 1), layer: fixture.m1)
         let corner = LayoutPin(name: "CORNER", position: .init(x: 1.5, y: 1.5), size: .init(width: 1, height: 1), layer: fixture.m1)
-        let result = try fixture.mesh(LayoutCell(name: "PINS", shapes: [fixture.rect(0, 0, 1, 1)], pins: [edge, corner]))
+        let result = try fixture.mesh(LayoutCell(name: "PINS", shapes: [fixture.rect(0, 0, 1, 1)], pins: [edge, corner]), span: 2_000)
         #expect(result.pinContacts.map(\.count) == [0, 0])
         #expect(result.cells.count == 1)
+        #expect(result.snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer == 2_000)
+        #expect(result.snapshot.hierarchy.units.scale.databaseUnitsPerMicrometer == 1_000)
     }
 
     @Test func separateLayersNeverMergeTheirCells() throws {

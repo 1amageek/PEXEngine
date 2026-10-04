@@ -11,12 +11,16 @@ struct NativePEXElectrodeTests {
     private let fixture = NativePEXTestFixture()
     private func terminal(_ name: String) -> NodeRef { .init(netName: NetName("SIGNAL"), nodeName: NodeName(name)) }
     private func binding(_ index: Int, side: NativePEXElectrodeFace.Side, coordinate: Int32,
-                         begin: Int32 = 0, end: Int32 = 1000) -> NativePEXElectrodeBinding {
+                         begin: Int32 = 0, end: Int32 = 2000) -> NativePEXElectrodeBinding {
         .init(pinIndex: index, terminal: terminal(index == 0 ? "A" : "B"),
               faces: [.init(side: side, coordinate: coordinate, begin: begin, end: end)])
     }
-    private func network(_ cell: LayoutCell, span: Int32 = 1000, technology: TechnologyIR? = nil) throws -> NativePEXNetwork {
-        try RectilinearPEXCalculator().calculate(snapshot: fixture.snapshot(cell), technology: technology ?? fixture.technology(),
+    private func network(_ cell: LayoutCell, span: Int32 = 2000, technology: TechnologyIR? = nil) throws -> NativePEXNetwork {
+        let captured = try fixture.snapshot(cell)
+        // These fixtures all contain selected centered pins: one native unit is 0.5 nm.
+        #expect(captured.coordinateUnits.scale.databaseUnitsPerMicrometer == 2000)
+        #expect(captured.hierarchy.units.scale.databaseUnitsPerMicrometer == 1000)
+        return try RectilinearPEXCalculator().calculate(snapshot: captured, technology: technology ?? fixture.technology(),
             corner: PEXCorner(id: "tt"), layerNames: fixture.bindings, maximumCellSpanDatabaseUnits: span)
     }
     private func rectangle(length: Double = 3, width: Double = 1, segmentedPins: Bool = false) -> LayoutCell {
@@ -36,7 +40,7 @@ struct NativePEXElectrodeTests {
     @Test func oneCellNeedsTwoHalfCellContactsForFullTerminalResistance() throws {
         let source = try network(rectangle(length: 1))
         #expect(source.nodes.count == 1 && source.resistors.isEmpty)
-        let output = try build(source, [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 1000)])
+        let output = try build(source, [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 2000)])
         #expect(output.contacts.count == 2 && output.contacts.allSatisfy { abs($0.ohms - 0.01) < 1e-15 })
         #expect(abs(try resistance(output) - 0.02) < 1e-14)
         #expect(output.network.nodes == source.nodes && output.network.resistors == source.resistors && output.network.capacitors == source.capacitors)
@@ -44,9 +48,9 @@ struct NativePEXElectrodeTests {
 
     @Test func analyticalTerminalResistanceSurvivesNonuniformAndRefinedMeshes() throws {
         for segmented in [false, true] {
-            for span: Int32 in [1000, 500, 250] {
+            for span: Int32 in [2000, 1000, 500] {
                 let output = try build(network(rectangle(segmentedPins: segmented), span: span),
-                    [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 3000)])
+                    [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 6000)])
                 #expect(abs(try resistance(output) - 0.06) < 1e-12)
                 #expect(output.ports[0].componentIndex == output.ports[1].componentIndex)
             }
@@ -54,17 +58,17 @@ struct NativePEXElectrodeTests {
     }
 
     @Test func yNormalElectrodesUseTheCorrectLengthAndWidth() throws {
-        let output = try build(network(rectangle(length: 1, width: 3), span: 500),
-            [binding(0, side: .minY, coordinate: 0), binding(1, side: .maxY, coordinate: 3000)])
+        let output = try build(network(rectangle(length: 1, width: 3), span: 1000),
+            [binding(0, side: .minY, coordinate: 0), binding(1, side: .maxY, coordinate: 6000)])
         #expect(abs(try resistance(output) - 0.06) < 1e-12)
     }
 
     @Test func adjacentFaceFragmentsAreParallelContactsWithoutDuplicateCoverage() throws {
         let source = try network(rectangle(length: 1))
         let a = NativePEXElectrodeBinding(pinIndex: 0, terminal: terminal("A"), faces: [
-            .init(side: .minX, coordinate: 0, begin: 0, end: 500),
-            .init(side: .minX, coordinate: 0, begin: 500, end: 1000)])
-        let result = try build(source, [a, binding(1, side: .maxX, coordinate: 1000)])
+            .init(side: .minX, coordinate: 0, begin: 0, end: 1000),
+            .init(side: .minX, coordinate: 0, begin: 1000, end: 2000)])
+        let result = try build(source, [a, binding(1, side: .maxX, coordinate: 2000)])
         #expect(result.contacts.count == 3)
         #expect(abs(try resistance(result) - 0.02) < 1e-14)
     }
@@ -100,14 +104,14 @@ struct NativePEXElectrodeTests {
         #expect(source.snapshot.shortComponentIndices == [0])
         let output = try build(source, [binding(0, side: .minX, coordinate: 0),
             .init(pinIndex: 1, terminal: .init(netName: NetName("OTHER"), nodeName: NodeName("B")),
-                  faces: [.init(side: .maxX, coordinate: 3000, begin: 0, end: 1000)])])
+                  faces: [.init(side: .maxX, coordinate: 6000, begin: 0, end: 2000)])])
         #expect(output.network.snapshot.shortComponentIndices == [0] && output.ports.count == 2)
         #expect(abs(try resistance(output) - 0.06) < 1e-12)
     }
 
     @Test func missingDuplicateAndEmptyBindingsFail() throws {
         let source = try network(rectangle(length: 1))
-        let a = binding(0, side: .minX, coordinate: 0), b = binding(1, side: .maxX, coordinate: 1000)
+        let a = binding(0, side: .minX, coordinate: 0), b = binding(1, side: .maxX, coordinate: 2000)
         #expect(throws: NativePEXElectrodeError.missingBinding(pinIndex: 1)) { try build(source, [a]) }
         #expect(throws: NativePEXElectrodeError.invalidBinding(pinIndex: 0)) { try build(source, [a, a, b]) }
         #expect(throws: NativePEXElectrodeError.duplicateTerminal) {
@@ -119,14 +123,14 @@ struct NativePEXElectrodeTests {
     }
 
     @Test func interiorWrongSideAndUncoveredFacesFailAtomically() throws {
-        let source = try network(rectangle(length: 1), span: 500)
-        for face in [NativePEXElectrodeFace(side: .minX, coordinate: 500, begin: 0, end: 1000),
-                     .init(side: .maxX, coordinate: 0, begin: 0, end: 1000),
-                     .init(side: .minX, coordinate: 0, begin: -1, end: 1000)] {
+        let source = try network(rectangle(length: 1), span: 1000)
+        for face in [NativePEXElectrodeFace(side: .minX, coordinate: 1000, begin: 0, end: 2000),
+                     .init(side: .maxX, coordinate: 0, begin: 0, end: 2000),
+                     .init(side: .minX, coordinate: 0, begin: -2, end: 2000)] {
             let builder = RectilinearPEXElectrodeBuilder()
             var output: NativePEXElectrodeNetwork?
             #expect(throws: NativePEXElectrodeError.uncoveredFace(pinIndex: 0, faceIndex: 0)) {
-                output = try builder.build(network: source, bindings: [.init(pinIndex: 0, terminal: terminal("A"), faces: [face]), binding(1, side: .maxX, coordinate: 1000)])
+                output = try builder.build(network: source, bindings: [.init(pinIndex: 0, terminal: terminal("A"), faces: [face]), binding(1, side: .maxX, coordinate: 2000)])
             }
             #expect(output == nil)
         }
@@ -137,7 +141,7 @@ struct NativePEXElectrodeTests {
         cell.pins[0].position = .init(x: 0.5, y: 0.5); cell.pins[0].size = .init(width: 0.5, height: 1)
         let source = try network(cell)
         #expect(throws: NativePEXElectrodeError.uncoveredFace(pinIndex: 0, faceIndex: 0)) {
-            try build(source, [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 1000)])
+            try build(source, [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 2000)])
         }
     }
 
@@ -145,7 +149,7 @@ struct NativePEXElectrodeTests {
         let source = try network(rectangle(length: 1))
         let a = binding(0, side: .minX, coordinate: 0)
         #expect(throws: NativePEXElectrodeError.overlappingElectrodes(firstPinIndex: 0, secondPinIndex: 0)) {
-            try build(source, [.init(pinIndex: 0, terminal: a.terminal, faces: a.faces + a.faces), binding(1, side: .maxX, coordinate: 1000)])
+            try build(source, [.init(pinIndex: 0, terminal: a.terminal, faces: a.faces + a.faces), binding(1, side: .maxX, coordinate: 2000)])
         }
         #expect(throws: NativePEXElectrodeError.overlappingElectrodes(firstPinIndex: 0, secondPinIndex: 1)) {
             try build(source, [a, binding(1, side: .minX, coordinate: 0)])
@@ -154,7 +158,7 @@ struct NativePEXElectrodeTests {
 
     @Test func deterministicBindingsAndResourceAdmission() throws {
         let source = try network(rectangle(length: 1))
-        let bindings = [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 1000)]
+        let bindings = [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 2000)]
         let a = try build(source, bindings), b = try build(source, bindings.reversed())
         #expect(a.ports == b.ports && a.contacts == b.contacts)
         for (limits, error) in [(NativePEXElectrodeLimits(maximumInputRecords: 0), NativePEXElectrodeError.limitExceeded(.inputRecords)),
@@ -170,10 +174,10 @@ struct NativePEXElectrodeTests {
     }
 
     @Test func cancellationAfterConstructionStartsPublishesNothing() throws {
-        let source = try network(rectangle(), span: 250), builder = RectilinearPEXElectrodeBuilder()
+        let source = try network(rectangle(), span: 500), builder = RectilinearPEXElectrodeBuilder()
         var checks = 0, output: NativePEXElectrodeNetwork?
         #expect(throws: NativePEXElectrodeError.cancelled) {
-            output = try builder.build(network: source, bindings: [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 3000)], isCancelled: {
+            output = try builder.build(network: source, bindings: [binding(0, side: .minX, coordinate: 0), binding(1, side: .maxX, coordinate: 6000)], isCancelled: {
                 checks += 1; return checks == 70
             })
         }
@@ -182,7 +186,7 @@ struct NativePEXElectrodeTests {
 
     @Test func identifierBytesAreAdmittedBeforeValidationAndHashing() throws {
         let source = try network(rectangle(length: 1)), builder = RectilinearPEXElectrodeBuilder()
-        let b = binding(1, side: .maxX, coordinate: 1000)
+        let b = binding(1, side: .maxX, coordinate: 2000)
         for name in [String(repeating: "N", count: 1024), String(repeating: " ", count: 1024),
                      String(repeating: "\u{301}", count: 1024)] {
             let a = NativePEXElectrodeBinding(pinIndex: 0,
@@ -205,8 +209,8 @@ struct NativePEXElectrodeTests {
 
     @Test func invalidIntervalsAndLateContactLimitPublishNothing() throws {
         let source = try network(rectangle(length: 1)), builder = RectilinearPEXElectrodeBuilder()
-        let a = binding(0, side: .minX, coordinate: 0), b = binding(1, side: .maxX, coordinate: 1000)
-        for end: Int32 in [0, -1] {
+        let a = binding(0, side: .minX, coordinate: 0), b = binding(1, side: .maxX, coordinate: 2000)
+        for end: Int32 in [0, -2] {
             #expect(throws: NativePEXElectrodeError.invalidFace(pinIndex: 0, faceIndex: 0)) {
                 try build(source, [binding(0, side: .minX, coordinate: 0, end: end), b])
             }
@@ -240,8 +244,8 @@ struct NativePEXElectrodeTests {
         #expect(source.nodes.count == 1 && source.resistors.isEmpty)
         var output: NativePEXElectrodeNetwork?
         #expect(throws: NativePEXElectrodeError.numericFailure) {
-            output = try build(source, [binding(0, side: .minX, coordinate: 0, end: 1_000_000_000),
-                binding(1, side: .maxX, coordinate: 1, end: 1_000_000_000)])
+            output = try build(source, [binding(0, side: .minX, coordinate: 0, end: 2_000_000_000),
+                binding(1, side: .maxX, coordinate: 2, end: 2_000_000_000)])
         }
         #expect(output == nil)
     }

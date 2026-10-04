@@ -29,6 +29,10 @@ flowchart LR
 
 ## Contracts and Invariants
 The schema is version 1; unsupported versions, nonpositive mesh span, negative lower ceilings, duplicate/unknown physical layer mappings, ambiguous standard layer numbers, invalid/duplicate supplemental pin identities/names, collapsed floating-point pin extents, invalid face intervals and duplicate terminal/net mappings fail at construction and decoding. Metadata records and identifier bytes inspected by schema/preparation have one finite aggregate ceiling. Lower technology records and shape geometry are bounded separately by forwarded capture ceilings; bounded serialized configuration bytes are owned by NativeInputCapture. Defaults inherit lower owner defaults and represent admission policy, not qualified scale. Every lower capture field is serialized and forwarded unchanged. Configuration stores no conductor shapes or guessed net connectivity.
+`conductiveLayers` is exactly the layer bindings marked conductive. Capture projects
+onto that selected material set, and SheetExtraction admits it only when it equals
+the conductor set in the selected electrical model. Unselected material geometry is
+outside this numerical input; registered contact alternatives do not expand it.
 Pin positions/sizes use LayoutCore micrometer semantics and are transformed by the existing hierarchy owner. Faces/mesh span use the captured conductor coordinate units, checked against the explicit expected scale; raw source units are never substituted. Occurrence/pin indices refer to deterministic captured ordering under exact input bytes and measured backend code identity. Net label annotation does not connect islands; lower contracts retain opens/shorts.
 
 ## Runtime Flows
