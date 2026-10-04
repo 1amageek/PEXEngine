@@ -1,6 +1,7 @@
 import Foundation
 import CircuiteFoundation
 import LayoutCore
+import LayoutIO
 import LayoutTech
 import LayoutVerify
 import PEXCore
@@ -338,6 +339,30 @@ struct NativePEXCalculationTests {
         #expect(close(capacitance(pathResult, .ground), capacitance(rectResult, .ground)))
         #expect(pathResult.resistors == rectResult.resistors)
         #expect(pathResult.nodes.count == rectResult.nodes.count)
+    }
+
+    @Test func standardOASISSignedCapsPreserveAnalyticalRC() throws {
+        var bytes = Data("%SEMI-OASIS\r\n".utf8)
+        bytes.append(contentsOf: [1, 3, 49, 46, 48, 0, 232, 7, 0])
+        bytes.append(Data(repeating: 0, count: 12))
+        // Width 1 um, begin +2 um, end -0.5 um: exact conductor [-2,1.5] x [-0.5,0.5].
+        bytes.append(contentsOf: [14, 1, 67, 22, 251, 1, 0, 244, 3, 15, 160, 31, 233, 7, 0, 1, 160, 31, 0, 0])
+        bytes.append(contentsOf: [2, 252, 1])
+        bytes.append(Data(repeating: 0, count: 252))
+        bytes.append(0)
+        let document = try MaskDataFormatConverter(tech: .standard()).importFromData(bytes)
+        let snapshot = try LayoutConnectivityExtractor().captureConductors(document: document, tech: .standard(), conductiveLayers: [fixture.m1, fixture.m2])
+        let calculator: any NativePEXCalculating = RectilinearPEXCalculator()
+        let result = try calculator.calculate(snapshot: snapshot, technology: fixture.technology(), corner: PEXCorner(id: "tt"),
+            layerNames: fixture.bindings, maximumCellSpanDatabaseUnits: 1000, limits: .default, isCancelled: { Task.isCancelled })
+        let reference = try network(LayoutCell(name: "RECT", shapes: [fixture.rect(-2, -0.5, 3.5, 1)]), span: 500)
+        // 3.5 um^2 area and 9 um perimeter under the fixture's declared SI model.
+        #expect(close(capacitance(result, .ground), 1.25e-15))
+        #expect(close(capacitance(result, .ground), capacitance(reference, .ground)))
+        #expect(result.resistors == reference.resistors)
+        #expect(result.nodes.count == reference.nodes.count)
+        #expect(close(result.metersPerDatabaseUnit, 0.5e-9))
+        #expect(result.snapshot.components.count == 1)
     }
 
     @Test func oddWidthStrokeHasAnalyticalRCWithoutHalfWidthRounding() throws {

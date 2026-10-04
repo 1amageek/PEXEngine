@@ -96,3 +96,5 @@ independent cut conductance, visible plate/sidewall C, shielding, floating/islan
 pin incidence, exact corner/units, deterministic mesh and typed limits/cancellation.
 Mesh/physics changes invalidate native graph evidence; backend terminal projection and
 qualification additionally require their own end-to-end and independent evidence.
+
+`standardOASISSignedCapsPreserveAnalyticalRC` enters through LayoutIO using independent standard bytes, then actual conductor capture and numeric calculation. Signed endpoint retention and refined units must reproduce the analytical rectangle capacitance and sheet operators. This does not qualify complete terminal resistance, native run composition or a foundry process.

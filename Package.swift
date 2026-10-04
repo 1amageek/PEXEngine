@@ -30,7 +30,7 @@ let package = Package(
         circuiteFoundationDependency,
         signoffToolSupportDependency,
         .package(url: "https://github.com/1amageek/semiconductor-layout.git",
-                 revision: "ff8c4dc5dc8f72a5aa92c46e0cacf5140dd5375d"),
+                 revision: "23037c0b5c7cb92c671c03f9436ae3feca1321a1"),
     ],
     targets: [
         .target(
@@ -83,6 +83,7 @@ let package = Package(
         .testTarget(name: "PEXNativeTests", dependencies: [
             "PEXNative", "PEXCore",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            .product(name: "LayoutIO", package: "semiconductor-layout"),
             .product(name: "LayoutCore", package: "semiconductor-layout"),
             .product(name: "LayoutTech", package: "semiconductor-layout"),
             .product(name: "LayoutVerify", package: "semiconductor-layout"),
