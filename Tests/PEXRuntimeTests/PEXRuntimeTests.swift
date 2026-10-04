@@ -128,7 +128,7 @@ struct PEXRuntimeTests {
 
         let tech = TechnologyIR(
             processName: "test_process",
-            stack: [TechnologyLayer(name: "M1", order: 0, thickness: 0.1, material: "copper", resistivity: 1.7e-8)],
+            stack: [TechnologyLayer(name: "M1", order: 0, material: "copper")],
             logicalToPhysicalLayerMap: [:],
             vias: [],
             defaultExtractionRules: .default,
@@ -273,7 +273,7 @@ struct PEXRuntimeTests {
 
         let tech = TechnologyIR(
             processName: "test_process",
-            stack: [TechnologyLayer(name: "M1", order: 0, thickness: 0.1, material: "copper", resistivity: 1.7e-8)],
+            stack: [TechnologyLayer(name: "M1", order: 0, material: "copper")],
             logicalToPhysicalLayerMap: [:],
             vias: [],
             defaultExtractionRules: .default,
@@ -330,7 +330,7 @@ struct PEXRuntimeTests {
 
         let tech = TechnologyIR(
             processName: "test_process",
-            stack: [TechnologyLayer(name: "M1", order: 0, thickness: 0.1, material: "copper", resistivity: 1.7e-8)],
+            stack: [TechnologyLayer(name: "M1", order: 0, material: "copper")],
             logicalToPhysicalLayerMap: [:],
             vias: [],
             defaultExtractionRules: .default,
@@ -1040,7 +1040,7 @@ struct PEXRuntimeTests {
     private func makeTestTech() -> TechnologyIR {
         TechnologyIR(
             processName: "test_process",
-            stack: [TechnologyLayer(name: "M1", order: 0, thickness: 0.1, material: "copper", resistivity: 1.7e-8)],
+            stack: [TechnologyLayer(name: "M1", order: 0, material: "copper")],
             logicalToPhysicalLayerMap: [:],
             vias: [],
             defaultExtractionRules: .default,

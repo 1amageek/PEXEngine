@@ -1,11 +1,29 @@
 # PEXEngine Design Contract
 
-## Responsibility
+## Related Designs
+
+The public native electrical input contract is owned by [PEXCore](Sources/PEXCore/DESIGN.md),
+whose [ElectricalModel](Sources/PEXCore/ElectricalModel/DESIGN.md) child owns SI units,
+exact-corner admission, calibration identity and applicability. Runtime resolution
+validates supplied models before backend execution; request hashing retains their
+complete encoded meaning. This does not establish native extraction or process trust.
+
+| Design | Relationship | Contract Used | Summary | Cautions |
+|---|---|---|---|---|
+| [LSI](../DESIGN.md) | parent | Platform ownership and evidence | Native extraction owner | External completion is not native completion |
+| [PEXCore](Sources/PEXCore/DESIGN.md) | child | Typed request, technology and electrical values | Public extraction inputs | Native model admission is mandatory |
+| [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
+| [ToolQualification](../ToolQualification/DESIGN.md) | used by | Raw measured observations | Independent trust decision | PEX does not self-qualify a process |
+
+## Purpose and Scope
 
 PEXEngine validates extraction requests, resolves technology and process
 profiles, executes one or more extraction backends, parses output into
 canonical `ParasiticIR`, validates the IR, and retains immutable run artifacts
 and lineage.
+This package is a direct child of the LSI system; its public Core child is linked above.
+
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -41,7 +59,7 @@ timestamps, so no caller-side projection can invent execution identity.
 `PEXRunRequest.designObjectReference()` provides a stable top-cell identity;
 corner IDs and parasitic nodes remain PEX domain concepts.
 
-## Responsibility boundary
+## Responsibilities and Boundaries
 
 | Concern | Owner |
 |---|---|
@@ -52,7 +70,9 @@ corner IDs and parasitic nodes remain PEX domain concepts.
 Foundation evidence is an interchange boundary, not a replacement for the
 PEX manifest or the canonical parasitic IR.
 
-## OpenRCX execution contract
+## Contracts and Invariants
+
+### OpenRCX execution contract
 
 `OpenRCXPEXAdapter` directly implements `PEXExtracting`. It does not convert
 GDSII/OASIS to DEF or infer PDK views. The request must supply routed DEF,
@@ -107,7 +127,9 @@ flow gate, or authorize release. Those decisions belong to `ToolQualification`,
 | Magic primary and Magic comparison | Regression observation only |
 | Independent implementations and correlated reports | Input for ToolQualification evaluation |
 
-## Captured input execution contract
+## Runtime Flows
+
+### Captured input execution contract
 
 `PEXPersistence.PEXArtifactRecorder.capturedRequest` is the common boundary
 for initial execution and request recording. It requires available layout,
@@ -126,6 +148,14 @@ uses process identity and semantic file roles with content digests; temporary
 capture locations are availability, not process identity. `pdkRoot` remains an
 explicit backend discovery context; capturing declared files does not qualify
 undeclared transitive includes or arbitrary files read by an external tool.
+
+## Verification and Change Impact
+
+Electrical model admission changes affect inline/JSON resolution, direct native model
+selection and request identity. The local suites in the Core child establish those
+contracts; captured execution and persistence evidence below protects upper composition.
+External-deck metadata can still describe an external backend without a native model.
+Native extraction, calibration byte availability and process trust remain separate work.
 
 | Invariant | Behavioral evidence owner |
 |---|---|

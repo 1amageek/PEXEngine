@@ -30,12 +30,6 @@ public struct TechnologyIRValidator: Sendable {
             } else if !layerOrders.insert(layer.order).inserted {
                 issues.append(issue("layer_order_duplicate", "Technology stack order \(layer.order) is declared more than once"))
             }
-            if let thickness = layer.thickness, !thickness.isFinite || thickness <= 0 {
-                issues.append(issue("layer_thickness_invalid", "Technology layer '\(name)' thickness must be finite and positive"))
-            }
-            if let resistivity = layer.resistivity, !resistivity.isFinite || resistivity <= 0 {
-                issues.append(issue("layer_resistivity_invalid", "Technology layer '\(name)' resistivity must be finite and positive"))
-            }
         }
 
         for (logical, physical) in technology.logicalToPhysicalLayerMap {
@@ -63,9 +57,6 @@ public struct TechnologyIRValidator: Sendable {
                     issues.append(issue("via_bottom_layer_unknown", "Via '\(name)' bottom layer '\(via.bottomLayer)' is not in the technology stack"))
                 }
             }
-            if let resistance = via.resistance, !resistance.isFinite || resistance < 0 {
-                issues.append(issue("via_resistance_invalid", "Via '\(name)' resistance must be finite and non-negative"))
-            }
         }
 
         if let threshold = technology.defaultExtractionRules.minCapacitanceF,
@@ -75,6 +66,11 @@ public struct TechnologyIRValidator: Sendable {
         if let threshold = technology.defaultExtractionRules.minResistanceOhm,
            !threshold.isFinite || threshold < 0 {
             issues.append(issue("min_resistance_invalid", "Default minimum resistance must be finite and non-negative"))
+        }
+        do {
+            try technology.validateElectricalModels()
+        } catch {
+            issues.append(issue("electrical_model_invalid", "Electrical model admission failed: \(error)"))
         }
         return issues
     }

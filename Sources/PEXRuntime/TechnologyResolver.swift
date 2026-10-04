@@ -5,12 +5,15 @@ public struct TechnologyResolver: Sendable {
     public init() {}
 
     public func resolve(_ input: TechnologyInput) throws -> TechnologyIR {
+        let technology: TechnologyIR
         switch input {
         case .jsonFile(let url):
-            return try resolveJSON(url)
+            technology = try resolveJSON(url)
         case .inline(let ir):
-            return ir
+            technology = ir
         }
+        try technology.validateElectricalModels()
+        return technology
     }
 
     private func resolveJSON(_ url: URL) throws -> TechnologyIR {

@@ -88,8 +88,7 @@ struct PEXCapturedInputExecutionTests {
     }
 
     private func makeTechnology(_ name: String) -> TechnologyIR {
-        TechnologyIR(processName: name, stack: [TechnologyLayer(name: "M1", order: 0, thickness: 1,
-                     material: "metal", resistivity: 1)], logicalToPhysicalLayerMap: [:], vias: [],
+        TechnologyIR(processName: name, stack: [TechnologyLayer(name: "M1", order: 0, material: "metal")], logicalToPhysicalLayerMap: [:], vias: [],
                      defaultExtractionRules: .default, backendHints: [:])
     }
 

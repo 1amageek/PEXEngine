@@ -103,9 +103,7 @@ struct PEXCornerTechnologyTests {
             stack: [TechnologyLayer(
                 name: "met1",
                 order: 1,
-                thickness: 0.35,
-                material: "metal",
-                resistivity: 2.8e-8
+                material: "metal"
             )],
             logicalToPhysicalLayerMap: ["met1": "met1"],
             vias: [],

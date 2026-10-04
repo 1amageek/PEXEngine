@@ -22,7 +22,7 @@
       "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
       "technology": {
         "processName": "sky130A",
-        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "stack": [{"name": "met1", "order": 1, "material": "metal"}],
         "logicalToPhysicalLayerMap": {"met1": "met1"},
         "vias": [],
         "defaultExtractionRules": {"reductionPolicy": "none"},
@@ -46,7 +46,7 @@
       "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
       "technology": {
         "processName": "sky130A",
-        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "stack": [{"name": "met1", "order": 1, "material": "metal"}],
         "logicalToPhysicalLayerMap": {"met1": "met1"},
         "vias": [],
         "defaultExtractionRules": {"reductionPolicy": "none"},
@@ -55,7 +55,7 @@
       "technologyByCorner": {
         "ss": {
           "processName": "sky130B",
-          "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+          "stack": [{"name": "met1", "order": 1, "material": "metal"}],
           "logicalToPhysicalLayerMap": {"met1": "met1"},
           "vias": [],
           "defaultExtractionRules": {"reductionPolicy": "none"},
@@ -88,7 +88,7 @@
       "sourceNetlist": ".subckt pex_plate\n.ends pex_plate\n",
       "technology": {
         "processName": "sky130A",
-        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "stack": [{"name": "met1", "order": 1, "material": "metal"}],
         "logicalToPhysicalLayerMap": {"met1": "met1"},
         "vias": [],
         "defaultExtractionRules": {"reductionPolicy": "none"},
@@ -112,7 +112,7 @@
       "sourceNetlist": ".subckt sky130_fd_sc_hd__inv_1 VPWR VGND A Y\n.ends sky130_fd_sc_hd__inv_1\n",
       "technology": {
         "processName": "sky130A",
-        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "stack": [{"name": "met1", "order": 1, "material": "metal"}],
         "logicalToPhysicalLayerMap": {"met1": "met1"},
         "vias": [],
         "defaultExtractionRules": {"reductionPolicy": "none"},
@@ -142,7 +142,7 @@
       "sourceNetlist": ".subckt sky130_fd_sc_hd__inv_1 VPWR VGND A Y\n.ends sky130_fd_sc_hd__inv_1\n",
       "technology": {
         "processName": "sky130A",
-        "stack": [{"name": "met1", "order": 1, "thickness": 0.35, "material": "metal", "resistivity": 2.8e-8}],
+        "stack": [{"name": "met1", "order": 1, "material": "metal"}],
         "logicalToPhysicalLayerMap": {"met1": "met1"},
         "vias": [],
         "defaultExtractionRules": {"reductionPolicy": "none"},

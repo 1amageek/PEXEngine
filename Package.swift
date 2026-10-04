@@ -35,7 +35,8 @@ let package = Package(
             dependencies: [
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
-            ]
+            ],
+            exclude: ["DESIGN.md", "ElectricalModel/DESIGN.md"]
         ),
         .target(
             name: "PEXAdapters",

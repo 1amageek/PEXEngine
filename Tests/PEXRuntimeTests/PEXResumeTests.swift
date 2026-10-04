@@ -25,7 +25,7 @@ struct PEXResumeTests {
             corners: [PEXCorner(id: "tt"), PEXCorner(id: "ss")],
             technology: .inline(TechnologyIR(
                 processName: "retry-process",
-                stack: [TechnologyLayer(name: "M1", order: 0, thickness: 0.1, material: "metal", resistivity: 1.0)],
+                stack: [TechnologyLayer(name: "M1", order: 0, material: "metal")],
                 logicalToPhysicalLayerMap: [:],
                 vias: [],
                 defaultExtractionRules: .default,
