@@ -66,6 +66,26 @@ corner IDs and parasitic nodes remain PEX domain concepts.
 
 ## Responsibilities and Boundaries
 
+### Native composition requirements and current gaps
+
+The numeric graph is verified independently of the run lifecycle. Native run
+composition must close the following implementation-backed gaps before it can
+be registered as a successful extraction backend. These are integration
+requirements, not evidence that the proposed native run already exists.
+
+| Boundary | Current implementation fact | Owner and required change | Completion evidence |
+|---|---|---|---|
+| Standard layout to geometry | `IRLayoutConverter.convertPath` maps custom extensions to half-width extension; imported text becomes labels, not physical pin contacts | LayoutIO retains admitted standard semantics; native input preparation supplies explicit exact terminal bindings rather than inferring contact from text | Standard-byte round-trip and native geometry tests, including unequal extensions and repeated occurrences |
+| Geometry to numerical state | ConductorCapture rejects paths; SheetExtraction returns cell-center state and pin incidence without electrode conditions | [ConductorCapture](../semiconductor-layout/Sources/LayoutVerify/ConductorCapture/DESIGN.md) owns exact footprint coordinates and their units; [PEXNative](Sources/PEXNative/DESIGN.md) owns numerical state and the eventual terminal projection | Analytical path coverage and terminal resistance; pin regions do not short islands; bounded failure/cancellation |
+| Backend to canonical result | `PEXAdapterExecutionResult` always contains raw files; `PEXOrchestrator.executeSuccessfulCorner` always reparses them; current defaults register only Magic/OpenRCX | PEXCore defines truthful native versus external result/identity contracts; PEXRuntime validates either result through the same artifact and run lifecycle | Native API/CLI execution reaches validated ParasiticIR and retained results without fabricating an external output |
+| Input identity to resume | The recorder captures layout/netlist/technology/profile views; electrical models carry calibration identities whose bytes are not captured by that path | PEXRuntime/PEXPersistence capture and verify every native input and calibration artifact before use; resolution and dependency evidence remain separate from content identity | Removing or mutating original inputs cannot change execution or resume; missing/digest-mismatched calibration bytes fail |
+| Source to physical terminals | `PEXSourceConnectivityChecker` permits leaf-name aliases and reports source-only nodes without failing | Source binding must preserve exact occurrence and terminal identities; name coverage alone cannot establish physical connectivity | Repeated leaf names, missing bindings, opens and shorts cannot yield a proven same-design result |
+
+Each lower contract is designed and behaviorally verified before its composing
+contract is finalized. The existing source-connectivity report is not proof of
+native electrode conditions. Calibration byte retention is not physical
+qualification; independent correlation and ToolQualification still own trust.
+
 | Concern | Owner |
 |---|---|
 | Extraction, parsing, IR, corners, retry, lineage | PEXEngine |
