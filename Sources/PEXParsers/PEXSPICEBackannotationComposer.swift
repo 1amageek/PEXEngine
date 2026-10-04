@@ -37,16 +37,30 @@ public struct PEXSPICEBackannotationComposer: Sendable {
             throw PEXSPICEBackannotationError.subcircuitNameCollision(declaration.name)
         }
         let sourceNodes = sourceNodeAliases(sourceLines)
+        let identity = try PEXSPICEIdentity.read(fragment, cornerID: ir.cornerID)
+        let pinRefs = ir.nets.flatMap { net in
+            net.nodes.filter { $0.kind == .pin }.map { NodeRef(netName: net.name, nodeName: $0.name) }
+        }
+        let pinOwners = Dictionary(grouping: pinRefs, by: { $0.nodeName.value.lowercased() })
         var connectedPorts: [String] = []
         if options.requirePortMatches {
             for port in declaration.ports where port != "0" {
-                guard let sourcePort = sourceNodes[port.lowercased()] else {
-                    throw PEXSPICEBackannotationError.unmatchedSourcePort(port)
+                let original = identity?.nodes[port]?.ref.nodeName.value
+                    ?? (port == identity?.referenceToken ? identity?.referenceName : nil) ?? port
+                guard (pinOwners[original.lowercased()]?.count ?? 0) <= 1,
+                      let sourcePort = sourceNodes[original.lowercased()] else {
+                    throw PEXSPICEBackannotationError.unmatchedSourcePort(original)
                 }
                 connectedPorts.append(sourcePort)
             }
         } else {
-            connectedPorts = declaration.ports.filter { $0 != "0" }
+            connectedPorts = declaration.ports.filter { $0 != "0" }.map { port in
+                identity?.nodes[port]?.ref.nodeName.value
+                    ?? (port == identity?.referenceToken ? identity?.referenceName : nil) ?? port
+            }
+            guard Set(connectedPorts.map { $0.lowercased() }).count == connectedPorts.count else {
+                throw PEXSPICEBackannotationError.unmatchedSourcePort("Ambiguous scoped terminal binding")
+            }
         }
 
         let sourceIdentifiers = sourceElementIdentifiers(sourceLines)

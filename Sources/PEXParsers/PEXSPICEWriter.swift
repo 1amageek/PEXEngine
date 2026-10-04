@@ -15,10 +15,13 @@ public struct PEXSPICEWriter: Sendable {
     }
 
     public func write(_ ir: ParasiticIR) throws -> String {
-        let nodeMap = try makeNodeMap(for: ir)
+        let referenceName = ir.metadata["referenceNodeName"] ?? "0"
+        try validateNodeToken(referenceName, original: referenceName)
+        let referenceToken = referenceName == "0" ? "0" : "PEX_REFERENCE_" + PEXSPICEIdentity.hex(referenceName)
+        let nodeMap = try makeNodeMap(for: ir, referenceToken: referenceToken)
         let elementIDs = try makeElementIDs(for: ir)
         let subcircuit = try makeSubcircuitName(for: ir)
-        let ports = ir.nets
+        var ports = ir.nets
             .flatMap { net in
                 net.nodes.filter { $0.kind == .pin }.map { NodeRef(netName: net.name, nodeName: $0.name) }
             }
@@ -26,8 +29,27 @@ public struct PEXSPICEWriter: Sendable {
             .filter { $0 != "0" }
             .deduplicated()
 
+        if referenceToken != "0" && ir.elements.contains(where: { $0.kind == .capacitor && $0.nodeB == nil }) {
+            ports.append(referenceToken)
+        }
+        var identityNodes: [String: PEXSPICEIdentity.Node] = [:]
+        for net in ir.nets {
+            for node in net.nodes {
+                let ref = NodeRef(netName: net.name, nodeName: node.name)
+                guard let token = nodeMap[ref] else { throw PEXSPICEWriterError.invalidNodeName(node.name.value) }
+                identityNodes[token] = PEXSPICEIdentity.Node(ref: ref, kind: node.kind)
+            }
+        }
+        var kinds: [String: ElementKind] = [:]
+        for element in ir.elements {
+            guard let id = elementIDs[element.id] else { throw PEXSPICEWriterError.invalidElementIdentifier(element.id) }
+            let prefix = element.kind == .resistor ? "R" : element.kind == .inductor ? "L" : "C"
+            kinds["\(prefix)PEX_\(id)"] = element.kind
+        }
+        let identity = PEXSPICEIdentity(nodes: identityNodes, elementKinds: kinds, referenceName: referenceName, referenceToken: referenceToken)
         var lines: [String] = []
         lines.append("* PEX backannotation generated from ParasiticIR \(ir.version)")
+        lines.append(try identity.comment())
         lines.append("* Corner: \(ir.cornerID.value)")
         lines.append("* Units: resistance=ohm capacitance=F inductance=H")
         if options.includeNodeMapComments {
@@ -51,24 +73,24 @@ public struct PEXSPICEWriter: Sendable {
             case .resistor:
                 guard let nodeB = element.nodeB else { throw PEXSPICEWriterError.missingEndpoint(element.id) }
                 value = element.value * resistanceScale(ir.units.resistance)
-                lines.append("RPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(format(value))")
+                lines.append("RPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(try checkedFormat(value, id: element.id))")
             case .capacitor:
                 value = element.value * capacitanceScale(ir.units.capacitance)
                 let nodeB: String
                 if let ref = element.nodeB {
                     nodeB = try nodeToken(for: ref, nodeMap: nodeMap)
                 } else {
-                    nodeB = "0"
+                    nodeB = referenceToken
                 }
-                lines.append("CPEX_\(elementID) \(nodeA) \(nodeB) \(format(value))")
+                lines.append("CPEX_\(elementID) \(nodeA) \(nodeB) \(try checkedFormat(value, id: element.id))")
             case .coupling:
                 guard let nodeB = element.nodeB else { throw PEXSPICEWriterError.missingEndpoint(element.id) }
                 value = element.value * capacitanceScale(ir.units.capacitance)
-                lines.append("CPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(format(value))")
+                lines.append("CPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(try checkedFormat(value, id: element.id))")
             case .inductor:
                 guard let nodeB = element.nodeB else { throw PEXSPICEWriterError.missingEndpoint(element.id) }
                 value = element.value
-                lines.append("LPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(format(value))")
+                lines.append("LPEX_\(elementID) \(nodeA) \(try nodeToken(for: nodeB, nodeMap: nodeMap)) \(try checkedFormat(value, id: element.id))")
             }
         }
 
@@ -104,63 +126,45 @@ public struct PEXSPICEWriter: Sendable {
             guard !base.isEmpty else { throw PEXSPICEWriterError.invalidElementIdentifier(element.id) }
             var candidate = base
             var suffix = 2
-            while !used.insert(candidate).inserted {
+            while !used.insert(candidate.lowercased()).inserted {
                 candidate = "\(base)_\(suffix)"
                 suffix += 1
             }
+            guard result[element.id] == nil else { throw PEXSPICEWriterError.invalidElementIdentifier(element.id) }
             result[element.id] = candidate
         }
         return result
     }
 
-    private func makeNodeMap(for ir: ParasiticIR) throws -> NodeMap {
-        let refs = ir.nets
-            .flatMap { net in net.nodes.map { NodeRef(netName: net.name, nodeName: $0.name) } }
-            .sorted { lhs, rhs in
-                if lhs.netName.value != rhs.netName.value { return lhs.netName.value < rhs.netName.value }
-                return lhs.nodeName.value < rhs.nodeName.value
-            }
+    private func makeNodeMap(for ir: ParasiticIR, referenceToken: String) throws -> NodeMap {
+        let refs = ir.nets.flatMap { net in
+            net.nodes.map { NodeRef(netName: net.name, nodeName: $0.name) }
+        }
+        guard Set(ir.nets.map(\.name)).count == ir.nets.count, Set(refs).count == refs.count else {
+            throw PEXSPICEWriterError.nodeIdentityCollision("Duplicate canonical net or node")
+        }
+        let counts = Dictionary(grouping: refs, by: { $0.nodeName.value.lowercased() }).mapValues(\.count)
         var map: [NodeRef: String] = [:]
-        var tokenOwners: [String: NodeRef] = [:]
-        let pinRefs = Set(ir.nets.flatMap { net in
-            net.nodes.filter { $0.kind == .pin || $0.kind == .ground }.map { NodeRef(netName: net.name, nodeName: $0.name) }
-        })
-        let nameCounts = Dictionary(grouping: refs, by: { $0.nodeName.value }).mapValues(\.count)
-
+        var owners: Set<String> = [referenceToken.lowercased(), "0"]
         for ref in refs {
+            try validateNodeToken(ref.nodeName.value, original: ref.nodeName.value)
+            guard !ref.netName.value.isEmpty else { throw PEXSPICEWriterError.invalidNodeName(ref.netName.value) }
             let raw = ref.nodeName.value
-            let base: String
-            if raw.isEmpty {
-                throw PEXSPICEWriterError.invalidNodeName(raw)
-            } else if raw == "0" || raw.caseInsensitiveCompare("gnd") == .orderedSame {
-                base = "0"
-            } else if pinRefs.contains(ref) && (nameCounts[raw] ?? 0) == 1 {
-                base = raw
-            } else if (nameCounts[raw] ?? 0) == 1 {
-                base = raw
-            } else {
-                base = "PEX_\(sanitizeIdentifier(ref.netName.value))_\(sanitizeIdentifier(raw))"
+            let lower = raw.lowercased()
+            let mustEncode = counts[lower] != 1 || lower == "0" || lower == "gnd"
+                || lower == "gnd!" || lower == "vsubs" || lower.hasPrefix("pex_")
+            let token = mustEncode ? PEXSPICEIdentity.encodedToken(ref) : raw
+            guard owners.insert(token.lowercased()).inserted else {
+                throw PEXSPICEWriterError.nodeIdentityCollision(token)
             }
-            try validateNodeToken(base, original: raw)
-            if let owner = tokenOwners[base], owner != ref {
-                let ownerIsGround = isGround(owner, in: ir)
-                let refIsGround = isGround(ref, in: ir)
-                guard base == "0", ownerIsGround, refIsGround else {
-                    throw PEXSPICEWriterError.nodeIdentityCollision("\(owner.netName.value):\(owner.nodeName.value) and \(ref.netName.value):\(ref.nodeName.value) -> \(base)")
-                }
-            }
-            tokenOwners[base] = ref
-            map[ref] = base
+            map[ref] = token
         }
         return NodeMap(values: map)
     }
 
     private func nodeToken(for ref: NodeRef, nodeMap: NodeMap) throws -> String {
-        if ref.nodeName.value == "0" || ref.nodeName.value.caseInsensitiveCompare("gnd") == .orderedSame {
-            return "0"
-        }
         guard let token = nodeMap[ref] else {
-            throw PEXSPICEWriterError.invalidNodeName(ref.nodeName.value)
+            throw PEXSPICEWriterError.invalidNodeName("\(ref.netName.value):\(ref.nodeName.value)")
         }
         return token
     }
@@ -172,17 +176,6 @@ public struct PEXSPICEWriter: Sendable {
         else {
             throw PEXSPICEWriterError.invalidNodeName(original)
         }
-    }
-
-    private func isGround(_ ref: NodeRef, in ir: ParasiticIR) -> Bool {
-        if ref.nodeName.value == "0" || ref.nodeName.value.caseInsensitiveCompare("gnd") == .orderedSame {
-            return true
-        }
-        return ir.nets
-            .first(where: { $0.name == ref.netName })?
-            .nodes
-            .first(where: { $0.name == ref.nodeName })?
-            .kind == .ground
     }
 
     private func sanitizeIdentifier(_ value: String) -> String {
@@ -209,6 +202,11 @@ public struct PEXSPICEWriter: Sendable {
         case .picoFarad: return 1e-12
         case .femtoFarad: return 1e-15
         }
+    }
+
+    private func checkedFormat(_ value: Double, id: String) throws -> String {
+        guard value.isFinite else { throw PEXSPICEWriterError.nonFiniteValue(id) }
+        return format(value)
     }
 
     private func format(_ value: Double) -> String {

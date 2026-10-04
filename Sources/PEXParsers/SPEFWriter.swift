@@ -10,6 +10,7 @@ public struct SPEFWriter: Sendable {
 
     public func write(_ ir: ParasiticIR) throws -> String {
         try validateHeaderIdentifiers()
+        try validateGraph(ir)
         let nameMap = try makeNameMap(for: ir)
 
         var lines: [String] = []
@@ -17,7 +18,7 @@ public struct SPEFWriter: Sendable {
         lines.append("*DESIGN \"\(escapedString(designName(from: ir)))\"")
         lines.append("*DATE \"\(escapedString(options.date))\"")
         lines.append("*VENDOR \"\(escapedString(options.vendor))\"")
-        lines.append("*PROGRAM \"\(escapedString(options.program))\"")
+        lines.append("*PROGRAM \"\(escapedString(options.program + " PEX_IDENTITY_V1"))\"")
         lines.append("*VERSION \"\(escapedString(ir.version))\"")
         lines.append("*DESIGN_FLOW \"EXTERNAL\"")
         lines.append("*DIVIDER \(options.divider)")
@@ -41,7 +42,7 @@ public struct SPEFWriter: Sendable {
         if !ports.isEmpty {
             lines.append("*PORTS")
             for port in ports {
-                lines.append("\(try token(for: port.name.value, nameMap: nameMap)) B\(coordinateSuffix(port.coordinate))")
+                lines.append("\(try localNodeToken(port.ref, nameMap: nameMap)) B\(coordinateSuffix(port.node.coordinate))")
             }
             lines.append("")
         }
@@ -69,22 +70,39 @@ public struct SPEFWriter: Sendable {
         lines: inout [String]
     ) throws {
         let netName = try token(for: net.name.value, nameMap: nameMap)
-        let elements = elements(for: net.name, in: ir.elements)
+        let elements = try elements(for: net.name, in: ir.elements).map { element in
+            let scale: Double
+            switch element.kind {
+            case .resistor: scale = ir.units.resistance == .kiloOhm ? 1_000 : 1
+            case .capacitor, .coupling:
+                switch ir.units.capacitance {
+                case .farad: scale = 1
+                case .picoFarad: scale = 1e-12
+                case .femtoFarad: scale = 1e-15
+                }
+            case .inductor: scale = 1
+            }
+            let value = element.value * scale
+            try validateFinite(id: element.id, value: value)
+            return ParasiticElement(id: element.id, kind: element.kind, nodeA: element.nodeA,
+                                    nodeB: element.nodeB, value: value, source: element.source)
+        }
         let totalCapF = totalCapacitance(for: net, elements: elements)
+        try validateFinite(id: net.name.value, value: totalCapF)
         lines.append("*D_NET \(netName) \(formatCapacitance(totalCapF))")
 
         let connections = net.nodes.filter { $0.kind == .pin }.sorted { $0.name.value < $1.name.value }
         let nodeCoordinates = net.nodes
             .filter { $0.kind != .pin && $0.coordinate != nil }
             .sorted { $0.name.value < $1.name.value }
-        if !connections.isEmpty || !nodeCoordinates.isEmpty {
+        if !connections.isEmpty {
             lines.append("*CONN")
             for node in connections {
-                let marker = node.name.value.contains(options.delimiter) ? "I" : "P"
-                lines.append("*\(marker) \(try token(for: node.name.value, nameMap: nameMap)) B\(coordinateSuffix(node.coordinate))")
+                let marker = "P"
+                lines.append("*\(marker) \(try localNodeToken(NodeRef(netName: net.name, nodeName: node.name), nameMap: nameMap)) B\(coordinateSuffix(node.coordinate))")
             }
             for node in nodeCoordinates {
-                lines.append("*N \(try token(for: node.name.value, nameMap: nameMap))\(coordinateSuffix(node.coordinate))")
+                lines.append("*N \(try localNodeToken(NodeRef(netName: net.name, nodeName: node.name), nameMap: nameMap))\(coordinateSuffix(node.coordinate))")
             }
         }
 
@@ -180,33 +198,63 @@ public struct SPEFWriter: Sendable {
     }
 
     private func localNodeToken(_ ref: NodeRef, nameMap: SPEFNameMap) throws -> String {
-        try token(for: ref.nodeName.value, nameMap: nameMap)
+        guard let value = nameMap.nodeTokens[ref] else { throw SPEFWriterError.invalidIdentifier("Dangling scoped node") }
+        return try token(for: value, nameMap: nameMap)
     }
 
     private func capacitorEndpointToken(_ ref: NodeRef, currentNetName: NetName, nameMap: SPEFNameMap) throws -> String {
-        if ref.netName == currentNetName || ref.nodeName.value.contains(options.delimiter) {
-            return try localNodeToken(ref, nameMap: nameMap)
-        }
-        return try token(for: "\(ref.netName.value)\(options.delimiter)\(ref.nodeName.value)", nameMap: nameMap)
+        try localNodeToken(ref, nameMap: nameMap)
     }
 
-    private func portNodes(in ir: ParasiticIR) throws -> [ParasiticNode] {
-        var seen: Set<NodeName> = []
-        var ports: [ParasiticNode] = []
+    private func portNodes(in ir: ParasiticIR) throws -> [(ref: NodeRef, node: ParasiticNode)] {
+        ir.nets.flatMap { net in
+            net.nodes.filter { $0.kind == .pin }.map { (NodeRef(netName: net.name, nodeName: $0.name), $0) }
+        }.sorted { $0.ref.netName.value + ":" + $0.ref.nodeName.value < $1.ref.netName.value + ":" + $1.ref.nodeName.value }
+    }
+
+    private func validateGraph(_ ir: ParasiticIR) throws {
+        let refs = ir.nets.flatMap { net in net.nodes.map { NodeRef(netName: net.name, nodeName: $0.name) } }
+        guard Set(ir.nets.map(\.name)).count == ir.nets.count, Set(refs).count == refs.count,
+              Set(ir.elements.map(\.id)).count == ir.elements.count else {
+            throw SPEFWriterError.invalidIdentifier("Duplicate canonical identity")
+        }
+        let known = Set(refs)
+        guard !(ir.metadata["referenceNodeName"] ?? "0").isEmpty else {
+            throw SPEFWriterError.invalidIdentifier("Empty model reference")
+        }
         for net in ir.nets {
-            for node in net.nodes where node.kind == .pin && !node.name.value.contains(options.delimiter) {
-                if seen.insert(node.name).inserted {
-                    try validateWritableName(node.name.value)
-                    ports.append(node)
-                }
+            guard net.nodes.allSatisfy({ $0.coordinate.map { $0.x.isFinite && $0.y.isFinite } ?? true }) else {
+                throw SPEFWriterError.invalidIdentifier("Invalid node coordinates in " + net.name.value)
+            }
+            guard net.totalGroundCapF.isFinite, net.totalCouplingCapF.isFinite, net.totalResistanceOhm.isFinite,
+                  net.totalGroundCapF >= 0, net.totalCouplingCapF >= 0, net.totalResistanceOhm >= 0 else {
+                throw SPEFWriterError.invalidIdentifier("Invalid net inventory " + net.name.value)
             }
         }
-        return ports.sorted { $0.name.value < $1.name.value }
+        for element in ir.elements {
+            guard known.contains(element.nodeA), element.nodeB.map({ known.contains($0) }) ?? true else {
+                throw SPEFWriterError.invalidIdentifier("Dangling endpoint for " + element.id)
+            }
+            guard element.value.isFinite, element.value >= 0 else {
+                throw SPEFWriterError.nonFiniteValue(id: element.id, value: element.value)
+            }
+            if (element.kind == .resistor || element.kind == .inductor),
+               let b = element.nodeB, b.netName != element.nodeA.netName {
+                throw SPEFWriterError.unrepresentableTopology(id: element.id, reason: "Cross-net resistance or inductance is not an intra-net SPEF network")
+            }
+            if element.kind == .coupling && element.nodeB == nil {
+                throw SPEFWriterError.unrepresentableTopology(id: element.id, reason: "Coupling requires two exact endpoints")
+            }
+            if element.kind == .capacitor && element.nodeB == nil,
+               let reference = ir.metadata["referenceNodeName"], reference != "0" {
+                throw SPEFWriterError.unrepresentableTopology(id: element.id, reason: "SPEF implicit reference cannot bind the explicit model reference " + reference)
+            }
+        }
     }
 
     private func coordinateSuffix(_ coordinate: Point2D?) -> String {
         guard let coordinate else { return "" }
-        return " \(formatCoordinate(coordinate.x)) \(formatCoordinate(coordinate.y))"
+        return " *C \(formatCoordinate(coordinate.x)) \(formatCoordinate(coordinate.y))"
     }
 
     private func designName(from ir: ParasiticIR) -> String {
@@ -229,29 +277,47 @@ public struct SPEFWriter: Sendable {
 
     private func makeNameMap(for ir: ParasiticIR) throws -> SPEFNameMap {
         var names: Set<String> = []
+        var tokens: [NodeRef: String] = [:]
+        var identityNodes: [String: PEXSPICEIdentity.Node] = [:]
         for net in ir.nets {
+            try validateWritableName(net.name.value)
             collectWritableName(net.name.value, into: &names)
-            for node in net.nodes {
-                collectWritableName(node.name.value, into: &names)
-            }
-        }
-        for element in ir.elements {
-            collectWritableName(element.nodeA.netName.value, into: &names)
-            collectWritableName(element.nodeA.nodeName.value, into: &names)
-            if let nodeB = element.nodeB {
-                collectWritableName(nodeB.netName.value, into: &names)
-                collectWritableName(nodeB.nodeName.value, into: &names)
-                if nodeB.netName != element.nodeA.netName && !nodeB.nodeName.value.contains(options.delimiter) {
-                    collectWritableName("\(nodeB.netName.value)\(options.delimiter)\(nodeB.nodeName.value)", into: &names)
+            for (index, node) in net.nodes.sorted(by: { $0.name.value < $1.name.value }).enumerated() {
+                let ref = NodeRef(netName: net.name, nodeName: node.name)
+                let value = node.kind == .pin ? "PEX_PIN_" + PEXSPICEIdentity.hex(net.name.value) + "_" + PEXSPICEIdentity.hex(node.name.value)
+                    : net.name.value + options.delimiter + String(index + 1)
+                try validateWritableName(value)
+                guard !net.name.value.isEmpty, !node.name.value.isEmpty, identityNodes[value] == nil else {
+                    throw SPEFWriterError.invalidIdentifier("Noninjective scoped node token")
                 }
+                tokens[ref] = value
+                identityNodes[value] = .init(ref: ref, kind: node.kind)
+                collectWritableName(value, into: &names)
             }
         }
-
-        let ordered = try names.sorted().enumerated().map { index, name in
-            try validateWritableName(name)
-            return SPEFNameMapEntry(id: index + 1, name: name)
+        var kinds: [String: ElementKind] = [:]
+        for net in ir.nets {
+            let local = elements(for: net.name, in: ir.elements)
+            for (index, element) in capacitorEntries(for: net.name, elements: local).enumerated() {
+                kinds[net.name.value + "_C" + String(index + 1)] = element.kind
+            }
+            for (index, element) in local.filter({ $0.kind == .resistor }).sorted(by: { $0.id < $1.id }).enumerated() {
+                kinds[net.name.value + "_R" + String(index + 1)] = element.kind
+            }
+            for (index, element) in local.filter({ $0.kind == .inductor }).sorted(by: { $0.id < $1.id }).enumerated() {
+                kinds[net.name.value + "_L" + String(index + 1)] = element.kind
+            }
         }
-        return SPEFNameMap(entries: ordered)
+        let identity = PEXSPICEIdentity(nodes: identityNodes, elementKinds: kinds,
+                                       referenceName: ir.metadata["referenceNodeName"] ?? "0", referenceToken: "0")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let annotation = "PEX_IDENTITY_V1_" + (try encoder.encode(identity)).map { String(format: "%02x", $0) }.joined()
+        let entries = [SPEFNameMapEntry(id: 1, name: annotation)] + (try names.sorted().enumerated().map { index, name in
+            try validateWritableName(name)
+            return SPEFNameMapEntry(id: index + 2, name: name)
+        })
+        return SPEFNameMap(entries: entries, nodeTokens: tokens)
     }
 
     private func collectWritableName(_ value: String, into names: inout Set<String>) {
@@ -346,9 +412,11 @@ private struct SPEFNameMapEntry: Sendable, Hashable {
 
 private struct SPEFNameMap: Sendable, Hashable {
     let entries: [SPEFNameMapEntry]
+    let nodeTokens: [NodeRef: String]
     private let idsByName: [String: Int]
 
-    init(entries: [SPEFNameMapEntry]) {
+    init(entries: [SPEFNameMapEntry], nodeTokens: [NodeRef: String]) {
+        self.nodeTokens = nodeTokens
         self.entries = entries
         var ids: [String: Int] = [:]
         for entry in entries {

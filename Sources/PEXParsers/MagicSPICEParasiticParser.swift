@@ -37,6 +37,30 @@ public struct MagicSPICEParasiticParser: PEXParsing {
         try validateFormat(raw.format, context: context)
         let fileURL = try selectedFile(from: raw, context: context)
         let source = try readSource(from: fileURL, context: context)
+        if let identity = try PEXSPICEIdentity.read(source, cornerID: context.cornerID) {
+            var records: [PEXStandardIdentityLowering.Record] = []
+            for rawLine in source.split(whereSeparator: \.isNewline) {
+                let tokens = rawLine.split(whereSeparator: \.isWhitespace).map(String.init)
+                guard let id = tokens.first, let kind = identity.elementKinds[id] else {
+                    if let first = tokens.first?.first, MagicSPICEElementKind(rawPrefix: first) != nil {
+                        throw PEXError.parseFailed(cornerID: context.cornerID, message: "Unmapped generated parasitic element")
+                    }
+                    continue
+                }
+                guard let line = try parseElementLine(String(rawLine), context: context) else {
+                    throw PEXError.parseFailed(cornerID: context.cornerID, message: "Invalid generated parasitic element")
+                }
+                let expectedPrefix = kind == .resistor ? "R" : kind == .inductor ? "L" : "C"
+                guard id.hasPrefix(expectedPrefix),
+                      line.nodeA != identity.referenceToken,
+                      (line.nodeB != identity.referenceToken || kind == .capacitor) else {
+                    throw PEXError.parseFailed(cornerID: context.cornerID, message: "Invalid generated parasitic reference or kind")
+                }
+                records.append(.init(id: id, kind: kind, nodeA: line.nodeA,
+                    nodeB: line.nodeB == identity.referenceToken ? nil : line.nodeB, value: line.value))
+            }
+            return try PEXStandardIdentityLowering.lower(records, identity: identity, context: context, sourceFormat: "pex-spice")
+        }
         let records = try parseRecords(source: source, context: context)
         return buildIR(
             records: records,

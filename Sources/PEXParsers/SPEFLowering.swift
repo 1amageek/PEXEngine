@@ -9,6 +9,9 @@ public struct SPEFLowering: Sendable {
         cornerID: PEXCornerID,
         options: PEXRunOptions = .default
     ) throws -> ParasiticIR {
+        if tree.header.program?.hasSuffix(" PEX_IDENTITY_V1") == true {
+            return try lowerGenerated(tree, cornerID: cornerID, options: options)
+        }
         let (capScale, resScale, inductScale) = unitScaleFactors(from: tree.header)
         let delimiter = tree.header.delimiter
         let explicitNodeOwners = explicitNodeOwnerMap(from: tree)
@@ -258,6 +261,73 @@ public struct SPEFLowering: Sendable {
                 "topCell": tree.header.designName,
             ]
         )
+    }
+
+    private func lowerGenerated(_ tree: SPEFParseTree, cornerID: PEXCornerID,
+                                options: PEXRunOptions) throws -> ParasiticIR {
+        let prefix = "PEX_IDENTITY_V1_"
+        let annotations = tree.nameMap.values.filter { $0.hasPrefix(prefix) }
+        guard annotations.count == 1 else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "Generated SPEF requires one identity annotation")
+        }
+        let hex = Array(annotations[0].dropFirst(prefix.count).utf8)
+        guard hex.count.isMultiple(of: 2) else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "Malformed SPEF identity annotation")
+        }
+        var bytes: [UInt8] = []
+        for index in stride(from: 0, to: hex.count, by: 2) {
+            guard let byte = UInt8(String(decoding: hex[index...index + 1], as: UTF8.self), radix: 16) else {
+                throw PEXError.parseFailed(cornerID: cornerID, message: "Malformed SPEF identity annotation")
+            }
+            bytes.append(byte)
+        }
+        guard let identity = try PEXSPICEIdentity.read(PEXSPICEIdentity.marker + Data(bytes).base64EncodedString(), cornerID: cornerID, caseInsensitive: false) else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "Missing SPEF identity annotation")
+        }
+        let scales = unitScaleFactors(from: tree.header)
+        var records: [PEXStandardIdentityLowering.Record] = []
+        var coordinates: [String: Point2D] = [:]
+        for block in tree.nets {
+            let net = resolveNameMap(block.netName, nameMap: tree.nameMap)
+            for connection in block.connections {
+                let token = resolveNameMap(connection.name, nameMap: tree.nameMap)
+                guard let node = identity.nodes[token], node.ref.netName.value == net, node.kind == .pin else {
+                    throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF connection disagrees with scoped identity")
+                }
+            }
+            for connection in block.connections {
+                if let coordinate = connection.coordinate {
+                    coordinates[resolveNameMap(connection.name, nameMap: tree.nameMap)] = coordinate
+                }
+            }
+            for entry in block.nodeCoordinates {
+                let token = resolveNameMap(entry.name, nameMap: tree.nameMap)
+                guard identity.nodes[token]?.ref.netName.value == net else {
+                    throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF coordinate disagrees with scoped identity")
+                }
+                coordinates[token] = entry.coordinate
+            }
+            func append(_ id: String, _ expected: ElementKind, _ a: String, _ b: String?, _ value: Double) throws {
+                let a = resolveNameMap(a, nameMap: tree.nameMap)
+                let b = b.map { resolveNameMap($0, nameMap: tree.nameMap) }
+                guard identity.nodes[a]?.ref.netName.value == net,
+                      let kind = identity.elementKinds[id],
+                      (expected == .capacitor ? kind == .capacitor || kind == .coupling : kind == expected) else {
+                    throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF operator disagrees with scoped identity")
+                }
+                if expected == .resistor || expected == .inductor {
+                    guard let b, identity.nodes[b]?.ref.netName.value == net else {
+                        throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF cross-net resistor or inductor is unrepresentable")
+                    }
+                }
+                records.append(.init(id: id, kind: kind, nodeA: a, nodeB: b, value: value))
+            }
+            for cap in block.capacitors { try append(net + "_C" + String(cap.id), .capacitor, cap.nodeA, cap.nodeB, cap.value * scales.cap) }
+            for res in block.resistors { try append(net + "_R" + String(res.id), .resistor, res.nodeA, res.nodeB, res.value * scales.res) }
+            for ind in block.inductors { try append(net + "_L" + String(ind.id), .inductor, ind.nodeA, ind.nodeB, ind.value * scales.induct) }
+        }
+        let context = PEXParseContext(cornerID: cornerID, runID: PEXRunID(), technology: nil, options: options)
+        return try PEXStandardIdentityLowering.lower(records, identity: identity, context: context, sourceFormat: "SPEF", coordinates: coordinates)
     }
 
     /// Returns scale factors to convert header units to canonical (Farad, Ohm, Henry).

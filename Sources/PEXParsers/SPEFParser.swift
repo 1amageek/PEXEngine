@@ -441,11 +441,7 @@ public struct SPEFParser: Sendable {
             guard let direction = SPEFDirection(rawValue: dirStr) else {
                 throw diagnostic("Invalid SPEF port direction '\(dirStr)'", location: cursor.currentLocation)
             }
-            // Optional coordinates
-            var coordinate: Point2D?
-            if let x = cursor.consumeNumber(), let y = cursor.consumeNumber() {
-                coordinate = Point2D(x: x, y: y)
-            }
+            let coordinate = optionalCoordinate(&cursor)
             ports.append(SPEFPort(name: name, direction: direction, coordinate: coordinate))
             cursor.skipNewlines()
         }
@@ -599,6 +595,7 @@ public struct SPEFParser: Sendable {
 
     private func optionalCoordinate(_ cursor: inout TokenCursor) -> Point2D? {
         let startIndex = cursor.index
+        if cursor.currentKeyword == "C" { cursor.advance() }
         guard let x = cursor.consumeNumber(),
               let y = cursor.consumeNumber() else {
             cursor.index = startIndex

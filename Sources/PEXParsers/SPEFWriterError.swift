@@ -3,6 +3,7 @@ import PEXCore
 
 public enum SPEFWriterError: Error, Sendable, LocalizedError, Equatable {
     case invalidIdentifier(String)
+    case unrepresentableTopology(id: String, reason: String)
     case nonFiniteValue(id: String, value: Double)
     case missingResistorEndpoint(id: String)
     case missingInductorEndpoint(id: String)
@@ -10,6 +11,8 @@ public enum SPEFWriterError: Error, Sendable, LocalizedError, Equatable {
 
     public var errorDescription: String? {
         switch self {
+        case .unrepresentableTopology(let id, let reason):
+            return "SPEF cannot preserve element \(id): \(reason)"
         case .invalidIdentifier(let value):
             return "Invalid SPEF identifier '\(value)'"
         case .nonFiniteValue(let id, let value):

@@ -90,8 +90,7 @@ struct SPEFWriterTests {
         let spef = try SPEFWriter(options: SPEFWriterOptions(designName: "phys")).write(ir)
 
         #expect(spef.contains("*NAME_MAP"))
-        #expect(spef.contains("m1_0_0#"))
-        #expect(spef.contains("m1_1_0#"))
+        #expect(spef.contains("PEX_IDENTITY_V1_"))
         #expect(spef.contains("*CAP"))
         #expect(spef.contains("*RES"))
 
