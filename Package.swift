@@ -44,16 +44,19 @@ let package = Package(
         .target(
             name: "PEXAdapters",
             dependencies: [
-                "PEXCore",
+                "PEXCore", "PEXNative", "PEXPersistence",
+                .product(name: "LayoutIO", package: "semiconductor-layout"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
-            ]
+            ], exclude: ["DESIGN.md", "NativeBackend/DESIGN.md"]
         ),
         .target(name: "PEXParsers", dependencies: ["PEXCore"]),
         .target(name: "PEXNative", dependencies: [
             "PEXCore",
+            .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
+            .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "LayoutCore", package: "semiconductor-layout"),
             .product(name: "LayoutVerify", package: "semiconductor-layout"),
-        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md", "InputPreparation/DESIGN.md"]),
+        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md", "InputPreparation/DESIGN.md", "CodeImage/DESIGN.md"]),
         .target(name: "PEXPersistence", dependencies: ["PEXCore"], exclude: ["DESIGN.md", "NativeInputCapture/DESIGN.md"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
@@ -104,7 +107,10 @@ let package = Package(
                 "PEXAdapters",
                 "PEXCore",
                 "PEXParsers",
-                "PEXTestSupport",
+                "PEXTestSupport", "PEXNative", "PEXPersistence", "PEXRuntime",
+                .product(name: "LayoutIO", package: "semiconductor-layout"),
+                .product(name: "LayoutCore", package: "semiconductor-layout"),
+                .product(name: "LayoutTech", package: "semiconductor-layout"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ],
             resources: [

@@ -128,6 +128,7 @@ public struct CanonicalPEXProjector: NativePEXProjecting {
         }
 
         var elements: [ParasiticElement] = []
+        var resistorIDs: [String] = [], contactIDs: [String] = [], capacitorIDs: [String] = []
         func emit(id: String, kind: ElementKind, a: NodeRef, b: NodeRef?, value: Double) throws(NativePEXProjectionError) {
             try budget.visit(isCancelled)
             guard value.isFinite, value > 0 else { throw .numericFailure }
@@ -145,12 +146,14 @@ public struct CanonicalPEXProjector: NativePEXProjecting {
         for (index, edge) in network.resistors.enumerated() {
             guard numericRefs.indices.contains(edge.nodeA), numericRefs.indices.contains(edge.nodeB), edge.nodeA != edge.nodeB,
                   network.nodes[edge.nodeA].componentIndex == network.nodes[edge.nodeB].componentIndex else { throw .invalidNetwork }
-            try emit(id: "native.r.\(index)", kind: .resistor, a: numericRefs[edge.nodeA], b: numericRefs[edge.nodeB], value: edge.ohms)
+            let id = "native.r.\(index)"; resistorIDs.append(id)
+            try emit(id: id, kind: .resistor, a: numericRefs[edge.nodeA], b: numericRefs[edge.nodeB], value: edge.ohms)
         }
         for (index, edge) in electrodes.contacts.enumerated() {
             guard numericRefs.indices.contains(edge.nodeIndex), electrodes.ports.indices.contains(edge.portIndex),
                   electrodes.ports[edge.portIndex].componentIndex == network.nodes[edge.nodeIndex].componentIndex else { throw .invalidNetwork }
-            try emit(id: "native.contact.\(index)", kind: .resistor, a: electrodes.ports[edge.portIndex].terminal,
+            let id = "native.contact.\(index)"; contactIDs.append(id)
+            try emit(id: id, kind: .resistor, a: electrodes.ports[edge.portIndex].terminal,
                      b: numericRefs[edge.nodeIndex], value: edge.ohms)
         }
         for (index, edge) in network.capacitors.enumerated() {
@@ -160,7 +163,8 @@ public struct CanonicalPEXProjector: NativePEXProjecting {
                 guard numericRefs.indices.contains(other), other != edge.nodeA, edge.kind != .ground else { throw .invalidNetwork }
                 b = numericRefs[other]
             } else { guard edge.kind == .ground else { throw .invalidNetwork }; b = nil }
-            try emit(id: "native.c.\(index)", kind: b == nil ? .capacitor : .coupling,
+            let id = "native.c.\(index)"; capacitorIDs.append(id)
+            try emit(id: id, kind: b == nil ? .capacitor : .coupling,
                      a: numericRefs[edge.nodeA], b: b, value: edge.farads)
         }
         var nets: [ParasiticNet] = []
@@ -181,7 +185,8 @@ public struct CanonicalPEXProjector: NativePEXProjecting {
                 "referenceNodeName": network.model.referenceNodeName,
                 "maximumCellSpanDatabaseUnits": String(network.maximumCellSpanDatabaseUnits),
                 "netTotalSemantics": "nodeA-owned operator inventory; not effective terminal resistance"])
-        return NativePEXProjection(ir: ir, electrodes: electrodes, netBindings: normalized, numericNodeReferences: numericRefs)
+        return NativePEXProjection(ir: ir, electrodes: electrodes, netBindings: normalized, numericNodeReferences: numericRefs,
+            numericResistorElementIDs: resistorIDs, electrodeContactElementIDs: contactIDs, numericCapacitorElementIDs: capacitorIDs)
     }
 
     private func unique(_ base: String, used: inout Set<String>, budget: inout NativePEXProjectionBudget,
