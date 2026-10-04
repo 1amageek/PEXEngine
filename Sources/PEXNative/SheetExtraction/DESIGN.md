@@ -70,8 +70,8 @@ not a general electromagnetic field solution or independent physical qualificati
 
 Pin incidence records positive-area overlap with metal cells, matching the captured
 annotation contract; edge/corner-only annotations add no contact. It adds no resistor/ideal wire.
-Finite-volume nodes are not terminal electrodes: the composing backend must construct
-and verify the requested electrode boundary conditions before reporting terminal
+Finite-volume nodes are not terminal electrodes: [ElectrodeConstruction](../ElectrodeConstruction/DESIGN.md) must construct
+and verify the explicitly requested sheet boundary conditions before reporting terminal
 resistance or canonical port connectivity. Opens and shorts remain captured facts.
 
 ## State, Ownership, and Lifecycle
