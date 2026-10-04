@@ -203,7 +203,13 @@ public struct PEXArtifactResolver: Sendable {
         expectedDigest: ContentDigest,
         expectedByteCount: UInt64
     ) throws -> [PEXArtifactCompletenessIssue] {
-        let data = try Data(contentsOf: artifactURL)
+        let data: Data
+        if record.matches(kind: .nativeConfigurationInput) || record.matches(kind: .calibrationInput) {
+            guard let ceiling = Int(exactly: expectedByteCount), ceiling > 0 else {
+                throw PEXError.persistenceFailed("Invalid native artifact byte count")
+            }
+            data = try PEXBoundedInputReader().read(artifactURL, maximumBytes: ceiling)
+        } else { data = try Data(contentsOf: artifactURL) }
         let actualHash = Self.sha256(data: data)
         if actualHash == expectedDigest.hexadecimalValue && expectedByteCount == UInt64(data.count) {
             return []

@@ -12,6 +12,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
     /// Optional per-corner technology overrides. Corners not present in this
     /// map use the run-level technology reference.
     public let technologyByCorner: [String: TechnologyInput]
+    public let nativeInput: PEXNativeInputReference?
     public let processProfile: PEXProcessProfileReference?
     public let backendSelection: PEXBackendSelection
     public let options: PEXRunOptions
@@ -27,6 +28,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         corners: [PEXCorner],
         technology: TechnologyInput,
         technologyByCorner: [String: TechnologyInput] = [:],
+        nativeInput: PEXNativeInputReference? = nil,
         processProfile: PEXProcessProfileReference? = nil,
         backendSelection: PEXBackendSelection,
         options: PEXRunOptions,
@@ -41,6 +43,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         self.corners = corners
         self.technology = technology
         self.technologyByCorner = technologyByCorner
+        self.nativeInput = nativeInput
         self.processProfile = processProfile
         self.backendSelection = backendSelection
         self.options = options
@@ -57,6 +60,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         case corners
         case technology
         case technologyByCorner
+        case nativeInput
         case processProfile
         case backendSelection
         case options
@@ -77,6 +81,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
             [String: TechnologyInput].self,
             forKey: .technologyByCorner
         ) ?? [:]
+        self.nativeInput = try container.decodeIfPresent(PEXNativeInputReference.self, forKey: .nativeInput)
         self.processProfile = try container.decodeIfPresent(
             PEXProcessProfileReference.self,
             forKey: .processProfile
@@ -100,6 +105,7 @@ public struct PEXRunRequest: Sendable, Codable, Hashable {
         try container.encode(corners, forKey: .corners)
         try container.encode(technology, forKey: .technology)
         try container.encode(technologyByCorner, forKey: .technologyByCorner)
+        try container.encodeIfPresent(nativeInput, forKey: .nativeInput)
         try container.encodeIfPresent(processProfile, forKey: .processProfile)
         try container.encode(backendSelection, forKey: .backendSelection)
         try container.encode(options, forKey: .options)

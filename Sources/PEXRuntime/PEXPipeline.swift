@@ -80,6 +80,20 @@ struct PEXPipeline: Sendable {
         }
     }
 
+    func validateNativeCalibrationInputs(_ request: PEXRunRequest, technology: TechnologyIR,
+                                         technologiesByCorner: [String: TechnologyIR],
+                                         inputArtifacts: [PEXArtifactRecord]) throws {
+        guard request.nativeInput != nil else { return }
+        let available = Set(inputArtifacts.filter { $0.matches(kind: .calibrationInput) }.compactMap { $0.reference?.id })
+        for corner in request.corners {
+            let selected = technologiesByCorner[corner.id.value] ?? technology
+            let model = try selected.electricalModel(for: corner)
+            guard Set(model.calibrationArtifacts).isSubset(of: available) else {
+                throw PEXError.invalidInput("Selected native model calibration bytes are not captured for corner '\(corner.id.value)'")
+            }
+        }
+    }
+
     func validateInputFiles(_ request: PEXRunRequest) throws {
         let inputs = [
             (label: "layout", url: request.layoutURL),

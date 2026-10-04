@@ -74,6 +74,7 @@ public final class DefaultPEXEngine: PEXExecuting, Sendable {
             corners: retryCorners,
             technology: request.technology,
             technologyByCorner: request.technologyByCorner,
+            nativeInput: request.nativeInput,
             processProfile: request.processProfile,
             backendSelection: request.backendSelection,
             options: request.options,

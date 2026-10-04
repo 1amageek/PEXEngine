@@ -30,6 +30,36 @@ public struct PEXArtifactRecorder: Sendable {
         )
     }
 
+    public func captureNativeInputs(_ input: PEXNativeInputReference) throws -> [PEXArtifactRecord] {
+        func capture(_ url: URL, kind: PEXArtifactKind, id: String, filename: String,
+                     maximumBytes: Int, expected: ArtifactID? = nil) throws -> PEXArtifactRecord {
+            let data = try PEXBoundedInputReader().read(url, maximumBytes: maximumBytes)
+            guard !data.isEmpty else { throw PEXError.invalidInput("Native input must not be empty: \(url.path)") }
+            if let expected {
+                guard UInt64(data.count) == expected.byteCount,
+                      Self.sha256(data: data) == expected.digest.hexadecimalValue else {
+                    throw PEXError.persistenceFailed("Calibration content identity mismatch: \(id)")
+                }
+            }
+            let destination = workspace.inputsDirectory.appending(path: "native").appending(path: filename)
+            let captured = try writeImmutableArtifactData(data, requestedURL: destination,
+                failureMessage: "Failed to capture native input")
+            let record = try availableRecord(id: id, kind: kind, stage: .inputValidation, cornerID: nil,
+                url: captured, provenance: PEXArtifactProvenance(sourcePath: url.path), maximumBytes: maximumBytes)
+            if let expected, record.reference?.id != expected {
+                throw PEXError.persistenceFailed("Saved calibration identity mismatch: \(id)")
+            }
+            return record
+        }
+        var records = [try capture(input.configurationURL, kind: .nativeConfigurationInput,
+            id: "input-native-configuration", filename: "configuration.json", maximumBytes: input.maximumConfigurationBytes)]
+        for source in input.calibrations.sorted(by: { $0.recordID < $1.recordID }) {
+            records.append(try capture(source.url, kind: .calibrationInput, id: source.recordID,
+                filename: "\(source.recordID).bin", maximumBytes: Int(source.artifactID.byteCount), expected: source.artifactID))
+        }
+        return records
+    }
+
     public func captureProcessProfileDeck(
         path: String,
         identifier: String
@@ -143,6 +173,13 @@ public struct PEXArtifactRecorder: Sendable {
             corners: request.corners,
             technology: capturedTechnology,
             technologyByCorner: capturedTechnologyByCorner,
+            nativeInput: try request.nativeInput.map { input in
+                try CapturedPEXNativeInput.resolve(input, records: inputArtifacts) { record in
+                    try capturedInputURL(kind: record.matches(kind: .calibrationInput) ? .calibrationInput : .nativeConfigurationInput,
+                        artifactID: record.id.rawValue, inputArtifacts: inputArtifacts,
+                        maximumBytes: record.matches(kind: .calibrationInput) ? input.maximumCalibrationBytes : input.maximumConfigurationBytes)
+                }
+            },
             processProfile: capturedProfile,
             backendSelection: request.backendSelection,
             options: request.options,
@@ -152,6 +189,12 @@ public struct PEXArtifactRecorder: Sendable {
     }
 
     public func recordRequest(_ request: PEXRunRequest, inputArtifacts: [PEXArtifactRecord]) throws -> PEXArtifactRecord {
+        try captureRunRequest(request, inputArtifacts: inputArtifacts).artifact
+    }
+
+    /// Verifies captured files once and returns the exact request whose metadata was recorded.
+    public func captureRunRequest(_ request: PEXRunRequest, inputArtifacts: [PEXArtifactRecord]) throws
+        -> (request: PEXRunRequest, artifact: PEXArtifactRecord) {
         let capturedRequest = try capturedRequest(request, inputArtifacts: inputArtifacts)
         let captured = PEXCapturedRunRequest(
             topCell: request.topCell,
@@ -160,6 +203,7 @@ public struct PEXArtifactRecorder: Sendable {
             corners: request.corners,
             technology: capturedRequest.technology,
             technologyByCorner: capturedRequest.technologyByCorner,
+            nativeInput: capturedRequest.nativeInput,
             processProfile: request.processProfile,
             extractorRunRequest: PEXExtractorRunRequest(runRequest: capturedRequest),
             backendSelection: request.backendSelection,
@@ -175,7 +219,7 @@ public struct PEXArtifactRecorder: Sendable {
             requestedURL: workspace.requestURL,
             failureMessage: "Failed to capture request"
         )
-        return try availableRecord(
+        let artifact = try availableRecord(
             id: "input-request",
             kind: .request,
             stage: .inputValidation,
@@ -183,6 +227,7 @@ public struct PEXArtifactRecorder: Sendable {
             url: capturedURL,
             provenance: nil
         )
+        return (capturedRequest, artifact)
     }
 
     private func capturedTechnologyInput(
@@ -206,7 +251,8 @@ public struct PEXArtifactRecorder: Sendable {
         kind: PEXArtifactKind,
         artifactID: String? = nil,
         sourcePath: String? = nil,
-        inputArtifacts: [PEXArtifactRecord]
+        inputArtifacts: [PEXArtifactRecord],
+        maximumBytes: Int? = nil
     ) throws -> URL {
         let matches = inputArtifacts.filter {
             $0.matches(kind: kind) && $0.availability == .available
@@ -219,7 +265,10 @@ public struct PEXArtifactRecorder: Sendable {
         let url = workspace.runDirectory.appending(path: record.relativePath.stringValue)
         try ensureExistingFileTargetIsInsideRunDirectory(url)
         let data: Data
-        do { data = try Data(contentsOf: url) }
+        do {
+            if let maximumBytes { data = try PEXBoundedInputReader().read(url, maximumBytes: maximumBytes) }
+            else { data = try Data(contentsOf: url) }
+        }
         catch { throw PEXError.persistenceFailed("Captured input is unreadable: \(record.id)", underlying: error) }
         guard reference.digest.algorithm == .sha256,
               UInt64(data.count) == reference.byteCount,
@@ -327,11 +376,13 @@ public struct PEXArtifactRecorder: Sendable {
         cornerID: PEXCornerID?,
         url: URL,
         provenance: PEXArtifactProvenance?,
-        producer: ProducerIdentity? = nil
+        producer: ProducerIdentity? = nil,
+        maximumBytes: Int? = nil
     ) throws -> PEXArtifactRecord {
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            if let maximumBytes { data = try PEXBoundedInputReader().read(url, maximumBytes: maximumBytes) }
+            else { data = try Data(contentsOf: url) }
         } catch {
             throw PEXError.persistenceFailed("Failed to read artifact \(url.path(percentEncoded: false))", underlying: error)
         }
@@ -409,7 +460,7 @@ public struct PEXArtifactRecorder: Sendable {
         }
         let name = sanitizedFileName(artifact.url.lastPathComponent)
         switch artifact.kind {
-        case .layoutInput, .netlistInput, .technologyInput, .processProfileDeckInput, .request:
+        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .request:
             return workspace.inputsDirectory.appending(path: name)
         case .sourceConnectivityReport:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
@@ -536,7 +587,7 @@ public struct PEXArtifactRecorder: Sendable {
 
     private func artifactRole(for kind: PEXArtifactKind) -> ArtifactRole {
         switch kind {
-        case .layoutInput, .netlistInput, .technologyInput, .processProfileDeckInput, .request:
+        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .request:
             .input
         case .processDriver, .processEvidence, .sourceConnectivityReport, .rawOutput, .log, .parasiticIR,
              .spefRoundTrip, .spiceBackannotation, .report:
@@ -545,7 +596,8 @@ public struct PEXArtifactRecorder: Sendable {
     }
 
     private func artifactFormatValue(kind: PEXArtifactKind, url: URL) -> String {
-        switch url.pathExtension.lowercased() {
+        if kind == .calibrationInput { return ArtifactFormat.raw.rawValue }
+        return switch url.pathExtension.lowercased() {
         case "gds", "gdsii": ArtifactFormat.gdsii.rawValue
         case "oas", "oasis": ArtifactFormat.oasis.rawValue
         case "lef": ArtifactFormat.lef.rawValue
@@ -702,6 +754,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
     let corners: [PEXCorner]
     let technology: TechnologyInput
     let technologyByCorner: [String: TechnologyInput]
+    let nativeInput: PEXNativeInputReference?
     let processProfile: PEXProcessProfileReference?
     let extractorRunRequest: PEXExtractorRunRequest
     let backendSelection: PEXBackendSelection
@@ -716,6 +769,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         corners: [PEXCorner],
         technology: TechnologyInput,
         technologyByCorner: [String: TechnologyInput],
+        nativeInput: PEXNativeInputReference?,
         processProfile: PEXProcessProfileReference?,
         extractorRunRequest: PEXExtractorRunRequest,
         backendSelection: PEXBackendSelection,
@@ -729,6 +783,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         self.corners = corners
         self.technology = technology
         self.technologyByCorner = technologyByCorner
+        self.nativeInput = nativeInput
         self.processProfile = processProfile
         self.extractorRunRequest = extractorRunRequest
         self.backendSelection = backendSelection
@@ -744,6 +799,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
         case corners
         case technology
         case technologyByCorner
+        case nativeInput
         case processProfile
         case extractorRunRequest
         case backendSelection
@@ -763,6 +819,7 @@ struct PEXCapturedRunRequest: Sendable, Codable, Hashable {
             [String: TechnologyInput].self,
             forKey: .technologyByCorner
         )
+        self.nativeInput = try container.decodeIfPresent(PEXNativeInputReference.self, forKey: .nativeInput)
         self.processProfile = try container.decodeIfPresent(
             PEXProcessProfileReference.self,
             forKey: .processProfile

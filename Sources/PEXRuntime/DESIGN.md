@@ -14,6 +14,8 @@ PEXOrchestrator and PEXPipeline are module composition roots. They consume publi
 | [PEXNative](../PEXNative/DESIGN.md) | coordinates with | Native canonical graph | Future actual backend registration | A fileless test adapter is not native backend proof |
 | [PEXCore](../PEXCore/DESIGN.md) | depends on | Exact requests/corners and IR | Domain admission | Do not infer connectivity from name coverage |
 
+| [NativeInputCapture](../PEXPersistence/NativeInputCapture/DESIGN.md) | depends on | Bounded native configuration/calibration capture | Exact run inputs | Model calibration coverage is checked after captured technology resolution |
+
 ## Architecture
 ```mermaid
 flowchart TD
@@ -30,7 +32,7 @@ flowchart TD
 ```
 
 ## Contracts and Invariants
-No parser or synthetic raw file is required for canonical payloads. Actual raw files/logs are retained only for raw payloads; generated evidence remains retained in both paths. Exact corner mismatch and backend/expected-producer mismatch fail explicitly. Canonical graph admission validates once at the immutable backend-result boundary; runtime reuses its derived warning evidence. Canonical graph validation cannot be disabled by non-strict raw-parser options. Cross-corner producer/image identity and invocation mode/entrypoint remain consistent. Standard writer warnings and input retention are existing separately owned gaps until their integration work closes them; this payload change does not claim complete native run/resume.
+Native input references are propagated through initial execution, exact retry and captured reload. Selected corner electrical-model calibration IDs must be a subset of actually captured calibration identities before adapter callbacks. No parser or synthetic raw file is required for canonical payloads. Actual raw files/logs are retained only for raw payloads; generated evidence remains retained in both paths. Exact corner mismatch and backend/expected-producer mismatch fail explicitly. Canonical graph admission validates once at the immutable backend-result boundary; runtime reuses its derived warning evidence. Canonical graph validation cannot be disabled by non-strict raw-parser options. Cross-corner producer/image identity and invocation mode/entrypoint remain consistent. Standard writer warnings and input retention are existing separately owned gaps until their integration work closes them; this payload change does not claim complete native run/resume.
 
 ## Runtime Flows
 Validate/capture request, resolve captured technology, execute corners under existing concurrency policy, retain output evidence, select raw parsing or canonical graph by payload, validate, persist, aggregate exact execution identities and save manifest. Existing public load reconstructs canonical IR and an empty raw-output list for fileless results without depending on raw files.

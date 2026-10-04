@@ -38,6 +38,7 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
             corners: request.corners,
             technology: PEXCanonicalTechnologyInput(input: request.technology),
             technologyByCorner: request.technologyByCorner.mapValues(PEXCanonicalTechnologyInput.init(input:)),
+            nativeInput: request.nativeInput.map(PEXCanonicalNativeInput.init),
             processProfile: request.processProfile.map { $0.mapInputPaths { _ in "captured-input" } },
             processProfileDeckSHA256: try processProfileDeckSHA256(request.processProfile),
             backendSelection: PEXCanonicalBackendSelection(request.backendSelection),
@@ -88,6 +89,7 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
     let corners: [PEXCorner]
     let technology: PEXCanonicalTechnologyInput
     let technologyByCorner: [String: PEXCanonicalTechnologyInput]
+    let nativeInput: PEXCanonicalNativeInput?
     let processProfile: PEXProcessProfileReference?
     let processProfileDeckSHA256: [String: String]
     let backendSelection: PEXCanonicalBackendSelection
@@ -128,5 +130,21 @@ private struct PEXCanonicalBackendSelection: Sendable, Codable, Hashable {
         self.backendID = selection.backendID
         self.executableName = selection.executablePath.map { URL(filePath: $0).lastPathComponent }
         self.environmentOverrides = selection.environmentOverrides
+    }
+}
+
+private struct PEXCanonicalNativeInput: Sendable, Codable, Hashable {
+    let calibrationArtifacts: [ArtifactID]
+    let maximumConfigurationBytes: Int
+    let maximumCalibrationBytes: Int
+    let maximumTotalCalibrationBytes: UInt64
+    let maximumCalibrationArtifacts: Int
+
+    init(_ input: PEXNativeInputReference) {
+        calibrationArtifacts = input.calibrations.sorted { $0.recordID < $1.recordID }.map(\.artifactID)
+        maximumConfigurationBytes = input.maximumConfigurationBytes
+        maximumCalibrationBytes = input.maximumCalibrationBytes
+        maximumTotalCalibrationBytes = input.maximumTotalCalibrationBytes
+        maximumCalibrationArtifacts = input.maximumCalibrationArtifacts
     }
 }

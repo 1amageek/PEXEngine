@@ -4,6 +4,8 @@ import CircuiteFoundation
 public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case layoutInput
     case netlistInput
+    case nativeConfigurationInput
+    case calibrationInput
     case technologyInput
     case processProfileDeckInput
     case processDriver

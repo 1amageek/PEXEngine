@@ -121,7 +121,19 @@ public struct PEXArtifactStore: Sendable {
         }
 
         let inputArtifactIDs = try captured.inputArtifactIDs.map(PEXArtifactRecordID.init(rawValue:))
-        let inputRecords = inputArtifactIDs.compactMap { manifest.artifact(id: $0) }
+        let requiredIDs = Set(captured.inputArtifactIDs)
+        let inputIssues = completeness.issues.filter { issue in
+            issue.artifactID.map { requiredIDs.contains($0) } ?? false
+        }
+        guard inputIssues.isEmpty else {
+            throw PEXError.persistenceFailed("Required captured inputs are unavailable or invalid: \(inputIssues.map(\.message).joined(separator: "; "))")
+        }
+        let inputRecords = try inputArtifactIDs.map { id in
+            guard let record = manifest.artifact(id: id), record.availability == .available else {
+                throw PEXError.persistenceFailed("Required captured input record is missing: \(id.rawValue)")
+            }
+            return record
+        }
         guard let layoutRecord = inputRecords.first(where: {
                   $0.matches(kind: .layoutInput) && $0.availability == .available
               }),
@@ -170,6 +182,9 @@ public struct PEXArtifactStore: Sendable {
             corners: captured.corners,
             technology: technology,
             technologyByCorner: technologyByCorner,
+            nativeInput: try captured.nativeInput.map {
+                try CapturedPEXNativeInput.resolve($0, records: inputRecords, validatedURL: resolver.validatedURL(for:))
+            },
             processProfile: processProfile,
             backendSelection: captured.backendSelection,
             options: captured.options,

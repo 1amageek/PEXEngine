@@ -70,19 +70,16 @@ public actor PEXOrchestrator {
 
         let store = PEXArtifactStore(workspace: workspace)
         let recorder = PEXArtifactRecorder(workspace: workspace)
-        let inputArtifacts = try captureInputs(
-            request: effectiveRequest,
-            recorder: recorder
-        )
-        let capturedRequest = try recorder.capturedRequest(
-            effectiveRequest,
-            inputArtifacts: inputArtifacts
-        )
+        let capturedInputs = try captureInputs(request: effectiveRequest, recorder: recorder)
+        let inputArtifacts = capturedInputs.artifacts
+        let capturedRequest = capturedInputs.request
         try validateDeclaredExecutionInputs(capturedRequest.executionInputArtifacts, request: capturedRequest)
         let technology = try technologyResolver.resolve(capturedRequest.technology)
         let technologiesByCorner = try capturedRequest.technologyByCorner.reduce(into: [:]) { result, entry in
             result[entry.key] = try technologyResolver.resolve(entry.value)
         }
+        try pipeline.validateNativeCalibrationInputs(capturedRequest, technology: technology,
+            technologiesByCorner: technologiesByCorner, inputArtifacts: inputArtifacts)
         let requestHash = try PEXRequestHash.compute(for: capturedRequest, inputArtifacts: inputArtifacts)
         let extractorRequest = PEXExtractorRunRequest(
             runRequest: capturedRequest,
@@ -272,6 +269,7 @@ public actor PEXOrchestrator {
             corners: request.corners,
             technology: request.technology,
             technologyByCorner: request.technologyByCorner,
+            nativeInput: request.nativeInput,
             processProfile: profile,
             backendSelection: request.backendSelection,
             options: request.options,
@@ -413,7 +411,7 @@ public actor PEXOrchestrator {
     private func captureInputs(
         request: PEXRunRequest,
         recorder: PEXArtifactRecorder
-    ) throws -> [PEXArtifactRecord] {
+    ) throws -> (request: PEXRunRequest, artifacts: [PEXArtifactRecord]) {
         var artifacts: [PEXArtifactRecord] = []
         artifacts.append(try recorder.captureInput(url: request.layoutURL, kind: .layoutInput))
         artifacts.append(try recorder.captureInput(url: request.sourceNetlistURL, kind: .netlistInput))
@@ -491,8 +489,12 @@ public actor PEXOrchestrator {
                 artifacts.append(deckArtifact)
             }
         }
-        artifacts.append(try recorder.recordRequest(request, inputArtifacts: artifacts))
-        return artifacts
+        if let nativeInput = request.nativeInput {
+            artifacts.append(contentsOf: try recorder.captureNativeInputs(nativeInput))
+        }
+        let captured = try recorder.captureRunRequest(request, inputArtifacts: artifacts)
+        artifacts.append(captured.artifact)
+        return (captured.request, artifacts)
     }
 
     private func validateDeclaredExecutionInputs(
@@ -572,6 +574,7 @@ public actor PEXOrchestrator {
                     sourceNetlistFormat: request.sourceNetlistFormat,
                     topCell: request.topCell,
                     technology: cornerTechnology,
+                    nativeInput: request.nativeInput,
                     processProfile: request.processProfile,
                     backendSelection: request.backendSelection,
                     options: request.options,

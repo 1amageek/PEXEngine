@@ -39,7 +39,7 @@ let package = Package(
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ],
-            exclude: ["DESIGN.md", "ElectricalModel/DESIGN.md", "BackendExecution/DESIGN.md"]
+            exclude: ["DESIGN.md", "ElectricalModel/DESIGN.md", "BackendExecution/DESIGN.md", "NativeInput/DESIGN.md"]
         ),
         .target(
             name: "PEXAdapters",
@@ -54,7 +54,7 @@ let package = Package(
             .product(name: "LayoutCore", package: "semiconductor-layout"),
             .product(name: "LayoutVerify", package: "semiconductor-layout"),
         ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md"]),
-        .target(name: "PEXPersistence", dependencies: ["PEXCore"]),
+        .target(name: "PEXPersistence", dependencies: ["PEXCore"], exclude: ["DESIGN.md", "NativeInputCapture/DESIGN.md"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),

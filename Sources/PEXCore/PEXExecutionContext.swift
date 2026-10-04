@@ -11,6 +11,7 @@ public struct PEXExecutionContext: Sendable {
     public let sourceNetlistFormat: NetlistFormat
     public let topCell: String
     public let technology: TechnologyIR
+    public let nativeInput: PEXNativeInputReference?
     public let processProfile: PEXProcessProfileReference?
     public let backendSelection: PEXBackendSelection
     public let options: PEXRunOptions
@@ -27,6 +28,7 @@ public struct PEXExecutionContext: Sendable {
         sourceNetlistFormat: NetlistFormat = .spice,
         topCell: String,
         technology: TechnologyIR,
+        nativeInput: PEXNativeInputReference? = nil,
         processProfile: PEXProcessProfileReference? = nil,
         backendSelection: PEXBackendSelection = PEXBackendSelection(backendID: "unspecified"),
         options: PEXRunOptions,
@@ -42,6 +44,7 @@ public struct PEXExecutionContext: Sendable {
         self.sourceNetlistFormat = sourceNetlistFormat
         self.topCell = topCell
         self.technology = technology
+        self.nativeInput = nativeInput
         self.processProfile = processProfile
         self.backendSelection = backendSelection
         self.options = options
