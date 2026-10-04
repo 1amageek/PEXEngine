@@ -120,7 +120,8 @@ public enum CLIRouter {
             --corner-technology <id>=<path>
                                   Corner-specific technology file (repeatable)
             --backend <id>        Backend ID (required in direct mode)
-            --corner <id>         Corner ID (repeatable)
+            --native-input <path> Native input reference JSON (direct/config override)
+            --corner <id>         Corner ID (repeatable; required for native)
             --max-jobs <n>        Max parallel jobs
             --include-coupling    Include coupling capacitances
             --min-cap-f <val>     Minimum capacitance threshold (F)

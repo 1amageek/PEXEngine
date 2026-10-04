@@ -372,7 +372,7 @@ struct PEXCLITests {
             "--min-res-ohm", "0.1",
             "--strict",
         ])
-        let request = cmd.buildRequestFromDirectParams(cmd.directParams!)
+        let request = try cmd.buildRequestFromDirectParams(cmd.directParams!)
         #expect(request.layoutFormat == .oas)
         #expect(request.topCell == "chip")
         #expect(request.corners.count == 1)

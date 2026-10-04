@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 import PEXEngine
 
 private enum JSONConfigValue: Sendable {
@@ -30,12 +31,12 @@ private enum JSONConfigValue: Sendable {
             self = .string(string)
             return
         }
-        if let boolean = value as? Bool {
-            self = .boolean(boolean)
-            return
-        }
         if let number = value as? NSNumber {
-            self = .number(number.doubleValue)
+            if CFGetTypeID(number) == CFBooleanGetTypeID() {
+                self = .boolean(number.boolValue)
+            } else {
+                self = .number(number.doubleValue)
+            }
             return
         }
         throw PEXError.invalidInput("Configuration contains an unsupported JSON value")
@@ -51,68 +52,83 @@ private struct ConfigReader: Sendable {
         self.defaults = defaults
     }
 
-    func string(forKey key: String) -> String? {
-        guard let value = lookup(key) else { return nil }
-        if case .string(let value) = value { return value }
-        return nil
-    }
-
-    func string(forKey key: String, default defaultValue: String) -> String {
-        string(forKey: key) ?? defaultValue
-    }
-
-    func bool(forKey key: String, default defaultValue: Bool) -> Bool {
-        guard let value = lookup(key) else { return defaultValue }
-        if case .boolean(let value) = value { return value }
-        return defaultValue
-    }
-
-    func double(forKey key: String) -> Double? {
-        guard let value = lookup(key) else { return nil }
-        if case .number(let value) = value { return value }
-        return nil
-    }
-
-    func int(forKey key: String, default defaultValue: Int) -> Int {
-        guard let value = lookup(key) else { return defaultValue }
-        if case .number(let value) = value { return Int(value) }
-        return defaultValue
-    }
-
-    func stringArray(forKey key: String, default defaultValue: [String]) -> [String] {
-        guard let value = lookup(key), case .array(let values) = value else {
-            return defaultValue
+    func string(forKey key: String) throws -> String? {
+        guard let value = try lookup(key) else { return nil }
+        guard case .string(let string) = value else {
+            throw PEXError.invalidInput("Configuration \(key) must be a string")
         }
-        return values.compactMap { value in
-            if case .string(let string) = value { return string }
-            return nil
-        }
+        return string
     }
 
-    func stringDictionary(forKey key: String) -> [String: String] {
-        guard let value = lookup(key), case .object(let values) = value else {
-            return [:]
+    func string(forKey key: String, default defaultValue: String) throws -> String {
+        try string(forKey: key) ?? defaultValue
+    }
+
+    func bool(forKey key: String, default defaultValue: Bool) throws -> Bool {
+        guard let value = try lookup(key) else { return defaultValue }
+        guard case .boolean(let boolean) = value else {
+            throw PEXError.invalidInput("Configuration \(key) must be a boolean")
         }
-        return values.reduce(into: [:]) { result, entry in
-            if case .string(let string) = entry.value,
-               !entry.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                result[entry.key] = string
+        return boolean
+    }
+
+    func double(forKey key: String) throws -> Double? {
+        guard let value = try lookup(key) else { return nil }
+        guard case .number(let number) = value, number.isFinite, number >= 0 else {
+            throw PEXError.invalidInput("Configuration \(key) must be a finite non-negative number")
+        }
+        return number
+    }
+
+    func int(forKey key: String, default defaultValue: Int) throws -> Int {
+        guard let value = try lookup(key) else { return defaultValue }
+        guard case .number(let number) = value, let integer = Int(exactly: number), integer > 0 else {
+            throw PEXError.invalidInput("Configuration \(key) must be a positive representable integer")
+        }
+        return integer
+    }
+
+    func stringArray(forKey key: String) throws -> [String]? {
+        guard let value = try lookup(key) else { return nil }
+        guard case .array(let values) = value else {
+            throw PEXError.invalidInput("Configuration \(key) must be an array of strings")
+        }
+        return try values.map { value in
+            guard case .string(let string) = value else {
+                throw PEXError.invalidInput("Configuration \(key) must contain only strings")
             }
+            return string
         }
     }
 
-    private func lookup(_ key: String) -> JSONConfigValue? {
-        lookup(key, in: values) ?? defaults.flatMap { lookup(key, in: $0) }
+    func stringDictionary(forKey key: String) throws -> [String: String] {
+        guard let value = try lookup(key) else { return [:] }
+        guard case .object(let values) = value else {
+            throw PEXError.invalidInput("Configuration \(key) must be an object of strings")
+        }
+        var result: [String: String] = [:]
+        for (name, value) in values {
+            guard case .string(let string) = value,
+                  !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw PEXError.invalidInput("Configuration \(key) requires non-empty string keys and values")
+            }
+            result[name] = string
+        }
+        return result
     }
 
-    private func lookup(_ key: String, in value: JSONConfigValue) -> JSONConfigValue? {
+    private func lookup(_ key: String) throws -> JSONConfigValue? {
+        try lookup(key, in: values) ?? defaults.flatMap { try lookup(key, in: $0) }
+    }
+
+    private func lookup(_ key: String, in value: JSONConfigValue) throws -> JSONConfigValue? {
         var current = value
         for component in key.split(separator: ".") {
-            guard case .object(let object) = current,
-                  let next = object[String(component)] else {
-                return nil
+            guard case .object(let object) = current else {
+                throw PEXError.invalidInput("Configuration parent of \(key) must be an object")
             }
+            guard let next = object[String(component)] else { return nil }
             current = next
         }
         return current
@@ -128,6 +144,7 @@ public struct ExtractCommand: Sendable {
     public let strictValidationOverride: Bool?
     public let sourceConnectivityPolicyOverride: PEXSourceConnectivityPolicy?
     public let processProfileOverride: PEXProcessProfileReference?
+    public let nativeInputURLOverride: URL?
 
     public struct DirectParams: Sendable {
         public let layoutPath: String
@@ -143,6 +160,7 @@ public struct ExtractCommand: Sendable {
         public let minResOhm: Double?
         public let outputPath: String?
         public let processProfile: PEXProcessProfileReference?
+        public let nativeInputURL: URL?
         public let strict: Bool
         public let sourceConnectivityPolicy: PEXSourceConnectivityPolicy
     }
@@ -166,6 +184,7 @@ public struct ExtractCommand: Sendable {
         self.strictValidationOverride = parsed.strictOverride
         self.sourceConnectivityPolicyOverride = parsed.sourceConnectivityPolicyOverride
         self.processProfileOverride = parsed.makeProcessProfile()
+        self.nativeInputURLOverride = parsed.nativeInputPath.map { URL(filePath: $0) }
     }
 
     public func run() async throws {
@@ -180,7 +199,7 @@ public struct ExtractCommand: Sendable {
         if let configURL {
             return try await buildRequestFromConfigFile(configURL)
         } else if let params = directParams {
-            return buildRequestFromDirectParams(params)
+            return try buildRequestFromDirectParams(params)
         }
         throw PEXError.invalidInput("Either --config <path> or direct parameters (--layout, --netlist, --top-cell, --technology) are required")
     }
@@ -249,16 +268,21 @@ public struct ExtractCommand: Sendable {
     func buildRequestFromConfigFile(_ configURL: URL) async throws -> PEXRunRequest {
         let config = try Self.loadConfig(configURL)
         let baseDir = configURL.deletingLastPathComponent()
-        let topCell = config.string(forKey: "topCell", default: "TOP")
+        let topCell = try config.string(forKey: "topCell", default: "TOP")
         let backendID = try Self.requiredBackendID(config.string(forKey: "backendID"), source: "config backendID")
-        let executablePath = config.string(forKey: "executablePath")
-        let layoutPath = config.string(forKey: "inputs.layout", default: "top.oas")
-        let netlistPath = config.string(forKey: "inputs.netlist", default: "top.cir")
-        let technologyPath = config.string(forKey: "inputs.technology", default: "tech.json")
-        let technologyByCorner = config.stringDictionary(forKey: "inputs.technologyByCorner").reduce(into: [String: TechnologyInput]()) { result, entry in
+        let executablePath = try config.string(forKey: "executablePath")
+        let layoutPath = try config.string(forKey: "inputs.layout", default: "top.oas")
+        let netlistPath = try config.string(forKey: "inputs.netlist", default: "top.cir")
+        let technologyPath = try config.string(forKey: "inputs.technology", default: "tech.json")
+        let technologyByCorner = try config.stringDictionary(forKey: "inputs.technologyByCorner").reduce(into: [String: TechnologyInput]()) { result, entry in
             result[entry.key] = .jsonFile(Self.resolveURL(entry.value, relativeTo: baseDir))
         }
-        let workspacePath = config.string(forKey: "output.workspace", default: ".xcircuite/pex/runs")
+        let workspacePath = try config.string(forKey: "output.workspace", default: ".xcircuite/pex/runs")
+        let configuredNativePath = try config.string(forKey: "inputs.nativeInput")
+        if let configuredNativePath, configuredNativePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw PEXError.invalidInput("Configuration inputs.nativeInput must not be empty")
+        }
+        let nativeInputURL = nativeInputURLOverride ?? configuredNativePath.map { Self.resolveURL($0, relativeTo: baseDir) }
 
         return PEXRunRequest(
             layoutURL: Self.resolveURL(layoutPath, relativeTo: baseDir),
@@ -266,18 +290,19 @@ public struct ExtractCommand: Sendable {
             sourceNetlistURL: Self.resolveURL(netlistPath, relativeTo: baseDir),
             sourceNetlistFormat: .spice,
             topCell: topCell,
-            corners: try Self.configuredCorners(from: config),
+            corners: try Self.configuredCorners(from: config, backendID: backendID),
             technology: .jsonFile(Self.resolveURL(technologyPath, relativeTo: baseDir)),
             technologyByCorner: technologyByCorner,
+            nativeInput: try Self.loadNativeInput(backendID: backendID, url: nativeInputURL),
             processProfile: Self.mergedProcessProfile(
-                Self.configuredProcessProfile(from: config, relativeTo: baseDir),
+                try Self.configuredProcessProfile(from: config, relativeTo: baseDir),
                 override: processProfileOverride
             ),
             backendSelection: PEXBackendSelection(
                 backendID: backendID,
                 executablePath: executablePath
             ),
-            options: Self.configuredOptions(
+            options: try Self.configuredOptions(
                 from: config,
                 strictOverride: strictValidationOverride,
                 sourceConnectivityOverride: sourceConnectivityPolicyOverride
@@ -328,18 +353,18 @@ public struct ExtractCommand: Sendable {
     private static func configuredProcessProfile(
         from config: ConfigReader,
         relativeTo baseDir: URL
-    ) -> PEXProcessProfileReference? {
+    ) throws -> PEXProcessProfileReference? {
         makeProcessProfile(
-            profileID: config.string(forKey: "processProfile.profileID"),
-            pdkID: config.string(forKey: "processProfile.pdkID"),
-            source: config.string(forKey: "processProfile.source"),
-            requirementID: config.string(forKey: "processProfile.requirementID"),
-            pdkRoot: config.string(forKey: "processProfile.pdkRoot").map { resolveURL($0, relativeTo: baseDir).path(percentEncoded: false) },
-            primaryDeckPath: config.string(forKey: "processProfile.primaryDeckPath").map { resolveURL($0, relativeTo: baseDir).path(percentEncoded: false) },
-            cornerDeckPaths: config.stringDictionary(forKey: "processProfile.cornerDeckPaths").reduce(into: [:]) { result, entry in
+            profileID: try config.string(forKey: "processProfile.profileID"),
+            pdkID: try config.string(forKey: "processProfile.pdkID"),
+            source: try config.string(forKey: "processProfile.source"),
+            requirementID: try config.string(forKey: "processProfile.requirementID"),
+            pdkRoot: try config.string(forKey: "processProfile.pdkRoot").map { resolveURL($0, relativeTo: baseDir).path(percentEncoded: false) },
+            primaryDeckPath: try config.string(forKey: "processProfile.primaryDeckPath").map { resolveURL($0, relativeTo: baseDir).path(percentEncoded: false) },
+            cornerDeckPaths: try config.stringDictionary(forKey: "processProfile.cornerDeckPaths").reduce(into: [:]) { result, entry in
                 result[entry.key] = resolveURL(entry.value, relativeTo: baseDir).path(percentEncoded: false)
             },
-            requiredViewPaths: config.stringDictionary(forKey: "processProfile.requiredViewPaths").reduce(into: [:]) { result, entry in
+            requiredViewPaths: try config.stringDictionary(forKey: "processProfile.requiredViewPaths").reduce(into: [:]) { result, entry in
                 result[entry.key] = resolveURL(entry.value, relativeTo: baseDir).path(percentEncoded: false)
             }
         )
@@ -364,12 +389,35 @@ public struct ExtractCommand: Sendable {
         )
     }
 
-    private static func configuredCorners(from config: ConfigReader) throws -> [PEXCorner] {
-        let cornerValues = config.stringArray(forKey: "corners", default: ["tt_25c_1v0"])
-        let filtered = cornerValues
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        return filtered.isEmpty ? [PEXCorner(id: "tt_25c_1v0")] : filtered.map { PEXCorner(id: $0) }
+    private static func configuredCorners(from config: ConfigReader, backendID: String) throws -> [PEXCorner] {
+        try admittedCorners(config.stringArray(forKey: "corners"), backendID: backendID)
+    }
+
+    fileprivate static func admittedCorners(_ values: [String]?, backendID: String) throws -> [PEXCorner] {
+        guard let values else {
+            guard backendID != "native" else {
+                throw PEXError.invalidInput("Native extraction requires explicit corners")
+            }
+            return [PEXCorner(id: "tt_25c_1v0")]
+        }
+        let trimmed = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        guard !trimmed.isEmpty, trimmed.allSatisfy({ !$0.isEmpty }), Set(trimmed).count == trimmed.count else {
+            throw PEXError.invalidInput("Corners must be non-empty, unique IDs")
+        }
+        return trimmed.map { PEXCorner(id: $0) }
+    }
+
+    private static func loadNativeInput(backendID: String, url: URL?) throws -> PEXNativeInputReference? {
+        guard backendID == "native" else {
+            guard url == nil else {
+                throw PEXError.invalidInput("Native input reference requires backend native")
+            }
+            return nil
+        }
+        guard let url else {
+            throw PEXError.invalidInput("Native extraction requires --native-input or inputs.nativeInput")
+        }
+        return try PEXNativeInputLoader().load(url)
     }
 
     fileprivate static func requiredBackendID(_ value: String?, source: String) throws -> String {
@@ -387,23 +435,31 @@ public struct ExtractCommand: Sendable {
         from config: ConfigReader,
         strictOverride: Bool?,
         sourceConnectivityOverride: PEXSourceConnectivityPolicy?
-    ) -> PEXRunOptions {
-        let configuredConnectivity = config.string(forKey: "options.sourceConnectivityPolicy")
-            .flatMap(PEXSourceConnectivityPolicy.init(rawValue:))
+    ) throws -> PEXRunOptions {
+        let configuredConnectivity: PEXSourceConnectivityPolicy?
+        if let value = try config.string(forKey: "options.sourceConnectivityPolicy") {
+            guard let policy = PEXSourceConnectivityPolicy(rawValue: value) else {
+                throw PEXError.invalidInput("Configuration options.sourceConnectivityPolicy requires disabled, warn, or strict")
+            }
+            configuredConnectivity = policy
+        } else {
+            configuredConnectivity = nil
+        }
+        let configuredStrict = try config.bool(forKey: "options.strictValidation", default: true)
         return PEXRunOptions(
             extractMode: .rc,
-            includeCouplingCaps: config.bool(forKey: "options.includeCouplingCaps", default: true),
-            minCapacitanceF: config.double(forKey: "options.minCapacitanceF"),
-            minResistanceOhm: config.double(forKey: "options.minResistanceOhm"),
-            maxParallelJobs: config.int(forKey: "options.maxParallelJobs", default: 2),
+            includeCouplingCaps: try config.bool(forKey: "options.includeCouplingCaps", default: true),
+            minCapacitanceF: try config.double(forKey: "options.minCapacitanceF"),
+            minResistanceOhm: try config.double(forKey: "options.minResistanceOhm"),
+            maxParallelJobs: try config.int(forKey: "options.maxParallelJobs", default: 2),
             emitRawArtifacts: true,
             emitIRJSON: true,
-            strictValidation: strictOverride ?? config.bool(forKey: "options.strictValidation", default: true),
+            strictValidation: strictOverride ?? configuredStrict,
             sourceConnectivityPolicy: sourceConnectivityOverride ?? configuredConnectivity ?? .warn
         )
     }
 
-    public func buildRequestFromDirectParams(_ params: DirectParams) -> PEXRunRequest {
+    public func buildRequestFromDirectParams(_ params: DirectParams) throws -> PEXRunRequest {
         let layoutURL = URL(filePath: params.layoutPath)
         let netlistURL = URL(filePath: params.netlistPath)
         let technologyURL = URL(filePath: params.technologyPath)
@@ -419,7 +475,7 @@ public struct ExtractCommand: Sendable {
             layoutFormat = .gds
         }
 
-        let corners = params.corners.map { PEXCorner(id: $0) }
+        let corners = try Self.admittedCorners(params.corners, backendID: params.backendID)
 
         let options = PEXRunOptions(
             extractMode: .rc,
@@ -444,6 +500,7 @@ public struct ExtractCommand: Sendable {
             technologyByCorner: params.technologyByCorner.reduce(into: [String: TechnologyInput]()) { result, entry in
                 result[entry.key] = .jsonFile(URL(filePath: entry.value))
             },
+            nativeInput: try Self.loadNativeInput(backendID: params.backendID, url: params.nativeInputURL),
             processProfile: params.processProfile,
             backendSelection: PEXBackendSelection(backendID: params.backendID),
             options: options,
@@ -510,6 +567,7 @@ private struct ExtractCommandArguments {
     var technologyPath: String?
     var technologyByCorner: [String: String] = [:]
     var backendID: String?
+    var nativeInputPath: String?
     var corners: [String] = []
     var maxJobs: Int?
     var includeCoupling: Bool?
@@ -536,20 +594,23 @@ private struct ExtractCommandArguments {
 
     func makeDirectParams() throws -> ExtractCommand.DirectParams? {
         if let layoutPath, let netlistPath, let topCell, let technologyPath {
+            let selectedBackendID = try ExtractCommand.requiredBackendID(backendID, source: "--backend")
+            let admittedCorners = try ExtractCommand.admittedCorners(corners.isEmpty ? nil : corners, backendID: selectedBackendID)
             return ExtractCommand.DirectParams(
                 layoutPath: layoutPath,
                 netlistPath: netlistPath,
                 topCell: topCell,
                 technologyPath: technologyPath,
                 technologyByCorner: technologyByCorner,
-                backendID: try ExtractCommand.requiredBackendID(backendID, source: "--backend"),
-                corners: corners.isEmpty ? ["tt_25c_1v0"] : corners,
+                backendID: selectedBackendID,
+                corners: admittedCorners.map { $0.id.value },
                 maxJobs: maxJobs,
                 includeCoupling: includeCoupling,
                 minCapF: minCapF,
                 minResOhm: minResOhm,
                 outputPath: outputPath,
                 processProfile: makeProcessProfile(),
+                nativeInputURL: nativeInputPath.map { URL(filePath: $0) },
                 strict: strictOverride ?? true,
                 sourceConnectivityPolicy: sourceConnectivityPolicyOverride ?? .warn
             )
@@ -582,6 +643,12 @@ private struct ExtractCommandArguments {
             try recordCornerTechnology(cursor.requireValue(for: argument, description: "<corner-id>=<technology-path>"))
         case "--backend":
             backendID = try cursor.requireValue(for: argument, description: "an ID argument")
+        case "--native-input":
+            let path = try cursor.requireValue(for: argument, description: "a reference JSON path")
+            guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw PEXError.invalidInput("--native-input requires a non-empty reference JSON path")
+            }
+            nativeInputPath = path
         case "--corner":
             corners.append(try cursor.requireValue(for: argument, description: "an ID argument"))
         case "--max-jobs":
@@ -715,8 +782,8 @@ private struct ExtractArgumentCursor {
 
     mutating func requireDouble(for option: String) throws -> Double {
         let value = try requireValue(for: option, description: "a numeric value")
-        guard let parsed = Double(value) else {
-            throw PEXError.invalidInput("\(option) requires a numeric value")
+        guard let parsed = Double(value), parsed.isFinite, parsed >= 0 else {
+            throw PEXError.invalidInput("\(option) requires a finite non-negative numeric value")
         }
         return parsed
     }

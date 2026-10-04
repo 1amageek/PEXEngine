@@ -76,7 +76,7 @@ struct PEXCLIDiagnosticCommandTests {
         let data = try JSONEncoder().encode(entries)
         let decoded = try JSONDecoder().decode([BackendEntry].self, from: data)
 
-        #expect(Set(decoded.map(\.id)) == Set(["magic", "openrcx"]))
+        #expect(Set(decoded.map(\.id)) == Set(["native", "magic", "openrcx"]))
         for entry in decoded {
             #expect(entry.readiness.backendID == entry.id)
             #expect(!entry.readiness.reason.isEmpty)

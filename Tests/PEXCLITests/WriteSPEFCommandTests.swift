@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import PEXCLICore
 @testable import PEXCore
+import PEXEngine
 
 @Suite("Write SPEF command")
 struct WriteSPEFCommandTests {
@@ -91,7 +92,28 @@ struct WriteSPEFCommandTests {
 
         let spef = try String(contentsOf: outputURL, encoding: .utf8)
         #expect(spef.contains("*NAME_MAP"))
-        #expect(spef.contains("m1_0_0#"))
+        #expect(spef.contains("*P "))
+        #expect(spef.contains("*N "))
+        #expect(spef.contains("*C 1 2"))
+        #expect(spef.contains("*C 3 4"))
+        let decodedIR = try SPEFPEXParser().parse(
+            PEXRawOutput(format: .spef, fileURLs: [outputURL], metadata: [:]),
+            context: PEXParseContext(cornerID: "tt", runID: PEXRunID(), technology: nil, options: .default)
+        )
+        let decodedNet = try #require(decodedIR.nets.first { $0.name == NetName("OUT") })
+        let decodedInternalNode = try #require(decodedNet.nodes.first { $0.name == NodeName("m1_1_0#") })
+        #expect(decodedInternalNode.kind == .internal)
+        #expect(decodedInternalNode.coordinate == Point2D(x: 3, y: 4))
+        let pin = NodeRef(netName: NetName("OUT"), nodeName: NodeName("OUT"))
+        let internalNode = NodeRef(netName: NetName("OUT"), nodeName: NodeName("m1_1_0#"))
+        let decodedResistance = try #require(decodedIR.elements.first { $0.kind == .resistor })
+        #expect(decodedResistance.nodeA == pin)
+        #expect(decodedResistance.nodeB == internalNode)
+        #expect(decodedResistance.value == 5)
+        let decodedCapacitance = try #require(decodedIR.elements.first { $0.kind == .capacitor })
+        #expect(decodedCapacitance.nodeA == pin)
+        #expect(decodedCapacitance.nodeB == nil)
+        #expect(decodedCapacitance.value == 1e-15)
 
         let parseReport = try ParseCommand(arguments: [
             "--input",
@@ -110,6 +132,34 @@ struct WriteSPEFCommandTests {
         #expect(parseReport.summary.inductorCount == 0)
         #expect(parseReport.summary.totalInductanceH == 0)
         #expect(parseReport.validation.errorCount == 0)
+    }
+
+    @Test func roundTripRejectsPinlessCoordinateLoss() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "pex-write-spef-pinless-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { removeTemporaryItem(directory) }
+        let inputURL = directory.appending(path: "ir.json")
+        let outputURL = directory.appending(path: "out.spef")
+        try JSONEncoder().encode(makeWriteSPEFIR(withPin: false)).write(to: inputURL)
+        do {
+            _ = try WriteSPEFCommand(arguments: [
+                "--input", inputURL.path, "--output", outputURL.path, "--round-trip",
+            ]).write()
+            Issue.record("Expected full semantic round-trip to reject lost pinless coordinates")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+            #expect(error.message.contains("node_coordinate_mismatch"))
+            #expect(error.message.contains("2 violation(s)"))
+        }
+        let report = try WriteSPEFCommand(arguments: [
+            "--input", inputURL.path, "--output", outputURL.path,
+        ]).write()
+        #expect(report.status == "passed")
+        #expect(report.roundTrip == nil)
+        let spef = try String(contentsOf: outputURL, encoding: .utf8)
+        #expect(!spef.contains("*CONN"))
+        #expect(!spef.contains("*N "))
     }
 
     @Test func rejectsMissingOutput() {
@@ -145,9 +195,9 @@ struct WriteSPEFCommandTests {
         }
     }
 
-    private func makeWriteSPEFIR() -> ParasiticIR {
+    private func makeWriteSPEFIR(withPin: Bool = true) -> ParasiticIR {
         let net = NetName("OUT")
-        let firstNode = NodeName("m1_0_0#")
+        let firstNode = NodeName(withPin ? "OUT" : "m1_0_0#")
         let secondNode = NodeName("m1_1_0#")
         return ParasiticIR(
             version: ParasiticIR.currentVersion,
@@ -157,7 +207,7 @@ struct WriteSPEFCommandTests {
                 ParasiticNet(
                     name: net,
                     nodes: [
-                        ParasiticNode(name: firstNode, kind: .internal, instancePath: nil, coordinate: Point2D(x: 1, y: 2)),
+                        ParasiticNode(name: firstNode, kind: withPin ? .pin : .internal, instancePath: nil, coordinate: Point2D(x: 1, y: 2)),
                         ParasiticNode(name: secondNode, kind: .internal, instancePath: nil, coordinate: Point2D(x: 3, y: 4)),
                     ],
                     totalGroundCapF: 1e-15,
