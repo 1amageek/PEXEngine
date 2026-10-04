@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Native CPU sheet/cut electrical calculation over owned, occurrence-exact layout facts.
-Parent: [PEXEngine](../../DESIGN.md). Children: [SheetExtraction](SheetExtraction/DESIGN.md), [ElectrodeConstruction](ElectrodeConstruction/DESIGN.md) and [CanonicalProjection](CanonicalProjection/DESIGN.md).
+Parent: [PEXEngine](../../DESIGN.md). Children: [SheetExtraction](SheetExtraction/DESIGN.md), [ElectrodeConstruction](ElectrodeConstruction/DESIGN.md) [CanonicalProjection](CanonicalProjection/DESIGN.md) and [InputPreparation](InputPreparation/DESIGN.md).
 The module boundary keeps layout dependencies out of PEXCore.
 
 ## Responsibilities and Boundaries
@@ -21,11 +21,16 @@ Owns conforming discretization, numeric graph construction and explicit electrod
 | [CanonicalProjection](CanonicalProjection/DESIGN.md) | child | Exact net binding and complete canonical operators | ParasiticIR composition | Canonical graph admission is not standard exporter qualification |
 | [SheetExtraction](SheetExtraction/DESIGN.md) | child | Bounded graph calculation | Numeric implementation | Resolution is an explicit input |
 
+| [InputPreparation](InputPreparation/DESIGN.md) | child | Admitted configuration and exact standard-document preparation | Native run inputs | Stored schema is not backend/image/process qualification |
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Capture[Conductor snapshot] --> SheetExtraction
+  Standard[Standard layout document] --> InputPreparation
+  Configuration[Admitted serialized configuration] --> InputPreparation
+  InputPreparation --> Capture[Conductor snapshot]
+  Capture --> SheetExtraction
   Model[PEXCore admitted SI model] --> SheetExtraction
   Resolution[Explicit mesh span and resource limits] --> SheetExtraction
   SheetExtraction --> Network[Nodes, resistors, capacitors, pin incidence]

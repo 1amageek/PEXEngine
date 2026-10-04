@@ -53,7 +53,7 @@ let package = Package(
             "PEXCore",
             .product(name: "LayoutCore", package: "semiconductor-layout"),
             .product(name: "LayoutVerify", package: "semiconductor-layout"),
-        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md"]),
+        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md", "InputPreparation/DESIGN.md"]),
         .target(name: "PEXPersistence", dependencies: ["PEXCore"], exclude: ["DESIGN.md", "NativeInputCapture/DESIGN.md"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",

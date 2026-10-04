@@ -1,4 +1,4 @@
-public struct NativePEXCalculationLimits: Sendable, Equatable {
+public struct NativePEXCalculationLimits: Sendable, Equatable, Codable {
     public let maximumInputRecords: Int
     public let maximumCoordinateValues: Int
     public let maximumMeshCells: Int
