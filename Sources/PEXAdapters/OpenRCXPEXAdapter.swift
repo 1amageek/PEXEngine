@@ -278,8 +278,8 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             context: context,
             retainedArtifacts: retainedAfterExtraction
         )
-        return PEXAdapterExecutionResult(
-            rawOutput: PEXRawOutput(
+        return try PEXAdapterExecutionResult(
+            output: .raw(PEXRawOutput(
                 format: .spef,
                 fileURLs: [outputURL],
                 logURL: stdoutURL,
@@ -291,7 +291,7 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
                     "technologyLEF": toolchain.technologyLEFURL.path(percentEncoded: false),
                     "libraryLEFCount": String(toolchain.libraryLEFURLs.count),
                 ]
-            ),
+            )),
             generatedArtifacts: retainedBeforeExtraction + [
                 PEXGeneratedArtifact(
                     kind: .processEvidence,

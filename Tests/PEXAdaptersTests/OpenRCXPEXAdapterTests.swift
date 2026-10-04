@@ -79,10 +79,10 @@ struct OpenRCXPEXAdapterTests {
         try await adapter.prepare(context)
         let result = try await adapter.execute(context)
 
-        #expect(result.rawOutput.format == .spef)
-        #expect(result.rawOutput.metadata["generator"] == "openrcx")
-        #expect(result.rawOutput.metadata["openROADVersion"]?.contains("2.0") == true)
-        #expect(result.rawOutput.metadata["openROADExecutableSHA256"]?.count == 64)
+        #expect((try #require(result.output.rawOutput)).format == .spef)
+        #expect((try #require(result.output.rawOutput)).metadata["generator"] == "openrcx")
+        #expect((try #require(result.output.rawOutput)).metadata["openROADVersion"]?.contains("2.0") == true)
+        #expect((try #require(result.output.rawOutput)).metadata["openROADExecutableSHA256"]?.count == 64)
         #expect(result.executionIdentity.producer.identifier == "pex-openrcx")
         #expect(result.executionIdentity.producer.version == "2.0")
         #expect(

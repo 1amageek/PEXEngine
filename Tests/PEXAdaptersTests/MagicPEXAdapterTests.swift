@@ -378,11 +378,11 @@ struct MagicPEXAdapterTests {
     ) throws {
         let expectedOutputURL = fixture.rawOutputDirectory.appending(path: "tt.spice")
         let expectedLogURL = fixture.rawOutputDirectory.appending(path: "extraction.log")
-        #expect(result.rawOutput.format == .spice)
-        #expect(result.rawOutput.fileURLs == [expectedOutputURL])
-        #expect(result.rawOutput.logURL == expectedLogURL)
-        #expect(result.rawOutput.metadata["generator"] == "magic")
-        #expect(result.rawOutput.metadata["extresist"] == "on")
+        #expect((try #require(result.output.rawOutput)).format == .spice)
+        #expect((try #require(result.output.rawOutput)).fileURLs == [expectedOutputURL])
+        #expect((try #require(result.output.rawOutput)).logURL == expectedLogURL)
+        #expect((try #require(result.output.rawOutput)).metadata["generator"] == "magic")
+        #expect((try #require(result.output.rawOutput)).metadata["extresist"] == "on")
         #expect(result.generatedArtifacts.contains { $0.kind == .rawOutput && $0.url == expectedOutputURL })
         #expect(result.generatedArtifacts.contains { $0.kind == .log && $0.url == expectedLogURL })
         #expect(FileManager.default.fileExists(atPath: expectedOutputURL.path(percentEncoded: false)))
@@ -403,7 +403,7 @@ struct MagicPEXAdapterTests {
             technology: nil,
             options: runOptions
         )
-        let ir = try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
+        let ir = try MagicSPICEParasiticParser().parse((try #require(result.output.rawOutput)), context: parseContext)
         #expect(ParasiticIRValidator().validate(ir).isValid)
         #expect(ir.nets.contains { abs($0.totalGroundCapF - 2e-15) < 1e-18 })
         #expect(ir.nets.contains { abs($0.totalCouplingCapF - 1e-15) < 1e-18 })
@@ -543,14 +543,14 @@ struct MagicPEXAdapterTests {
         let adapter = MagicPEXAdapter()
         try await adapter.prepare(context)
         let result = try await adapter.execute(context)
-        #expect(result.rawOutput.format == .spice)
-        #expect(result.rawOutput.logURL?.lastPathComponent == "extraction.log")
+        #expect((try #require(result.output.rawOutput)).format == .spice)
+        #expect((try #require(result.output.rawOutput)).logURL?.lastPathComponent == "extraction.log")
         #expect(result.generatedArtifacts.contains { $0.kind == .log })
 
         let parseContext = PEXParseContext(
             cornerID: context.corner.id, runID: context.runID, technology: nil, options: options()
         )
-        let ir = try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
+        let ir = try MagicSPICEParasiticParser().parse((try #require(result.output.rawOutput)), context: parseContext)
         #expect(ParasiticIRValidator().validate(ir).isValid)
 
         // A 10x10 um met1 plate over substrate: Sky130 met1 areacap (~25.8 aF/um^2)
@@ -621,7 +621,7 @@ struct MagicPEXAdapterTests {
                 technology: nil,
                 options: options(.cOnly)
             )
-            let ir = try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
+            let ir = try MagicSPICEParasiticParser().parse((try #require(result.output.rawOutput)), context: parseContext)
             #expect(ParasiticIRValidator().validate(ir).isValid)
             #expect(ir.nets.map(\.totalGroundCapF).reduce(0, +) > 0)
             extracted.append(ir)

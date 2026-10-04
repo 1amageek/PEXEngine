@@ -132,6 +132,37 @@ struct PEXPipeline: Sendable {
         return try parser.parse(raw, context: context)
     }
 
+    func validateExecutionIdentity(_ identity: PEXBackendExecutionIdentity, context: PEXExecutionContext, backendID: String) throws {
+        guard identity.producer.kind == .tool, identity.producer.identifier == "pex-\(backendID)" else {
+            throw PEXError.backendExecutionFailed(backendID: backendID, cornerID: context.corner.id,
+                message: "Returned producer does not identify the executing backend")
+        }
+        if let expected = context.backendSelection.expectedProducer, identity.producer != expected {
+            throw PEXError.backendExecutionFailed(backendID: backendID, cornerID: context.corner.id,
+                message: "Returned producer does not match the requested producer identity")
+        }
+    }
+
+    func canonicalIR(from execution: PEXAdapterExecutionResult, context: PEXParseContext) throws -> (ir: ParasiticIR, warnings: [PEXWarning]) {
+        let ir: ParasiticIR
+        let warnings: [PEXWarning]
+        switch execution.output {
+        case .raw(let raw):
+            let parsed = try parseOutput(raw: raw, context: context)
+            (ir, warnings) = try validateIR(parsed, strict: context.options.strictValidation)
+        case .canonical(let canonical):
+            ir = canonical
+            warnings = execution.canonicalValidationWarnings.map {
+                PEXWarning(stage: .irValidation, cornerID: canonical.cornerID, message: String(describing: $0))
+            }
+        }
+        guard ir.cornerID == context.cornerID else {
+            throw PEXError(kind: .irValidationFailed, stage: .irValidation, cornerID: context.cornerID,
+                message: "Returned IR corner '\(ir.cornerID.value)' does not match requested corner '\(context.cornerID.value)'")
+        }
+        return (ir, warnings)
+    }
+
     func validateIR(
         _ ir: ParasiticIR,
         strict: Bool

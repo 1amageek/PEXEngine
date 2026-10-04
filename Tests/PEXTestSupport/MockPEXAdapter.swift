@@ -4,7 +4,7 @@ import PEXCore
 /// Deterministic extractor used exclusively by PEXEngine tests.
 
 public struct MockPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
-    public let backendID = "mock"
+    public let backendID: String
     public let capabilities = PEXBackendCapabilities(
         supportsCouplingCaps: true,
         supportsCornerSweep: true,
@@ -13,7 +13,7 @@ public struct MockPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         nativeOutputFormats: [.spef]
     )
 
-    public init() {}
+    public init(backendID: String = "mock") { self.backendID = backendID }
 
     public func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
         PEXExtractorToolReadiness(
@@ -90,8 +90,8 @@ public struct MockPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             metadata: ["generator": "mock", "version": "1.0"]
         )
         let executionIdentity = try PEXTestExecutionIdentity.make(backendID: backendID)
-        return PEXAdapterExecutionResult(
-            rawOutput: rawOutput,
+        return try PEXAdapterExecutionResult(
+            output: .raw(rawOutput),
             generatedArtifacts: [
                 PEXGeneratedArtifact(
                     kind: .rawOutput,

@@ -180,7 +180,7 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             context: context,
             executionIdentity: executionIdentity
         )
-        return executionResult(
+        return try executionResult(
             plan: plan,
             logURL: logURL,
             context: context,
@@ -459,7 +459,7 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         logURL: URL,
         context: PEXExecutionContext,
         executionIdentity: PEXBackendExecutionIdentity
-    ) -> PEXAdapterExecutionResult {
+    ) throws -> PEXAdapterExecutionResult {
         let rawOutput = PEXRawOutput(
             format: .spice,
             fileURLs: [plan.outputURL],
@@ -470,8 +470,8 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
                 "extresist": plan.settings.extresist,
             ]
         )
-        return PEXAdapterExecutionResult(
-            rawOutput: rawOutput,
+        return try PEXAdapterExecutionResult(
+            output: .raw(rawOutput),
             generatedArtifacts: [
                 rawOutputArtifact(
                     plan.outputURL,

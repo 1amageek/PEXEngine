@@ -1225,7 +1225,7 @@ private struct CornerUnavailablePEXAdapter: PEXExtracting {
 private struct DelayedMockPEXAdapter: PEXExtracting {
     let backendID = "delayed-mock"
     let capabilities = MockPEXAdapter().capabilities
-    private let base = MockPEXAdapter()
+    private let base = MockPEXAdapter(backendID: "delayed-mock")
 
     func prepare(_ context: PEXExecutionContext) async throws {
         try await base.prepare(context)
@@ -1296,7 +1296,7 @@ private struct CornerDeckAwarePEXAdapter: PEXExtracting, PEXAdapterReadinessProv
         supportsRCReduction: false,
         nativeOutputFormats: [.spef]
     )
-    private let base = MockPEXAdapter()
+    private let base = MockPEXAdapter(backendID: "corner-deck-aware")
 
     func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
         PEXExtractorToolReadiness(
@@ -1366,7 +1366,7 @@ private struct BlockedReadinessPEXAdapter: PEXExtracting, PEXAdapterReadinessPro
 private struct IRPersistenceFailurePEXAdapter: PEXExtracting {
     let backendID = "ir-persistence-failure"
     let capabilities = MockPEXAdapter().capabilities
-    private let base = MockPEXAdapter()
+    private let base = MockPEXAdapter(backendID: "ir-persistence-failure")
 
     func prepare(_ context: PEXExecutionContext) async throws {
         try await base.prepare(context)
@@ -1404,8 +1404,8 @@ private struct UnsupportedFormatPEXAdapter: PEXExtracting {
         try Data("not a valid spef".utf8).write(to: rawURL)
         let rawOutput = PEXRawOutput(format: .custom, fileURLs: [rawURL])
         let executionIdentity = try PEXTestExecutionIdentity.make(backendID: backendID)
-        return PEXAdapterExecutionResult(
-            rawOutput: rawOutput,
+        return try PEXAdapterExecutionResult(
+            output: .raw(rawOutput),
             generatedArtifacts: [
                 PEXGeneratedArtifact(
                     kind: .rawOutput,

@@ -8,23 +8,25 @@ exact-corner admission, calibration identity and applicability. Runtime resoluti
 validates supplied models before backend execution; request hashing retains their
 complete encoded meaning. This does not establish native extraction or process trust.
 The [PEXNative](Sources/PEXNative/DESIGN.md) child now provides a bounded numeric
-graph from captured layout facts. Run-backend composition and terminal electrode
-observables remain separate unfinished contracts; graph construction does not
+graph, explicit terminal electrodes and scoped canonical projection from captured
+layout facts. Native run-backend composition and process qualification remain
+unfinished contracts; lower graph construction does not
 establish a successful canonical extraction run.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [LSI](../DESIGN.md) | parent | Platform ownership and evidence | Native extraction owner | External completion is not native completion |
 | [PEXCore](Sources/PEXCore/DESIGN.md) | child | Typed request, technology and electrical values | Public extraction inputs | Native model admission is mandatory |
-| [PEXNative](Sources/PEXNative/DESIGN.md) | child | Bounded native numeric graph | Layout-backed calculation | Electrode projection and qualification are separate |
+| [PEXNative](Sources/PEXNative/DESIGN.md) | child | Bounded native numeric graph | Layout-backed calculation | Run composition and process qualification remain separate |
+| [PEXRuntime](Sources/PEXRuntime/DESIGN.md) | child | Captured execution and typed output dispatch | Run lifecycle composition | Native inputs/calibration/backend remain unfinished until independently verified |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
 | [ToolQualification](../ToolQualification/DESIGN.md) | used by | Raw measured observations | Independent trust decision | PEX does not self-qualify a process |
 
 ## Purpose and Scope
 
 PEXEngine validates extraction requests, resolves technology and process
-profiles, executes one or more extraction backends, parses output into
-canonical `ParasiticIR`, validates the IR, and retains immutable run artifacts
+profiles, executes one or more extraction backends, admits raw or canonical
+outputs, validates the IR, and retains immutable run artifacts
 and lineage.
 This package is a direct child of the LSI system; its public Core child is linked above.
 
@@ -36,8 +38,11 @@ flowchart TD
     Validate --> Capture["Capture declared input bytes"]
     Capture --> Resolve["Decode captured technology and freeze request identity"]
     Resolve --> Execute["Backend reads captured files per corner"]
-    Execute --> Parse["SPEF / DSPF / SPICE parser"]
-    Parse --> IR["ParasiticIR validation"]
+    Execute --> Payload["Admitted raw / canonical payload"]
+    Payload --> Parse["Raw: SPEF / DSPF / SPICE parser"]
+    Payload --> Canonical["Canonical: immutable validated graph"]
+    Parse --> IR["Exact corner / producer admission"]
+    Canonical --> IR
     IR --> Persist["Immutable PEX manifest"]
     Persist --> Result["PEXRunResult + Foundation protocols"]
 
@@ -77,7 +82,7 @@ requirements, not evidence that the proposed native run already exists.
 |---|---|---|---|
 | Standard layout to geometry | `IRLayoutConverter` preserves signed custom extensions imported from OASIS/GDS bytes; imported text remains labels, not physical pin contacts | LayoutIO retains admitted standard semantics; native input preparation supplies explicit exact terminal bindings rather than inferring contact from text | Standard-byte round-trip and native geometry tests, including unequal extensions and repeated occurrences |
 | Geometry to numerical state | ConductorCapture preserves admitted orthogonal paths; PEXNative exposes numerical operators, explicit electrode contacts and exact scoped canonical projection | [ConductorCapture](../semiconductor-layout/Sources/LayoutVerify/ConductorCapture/DESIGN.md) owns exact footprint coordinates and their units; [PEXNative](Sources/PEXNative/DESIGN.md) composes its lower contracts into a retained canonical graph, separately from backend execution | Analytical path coverage and terminal resistance; pin regions and net labels do not short islands; bounded failure/cancellation |
-| Backend to canonical result | `PEXAdapterExecutionResult` always contains raw files; `PEXOrchestrator.executeSuccessfulCorner` always reparses them; current defaults register only Magic/OpenRCX | PEXCore defines truthful native versus external result/identity contracts; PEXRuntime validates either result through the same artifact and run lifecycle | Native API/CLI execution reaches validated ParasiticIR and retained results without fabricating an external output |
+| Backend to canonical result | [BackendExecution](Sources/PEXCore/BackendExecution/DESIGN.md) admits raw files or a validated immutable canonical graph; [PEXRuntime](Sources/PEXRuntime/DESIGN.md) dispatches both through persistence and retains verified evidence on failure; defaults still register only Magic/OpenRCX | The native backend must implement the existing typed contract with measured code-image identity and captured inputs before registration | Fileless contract-fixture tests prove dispatch, producer/corner rejection and reload; actual native API/CLI/resume evidence remains required |
 | Input identity to resume | The recorder captures layout/netlist/technology/profile views; electrical models carry calibration identities whose bytes are not captured by that path | PEXRuntime/PEXPersistence capture and verify every native input and calibration artifact before use; resolution and dependency evidence remain separate from content identity | Removing or mutating original inputs cannot change execution or resume; missing/digest-mismatched calibration bytes fail |
 | Source to physical terminals | `PEXSourceConnectivityChecker` permits leaf-name aliases and reports source-only nodes without failing | Source binding must preserve exact occurrence and terminal identities; name coverage alone cannot establish physical connectivity | Repeated leaf names, missing bindings, opens and shorts cannot yield a proven same-design result |
 
@@ -116,7 +121,8 @@ executable and observes its semantic version. It hashes the executable again
 after the process completes and rejects any change. The resulting
 `PEXBackendExecutionIdentity` retains the producer identifier/version/build,
 external invocation, sanitized-environment digest, and platform fingerprint.
-All successful corners must report the same producer and executable digest;
+All successful corners must report the same producer, code-image digest and
+invocation mode/entrypoint;
 otherwise the orchestrator rejects the run instead of merging inconsistent
 evidence. Per-corner environment fingerprints may differ because corner decks
 and output paths are invocation inputs. The manifest retains every corner invocation, while
@@ -185,6 +191,7 @@ Native extraction, calibration byte availability and process trust remain separa
 | Invariant | Behavioral evidence owner |
 |---|---|
 | Initial execution consumes recorded bytes despite changed/deleted originals | `PEXRuntimeTests/PEXCapturedInputExecutionTests` |
+| Canonical output bypasses parsing; exact producer/corner failure retains observed identity and earlier verified artifacts | `PEXRuntimeTests/PEXCanonicalExecutionTests` |
 | Technology values are decoded after capture | Same runtime suite, readiness callback changes source JSON before capture |
 | Missing or tampered captured inputs fail before execution | `PEXPersistenceTests` |
 | Process-role content affects identity; file relocation does not | `PEXCoreTests/PEXRequestHashTests` |

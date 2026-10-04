@@ -3,7 +3,7 @@
 ## Purpose and Scope
 
 Public extraction values and protocol contracts. Parent: [PEXEngine](../../DESIGN.md).
-Child: [ElectricalModel](ElectricalModel/DESIGN.md).
+Children: [ElectricalModel](ElectricalModel/DESIGN.md) and [BackendExecution](BackendExecution/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -16,6 +16,7 @@ file availability, trust decisions and release authorization are outside this mo
 |---|---|---|---|---|
 | [PEXEngine](../../DESIGN.md) | parent | Captured execution inputs | Runtime composition | Preserve content-based request identity |
 | [ElectricalModel](ElectricalModel/DESIGN.md) | child | Exact-corner electrical admission | Native calculation inputs | No inference from external metadata |
+| [BackendExecution](BackendExecution/DESIGN.md) | child | Admitted raw/canonical results and execution provenance | Backend boundary | Identity values do not measure code images or qualify tools |
 
 ## Architecture
 

@@ -39,7 +39,7 @@ let package = Package(
                 .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
                 .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             ],
-            exclude: ["DESIGN.md", "ElectricalModel/DESIGN.md"]
+            exclude: ["DESIGN.md", "ElectricalModel/DESIGN.md", "BackendExecution/DESIGN.md"]
         ),
         .target(
             name: "PEXAdapters",
@@ -60,7 +60,7 @@ let package = Package(
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
-        ]),
+        ], exclude: ["DESIGN.md"]),
         .target(name: "PEXEngine", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence", "PEXRuntime",
         ]),

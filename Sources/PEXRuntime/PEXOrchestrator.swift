@@ -624,6 +624,8 @@ public actor PEXOrchestrator {
         guard identities.allSatisfy({ identity in
             identity.producer == primary.producer
                 && identity.binaryDigest == primary.binaryDigest
+                && identity.invocation.mode == primary.invocation.mode
+                && identity.invocation.entryPoint == primary.invocation.entryPoint
         }) else {
             throw PEXError(
                 kind: .backendExecutionFailed,
@@ -695,14 +697,14 @@ public actor PEXOrchestrator {
         let cornerID = context.corner.id
         let execution = try await pipeline.executeCorner(adapter: adapter, context: context)
         retainedExecutionIdentity = execution.executionIdentity
-        let rawOutput = execution.rawOutput
-        var artifacts = try recordBackendArtifacts(
+        try recordBackendArtifacts(
             execution: execution,
-            rawOutput: rawOutput,
             recorder: recorder,
-            cornerID: cornerID
+            cornerID: cornerID,
+            retainedArtifacts: &retainedArtifacts
         )
-        retainedArtifacts = artifacts
+        var artifacts = retainedArtifacts
+        try pipeline.validateExecutionIdentity(execution.executionIdentity, context: context, backendID: adapter.backendID)
 
         let parseContext = PEXParseContext(
             cornerID: cornerID,
@@ -711,8 +713,7 @@ public actor PEXOrchestrator {
             technology: context.technology,
             options: context.options
         )
-        let ir = try pipeline.parseOutput(raw: rawOutput, context: parseContext)
-        let (validatedIR, validationWarnings) = try pipeline.validateIR(ir, strict: options.strictValidation)
+        let (validatedIR, validationWarnings) = try pipeline.canonicalIR(from: execution, context: parseContext)
 
         var connectivityWarnings: [PEXWarning] = []
         if options.sourceConnectivityPolicy != .disabled {
@@ -769,13 +770,21 @@ public actor PEXOrchestrator {
         artifacts.append(contentsOf: spiceOutcome.artifacts)
         artifacts.append(contentsOf: spefOutcome.artifacts)
 
+        let rawURLs: [URL]
+        let logURL: URL?
+        switch execution.output {
+        case .raw(let raw): rawURLs = raw.fileURLs; logURL = raw.logURL
+        case .canonical:
+            rawURLs = []
+            logURL = availableArtifactURLs(kind: .log, artifacts: artifacts, context: context).first
+        }
         let cornerEnd = Date()
         let result = PEXCornerResult(
             cornerID: cornerID,
             status: .success,
             ir: validatedIR,
-            rawOutputURLs: rawOutput.fileURLs,
-            logURL: rawOutput.logURL,
+            rawOutputURLs: rawURLs,
+            logURL: logURL,
             warnings: validationWarnings + connectivityWarnings + spiceOutcome.warnings + spefOutcome.warnings,
             metrics: PEXCornerMetrics(
                 durationSeconds: cornerEnd.timeIntervalSince(cornerStart),
@@ -793,17 +802,17 @@ public actor PEXOrchestrator {
 
     private func recordBackendArtifacts(
         execution: PEXAdapterExecutionResult,
-        rawOutput: PEXRawOutput,
         recorder: PEXArtifactRecorder,
-        cornerID: PEXCornerID
-    ) throws -> [PEXArtifactRecord] {
-        var artifacts: [PEXArtifactRecord] = []
+        cornerID: PEXCornerID,
+        retainedArtifacts: inout [PEXArtifactRecord]
+    ) throws {
         for generated in execution.generatedArtifacts {
-            artifacts.append(try recorder.recordGeneratedArtifact(generated))
+            retainedArtifacts.append(try recorder.recordGeneratedArtifact(generated))
         }
-        if artifacts.filter({ $0.matches(kind: .rawOutput) && $0.cornerID == cornerID }).isEmpty {
+        guard case .raw(let rawOutput) = execution.output else { return }
+        if retainedArtifacts.contains(where: { $0.matches(kind: .rawOutput) && $0.cornerID == cornerID }) == false {
             for url in rawOutput.fileURLs {
-                artifacts.append(try recorder.recordExistingArtifact(
+                retainedArtifacts.append(try recorder.recordExistingArtifact(
                     url: url,
                     kind: .rawOutput,
                     stage: .backendExecution,
@@ -813,8 +822,8 @@ public actor PEXOrchestrator {
             }
         }
         if let logURL = rawOutput.logURL,
-           artifacts.filter({ $0.matches(kind: .log) && $0.cornerID == cornerID }).isEmpty {
-            artifacts.append(try recorder.recordExistingArtifact(
+           retainedArtifacts.contains(where: { $0.matches(kind: .log) && $0.cornerID == cornerID }) == false {
+            retainedArtifacts.append(try recorder.recordExistingArtifact(
                 url: logURL,
                 kind: .log,
                 stage: .backendExecution,
@@ -822,7 +831,6 @@ public actor PEXOrchestrator {
                 producer: execution.executionIdentity.producer
             ))
         }
-        return artifacts
     }
 
     private func recordIRArtifact(

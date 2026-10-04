@@ -44,7 +44,7 @@ struct MagicResistanceExtractionTests {
         let result = try await adapter.execute(context)
         let parseContext = PEXParseContext(cornerID: context.corner.id, runID: context.runID,
                                            technology: nil, options: options(mode))
-        return try MagicSPICEParasiticParser().parse(result.rawOutput, context: parseContext)
+        return try MagicSPICEParasiticParser().parse((try #require(result.output.rawOutput)), context: parseContext)
     }
 
     @Test(
