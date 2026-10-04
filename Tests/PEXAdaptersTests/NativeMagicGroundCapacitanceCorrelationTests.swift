@@ -125,17 +125,17 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
         \(rectangle.description),\(nativeValue),\(oracleValue),\(printBudget),\(floatingBudget),\(layoutID.digest.hexadecimalValue),\(calibrationID.digest.hexadecimalValue)
         """
         Attachment.record(summary, named: "\(rectangle.description)-comparison.csv")
-        Attachment.record(deckBytes, named: "\(rectangle.description)-calibration.tech")
+        Attachment.record(Array(deckBytes), named: "\(rectangle.description)-calibration.tech")
         for (backend, result) in [("native", native), ("magic", oracle)] {
             let store = PEXArtifactStore(workspace: .init(baseURL: root.appending(path: backend), runID: result.runID))
             let captured = try store.loadRequest()
             #expect(try artifactID(Data(contentsOf: captured.layoutURL)) == layoutID)
-            Attachment.record(try encoder.encode(captured), named: "\(rectangle.description)-\(backend)-captured-request.json")
-            Attachment.record(try encoder.encode(result), named: "\(rectangle.description)-\(backend)-result.json")
-            Attachment.record(try Data(contentsOf: captured.layoutURL), named: "\(rectangle.description)-\(backend)-captured.gds")
-            Attachment.record(try Data(contentsOf: captured.sourceNetlistURL), named: "\(rectangle.description)-\(backend)-source.spice")
+            Attachment.record(Array(try encoder.encode(captured)), named: "\(rectangle.description)-\(backend)-captured-request.json")
+            Attachment.record(Array(try encoder.encode(result)), named: "\(rectangle.description)-\(backend)-result.json")
+            Attachment.record(Array(try Data(contentsOf: captured.layoutURL)), named: "\(rectangle.description)-\(backend)-captured.gds")
+            Attachment.record(Array(try Data(contentsOf: captured.sourceNetlistURL)), named: "\(rectangle.description)-\(backend)-source.spice")
             let input = try #require(captured.nativeInput)
-            Attachment.record(try Data(contentsOf: input.configurationURL), named: "\(rectangle.description)-\(backend)-configuration.json")
+            Attachment.record(Array(try Data(contentsOf: input.configurationURL)), named: "\(rectangle.description)-\(backend)-configuration.json")
             let calibration = try #require(input.calibrations.first)
             #expect(calibration.artifactID == calibrationID)
             #expect(try artifactID(Data(contentsOf: calibration.url)) == calibrationID)
@@ -143,7 +143,7 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
             for kind in [PEXArtifactKind.processProfileDeckInput, .processEvidence, .log, .rawOutput] {
                 for record in resolver.records(kind: kind, availability: .available) {
                     let url = try resolver.validatedURL(for: record)
-                    Attachment.record(try Data(contentsOf: url), named: "\(rectangle.description)-\(backend)-\(url.lastPathComponent)")
+                    Attachment.record(Array(try Data(contentsOf: url)), named: "\(rectangle.description)-\(backend)-\(url.lastPathComponent)")
                 }
             }
         }

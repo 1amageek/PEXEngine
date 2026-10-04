@@ -596,7 +596,7 @@ struct MagicPEXAdapterTests {
             pdkID: "sky130",
             requirementID: MagicToolchain.magicRequirementID
         ))
-        Attachment.record(try JSONEncoder().encode(profile), named: "installed-process-profile.json")
+        Attachment.record(Array(try JSONEncoder().encode(profile)), named: "installed-process-profile.json")
 
         var extracted: [ParasiticIR] = []
         for cornerID in ["sky130A", "sky130B"] {
@@ -632,14 +632,14 @@ struct MagicPEXAdapterTests {
             #expect(result.executionIdentity.environment.toolchain == result.executionIdentity.producer.version)
             #expect(result.generatedArtifacts.contains { $0.kind == .log })
             Attachment.record(
-                try JSONEncoder().encode(result.executionIdentity),
+                Array(try JSONEncoder().encode(result.executionIdentity)),
                 named: "\(cornerID)-execution-identity.json"
             )
             let rawOutput = try #require(result.output.rawOutput)
             let logURL = try #require(rawOutput.logURL)
-            Attachment.record(try Data(contentsOf: logURL), named: "\(cornerID)-extraction.log")
+            Attachment.record(Array(try Data(contentsOf: logURL)), named: "\(cornerID)-extraction.log")
             for fileURL in rawOutput.fileURLs {
-                Attachment.record(try Data(contentsOf: fileURL), named: "\(cornerID)-\(fileURL.lastPathComponent)")
+                Attachment.record(Array(try Data(contentsOf: fileURL)), named: "\(cornerID)-\(fileURL.lastPathComponent)")
             }
             let parseContext = PEXParseContext(
                 cornerID: context.corner.id,
