@@ -18,9 +18,10 @@ struct MagicPEXAdapterTests {
     static let toolchain = MagicToolchain.locate()
     static let installedAAndBDecksAvailable: Bool = {
         guard let toolchain else { return false }
-        let parent = URL(filePath: toolchain.pdkRoot).deletingLastPathComponent()
-        let sky130BDeck = parent.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
-        return FileManager.default.fileExists(atPath: sky130BDeck.path(percentEncoded: false))
+        let providerRoot = URL(filePath: toolchain.pdkRoot)
+        let sky130BDeck = providerRoot.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
+        return FileManager.default.fileExists(atPath: toolchain.rcFileURL.path(percentEncoded: false))
+            && FileManager.default.fileExists(atPath: sky130BDeck.path(percentEncoded: false))
     }()
 
     private func options(_ mode: PEXExtractMode = .cOnly) -> PEXRunOptions {
@@ -85,8 +86,8 @@ struct MagicPEXAdapterTests {
         executableURL: URL
     )
 
-    @Test("MagicToolchain locates a profile-declared Magic requirement")
-    func magicToolchainLocatesProfileDeclaredRequirement() throws {
+    @Test("MagicToolchain normalizes provider and direct profile roots", arguments: [false, true])
+    func magicToolchainLocatesProfileDeclaredRequirement(useDirectProfileRoot: Bool) throws {
         let root = try makeDir("profile")
         defer { removeTemporaryItem(root) }
         let executableURL = try makeExecutableScript(
@@ -106,7 +107,7 @@ struct MagicPEXAdapterTests {
             profileID: "custom.signoff",
             pdkID: "custom",
             rootDirectoryName: "customPDK",
-            candidateRootPaths: [root.path(percentEncoded: false)],
+            candidateRootPaths: [(useDirectProfileRoot ? pdkRoot : root).path(percentEncoded: false)],
             requirements: [
                 SignoffPDKRequiredFile(
                     requirementID: MagicToolchain.magicRequirementID,
@@ -124,7 +125,7 @@ struct MagicPEXAdapterTests {
             fileManager: .default
         ))
         #expect(toolchain.magicExecutableURL.path(percentEncoded: false) == executableURL.path(percentEncoded: false))
-        #expect(toolchain.pdkRoot == root.path(percentEncoded: false))
+        #expect(URL(filePath: toolchain.pdkRoot).pathComponents == root.pathComponents)
         #expect(toolchain.rcFileURL.path(percentEncoded: false) == rcFileURL.path(percentEncoded: false))
         #expect(toolchain.processProfileReference.profileID == "custom.signoff")
         #expect(toolchain.processProfileReference.pdkID == "custom")
@@ -573,25 +574,29 @@ struct MagicPEXAdapterTests {
             "missing fixture pex_plate.gds"
         )
         let toolchain = try #require(MagicPEXAdapterTests.toolchain)
-        let parent = URL(filePath: toolchain.pdkRoot).deletingLastPathComponent()
-        let ttDeck = parent.appending(path: "sky130A/libs.tech/magic/sky130A.magicrc")
-        let ssDeck = parent.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
+        let providerRoot = URL(filePath: toolchain.pdkRoot)
+        let sky130ADeck = toolchain.rcFileURL
+        let sky130BDeck = providerRoot.appending(path: "sky130B/libs.tech/magic/sky130B.magicrc")
         let profile = PEXProcessProfileReference(
-            pdkRoot: parent.path(percentEncoded: false),
-            primaryDeckPath: ttDeck.path(percentEncoded: false),
+            profileID: "sky130.profile-sweep",
+            pdkID: "sky130",
+            requirementID: MagicToolchain.magicRequirementID,
+            pdkRoot: toolchain.pdkRoot,
+            primaryDeckPath: sky130ADeck.path(percentEncoded: false),
             cornerDeckPaths: [
-                "sky130A": ttDeck.path(percentEncoded: false),
-                "sky130B": ssDeck.path(percentEncoded: false),
+                "sky130A": sky130ADeck.path(percentEncoded: false),
+                "sky130B": sky130BDeck.path(percentEncoded: false),
             ]
         )
         let adapter = MagicPEXAdapter(toolchain: MagicToolchain(
             magicExecutableURL: toolchain.magicExecutableURL,
-            rcFileURL: ttDeck,
-            pdkRoot: parent.path(percentEncoded: false),
+            rcFileURL: sky130ADeck,
+            pdkRoot: toolchain.pdkRoot,
             profileID: "sky130.profile-sweep",
             pdkID: "sky130",
             requirementID: MagicToolchain.magicRequirementID
         ))
+        Attachment.record(try JSONEncoder().encode(profile), named: "installed-process-profile.json")
 
         var extracted: [ParasiticIR] = []
         for cornerID in ["sky130A", "sky130B"] {
@@ -615,6 +620,27 @@ struct MagicPEXAdapterTests {
             )
             try await adapter.prepare(context)
             let result = try await adapter.execute(context)
+            let selectedDeck = try #require(profile.cornerDeckPaths[cornerID])
+            #expect(result.executionIdentity.invocation.mode == .externalProcess)
+            #expect(result.executionIdentity.invocation.arguments == [
+                "-dnull", "-noconsole", "-rcfile", selectedDeck,
+                rawOut.appending(path: "pex_extract.tcl").path(percentEncoded: false),
+            ])
+            #expect(result.executionIdentity.invocation.executable == toolchain.magicExecutableURL.path(percentEncoded: false))
+            #expect(result.executionIdentity.environment.environmentDigest != nil)
+            #expect(result.executionIdentity.producer.identifier == "pex-magic")
+            #expect(result.executionIdentity.environment.toolchain == result.executionIdentity.producer.version)
+            #expect(result.generatedArtifacts.contains { $0.kind == .log })
+            Attachment.record(
+                try JSONEncoder().encode(result.executionIdentity),
+                named: "\(cornerID)-execution-identity.json"
+            )
+            let rawOutput = try #require(result.output.rawOutput)
+            let logURL = try #require(rawOutput.logURL)
+            Attachment.record(try Data(contentsOf: logURL), named: "\(cornerID)-extraction.log")
+            for fileURL in rawOutput.fileURLs {
+                Attachment.record(try Data(contentsOf: fileURL), named: "\(cornerID)-\(fileURL.lastPathComponent)")
+            }
             let parseContext = PEXParseContext(
                 cornerID: context.corner.id,
                 runID: context.runID,

@@ -29,3 +29,5 @@ Successful adapters publish admitted actual outputs with measured implementation
 
 ## Verification and Change Impact
 PEXAdaptersTests owns backend behavior; PEXRuntimeTests owns public run composition and evidence retention. Shared-state changes are checked at their owner. Default registration and external process qualification remain separate verification boundaries.
+
+`MagicPEXAdapterTests.runsDistinctInstalledProfileDecks` uses the locator-normalized provider root for installed Sky130 A/B decks, verifies actual deck selection, and attaches invocation identity plus raw logs and output. A/B are distinct physical profiles; this evidence does not establish tt/ss corners or process qualification.
