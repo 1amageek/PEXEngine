@@ -16,8 +16,22 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     public let maximumEvidenceBytes: Int
     public let cancellationPollInterval: Duration
 
-    public init(maximumLayoutBytes: Int = 256 * 1024 * 1024, maximumCodeImageBytes: Int = 512 * 1024 * 1024,
-                maximumEvidenceBytes: Int = 64 * 1024 * 1024, cancellationPollInterval: Duration = .milliseconds(20)) throws {
+    public static let defaultMaximumLayoutBytes = 256 * 1024 * 1024
+    public static let defaultMaximumCodeImageBytes = 512 * 1024 * 1024
+    public static let defaultMaximumEvidenceBytes = 64 * 1024 * 1024
+    public static let defaultCancellationPollInterval: Duration = .milliseconds(20)
+
+    public init() {
+        maximumLayoutBytes = Self.defaultMaximumLayoutBytes
+        maximumCodeImageBytes = Self.defaultMaximumCodeImageBytes
+        maximumEvidenceBytes = Self.defaultMaximumEvidenceBytes
+        cancellationPollInterval = Self.defaultCancellationPollInterval
+    }
+
+    public init(maximumLayoutBytes: Int = Self.defaultMaximumLayoutBytes,
+                maximumCodeImageBytes: Int = Self.defaultMaximumCodeImageBytes,
+                maximumEvidenceBytes: Int = Self.defaultMaximumEvidenceBytes,
+                cancellationPollInterval: Duration = Self.defaultCancellationPollInterval) throws {
         guard maximumLayoutBytes > 0, maximumCodeImageBytes > 0, maximumEvidenceBytes > 0,
               cancellationPollInterval > .zero else { throw NativePEXBackendError.invalidLimits }
         self.maximumLayoutBytes = maximumLayoutBytes; self.maximumCodeImageBytes = maximumCodeImageBytes

@@ -24,7 +24,7 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
-Available artifacts bind role, path, SHA-256 and byte count. Request reconstruction requires every input ID recorded by the captured request to exist and be available, rejects all integrity issues for those IDs (including missing files classified as partial availability), and reuses the existing completeness inspection before returning run-local availability. Native input references and byte budgets survive reconstruction exactly; source location is provenance only.
+Available artifacts bind role, path, SHA-256 and byte count. Request reconstruction requires every input ID recorded by the captured request to exist and be available, rejects all integrity issues for those IDs (including missing files classified as partial availability), and reuses the existing completeness inspection before returning run-local availability. Native input references and byte budgets survive reconstruction exactly; source location is provenance only. Failed corners retain available canonical bytes for diagnostic loadIR access, but loadResult publishes IR only for successful corners, matching the live runtime result. Retained bytes cannot turn a required-export failure into completed output. Raw, log or process-evidence records provide retained failure evidence; fileless in-process execution is not required to invent external logs.
 
 ## Verification and Change Impact
 PEXPersistenceTests owns immutable artifact/resolver/load behavior. Runtime capture tests own initial execution and retry. Native input changes require both boundaries to be verified; no target-dependent synchronization is introduced.

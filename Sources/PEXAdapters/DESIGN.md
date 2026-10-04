@@ -25,7 +25,7 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
-Successful adapters publish admitted actual outputs with measured implementation identity. Failed operations retain observed identity and complete generated evidence. No mock/CPU/external fallback is silently selected.
+Successful adapters publish admitted actual outputs with measured implementation identity. Failed operations retain observed identity and complete generated evidence. No mock/CPU/external fallback is silently selected. PEXDefaultBackends registers native, Magic and OpenRCX; requests select one backend explicitly. Native default policy is admitted by its nonthrowing constructor, configurable policy remains throwing.
 
 ## Verification and Change Impact
 PEXAdaptersTests owns backend behavior; PEXRuntimeTests owns public run composition and evidence retention. Shared-state changes are checked at their owner. Default registration and external process qualification remain separate verification boundaries.

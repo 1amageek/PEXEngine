@@ -49,7 +49,7 @@ let package = Package(
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ], exclude: ["DESIGN.md", "NativeBackend/DESIGN.md"]
         ),
-        .target(name: "PEXParsers", dependencies: ["PEXCore"]),
+        .target(name: "PEXParsers", dependencies: ["PEXCore"], exclude: ["DESIGN.md"]),
         .target(name: "PEXNative", dependencies: [
             "PEXCore",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
@@ -70,7 +70,7 @@ let package = Package(
         .target(name: "PEXCLICore", dependencies: [
             "PEXEngine",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
-        ]),
+        ], exclude: ["DESIGN.md", "NativeInputLoading/DESIGN.md"]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 
         .testTarget(

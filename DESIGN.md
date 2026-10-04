@@ -12,8 +12,11 @@ graph, explicit terminal electrodes and scoped canonical projection from capture
 layout facts. [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) now
 executes these actual contracts through explicit PEXExtracting registration with
 measured native backing-image identity, physical-topology evidence and atomic
-failure/cancellation. Default API/CLI registration, exact standard exporters,
-full native resume integration and process qualification remain separate gaps.
+failure/cancellation. Default API/CLI execution now consumes typed captured native references and exact corners.
+Standard export preserves scoped electrical identity in its declared portable profile;
+unrepresentable required output fails the run while retaining canonical/topology evidence.
+Captured retry after removal of original files is verified. Production dependency adoption
+and independent physical process qualification remain separate gaps.
 
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
@@ -21,6 +24,8 @@ full native resume integration and process qualification remain separate gaps.
 | [PEXCore](Sources/PEXCore/DESIGN.md) | child | Typed request, technology and electrical values | Public extraction inputs | Native model admission is mandatory |
 | [PEXNative](Sources/PEXNative/DESIGN.md) | child | Bounded native numeric graph | Layout-backed calculation | Run composition and process qualification remain separate |
 | [PEXAdapters](Sources/PEXAdapters/DESIGN.md) | child | Concrete backend execution | Native/external composition | Process trust remains independent |
+| [PEXParsers](Sources/PEXParsers/DESIGN.md) | child | Scoped standard identity and portable export profile | SPICE/SPEF semantics | Unsupported topology fails required output |
+| [PEXCLICore](Sources/PEXCLICore/DESIGN.md) | child | Explicit native CLI input and corners | Developer operation | Typed reference URLs must be local |
 | [PEXRuntime](Sources/PEXRuntime/DESIGN.md) | child | Captured execution and typed output dispatch | Run lifecycle composition | Native inputs/calibration/backend remain unfinished until independently verified |
 | [PEXPersistence](Sources/PEXPersistence/DESIGN.md) | child | Immutable input/output capture and reload | Run artifact owner | Integrity does not qualify process physics |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
@@ -78,14 +83,14 @@ corner IDs and parasitic nodes remain PEX domain concepts.
 ### Native composition requirements and current gaps
 
 The numeric graph and explicit native backend execution have separate behavioral
-proofs. The table distinguishes established composition from remaining default
-registration, standard export, resume and source-binding requirements.
+proofs. The table distinguishes established composition from remaining production adoption
+and exact source-binding requirements.
 
 | Boundary | Current implementation fact | Owner and required change | Completion evidence |
 |---|---|---|---|
 | Standard layout to geometry | `IRLayoutConverter` preserves signed custom extensions imported from OASIS/GDS bytes; imported text remains labels, not physical pin contacts | LayoutIO retains admitted standard semantics; native input preparation supplies explicit exact terminal bindings rather than inferring contact from text | Standard-byte round-trip and native geometry tests, including unequal extensions and repeated occurrences |
 | Geometry to numerical state | ConductorCapture preserves admitted orthogonal paths; PEXNative exposes numerical operators, explicit electrode contacts and exact scoped canonical projection | [ConductorCapture](../semiconductor-layout/Sources/LayoutVerify/ConductorCapture/DESIGN.md) owns exact footprint coordinates and their units; [PEXNative](Sources/PEXNative/DESIGN.md) composes its lower contracts into a retained canonical graph, separately from backend execution | Analytical path coverage and terminal resistance; pin regions and net labels do not short islands; bounded failure/cancellation |
-| Backend to canonical result | [BackendExecution](Sources/PEXCore/BackendExecution/DESIGN.md) admits raw files or a validated immutable canonical graph; [PEXRuntime](Sources/PEXRuntime/DESIGN.md) dispatches both through persistence and retains verified evidence on failure; defaults still register only Magic/OpenRCX | [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) implements explicit native execution with measured backing-image identity and retained physical topology; default registration/export/resume remain separate | Actual GDS/OASIS public API tests prove analytical RC, measured identity/reload and failure/cancellation; full CLI/export/resume integration remains required |
+| Backend to canonical result | [BackendExecution](Sources/PEXCore/BackendExecution/DESIGN.md) admits raw files or a validated immutable canonical graph; [PEXRuntime](Sources/PEXRuntime/DESIGN.md) dispatches both through persistence and retains verified evidence on failure; defaults register native/Magic/OpenRCX | [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) implements explicit native execution with measured backing-image identity and retained physical topology; default API/CLI registration, required-output failure and captured retry are verified on macOS CPU | Actual GDS/OASIS public API tests prove analytical RC, measured identity/reload and failure/cancellation; actual executable CLI/captured retry and standard-profile failure retention are verified |
 | Input identity to resume | [NativeInput](Sources/PEXCore/NativeInput/DESIGN.md) supplies explicit configuration/calibration locations and budgets; [NativeInputCapture](Sources/PEXPersistence/NativeInputCapture/DESIGN.md) retains bounded bytes and exact content IDs; Runtime checks selected model coverage | [InputPreparation](Sources/PEXNative/InputPreparation/DESIGN.md) admits configuration; NativeBackend consumes captured standard/configuration/calibration bytes and checks direct-call calibration content too; capture does not qualify calibration physics | Public run/retry/reload fixtures verify source mutation/removal, required captured-input missing/tamper rejection and location-independent content identity |
 | Source to physical terminals | `PEXSourceConnectivityChecker` permits leaf-name aliases and reports source-only nodes without failing | Source binding must preserve exact occurrence and terminal identities; name coverage alone cannot establish physical connectivity | Repeated leaf names, missing bindings, opens and shorts cannot yield a proven same-design result |
 

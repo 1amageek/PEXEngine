@@ -288,7 +288,7 @@ public struct PEXArtifactResolver: Sendable {
             issues.append(PEXArtifactCompletenessIssue(
                 kind: .failedCornerWithoutEvidence,
                 cornerID: corner.cornerID,
-                message: "Failed corner has no raw or log evidence artifacts"
+                message: "Failed corner has no raw, log or process evidence artifacts"
             ))
         }
         return issues
@@ -316,6 +316,7 @@ public struct PEXArtifactResolver: Sendable {
     private func failedCornerEvidenceCount(cornerID: PEXCornerID) -> Int {
         records(kind: .rawOutput, cornerID: cornerID, availability: .available).count
             + records(kind: .log, cornerID: cornerID, availability: .available).count
+            + records(kind: .processEvidence, cornerID: cornerID, availability: .available).count
     }
 
     private func completenessStatus(for issues: [PEXArtifactCompletenessIssue]) -> PEXArtifactCompletenessStatus {

@@ -10,6 +10,7 @@ import PEXRuntime
 import LayoutCore
 import LayoutTech
 import LayoutIO
+import SignoffToolSupport
 @testable import PEXAdapters
 
 @Suite("Actual native backend and public run behavior", .timeLimit(.minutes(1)))
@@ -17,8 +18,8 @@ struct NativePEXAdapterTests {
     @Test(arguments: [LayoutFileFormat.gds, .oasis])
     func publicRunCalculatesAnalyticalRCAndReloadsObservedIdentity(format: LayoutFileFormat) async throws {
         try await fixture(format: format) { f in
-            let adapter = try NativePEXAdapter()
-            let result = try await DefaultPEXEngine(adapterRegistry: .init(adapters: [adapter]), parserRegistry: .init()).run(f.request)
+            let adapter = NativePEXAdapter()
+            let result = try await DefaultPEXEngine.withDefaults().run(f.request)
             #expect(result.status == .success && result.cornerResults[0].ir != nil)
             let ir = try #require(result.cornerResults[0].ir)
             #expect(abs(ir.elements.filter { $0.kind == .resistor }.reduce(0) { $0 + $1.value } - 0.02) < 1e-14)
@@ -67,7 +68,7 @@ struct NativePEXAdapterTests {
     }
     @Test func failedLowerBudgetKeepsImageAndTerminalEvidenceWithoutCanonicalOutput() async throws {
         try await fixture(meshLimit: 0) { f in
-            let engine = DefaultPEXEngine(adapterRegistry: .init(adapters: [try NativePEXAdapter()]), parserRegistry: .init())
+            let engine = DefaultPEXEngine(adapterRegistry: .init(adapters: [NativePEXAdapter()]), parserRegistry: .init())
             let result = try await engine.run(f.request)
             #expect(result.status == .failed && result.cornerResults[0].ir == nil)
             #expect(result.artifactManifest.backendExecutions.count == 1)
@@ -78,7 +79,7 @@ struct NativePEXAdapterTests {
     }
     @Test func directInvocationRejectsCalibrationTamperMissingConfigAndMismatchedStandardBytes() async throws {
         try await fixture { f in
-            let adapter = try NativePEXAdapter()
+            let adapter = NativePEXAdapter()
             try Data("changed bytes".utf8).write(to: f.calibrationURL)
             let tampered = try await failure(adapter, context: f.context)
             #expect(tampered.message.contains("calibrationMismatch") && tampered.executionIdentity != nil)
@@ -93,7 +94,7 @@ struct NativePEXAdapterTests {
     }
     @Test func unsupportedModesThresholdsAndExternalOverridesFailExplicitly() async throws {
         try await fixture { f in
-            let adapter = try NativePEXAdapter()
+            let adapter = NativePEXAdapter()
             for mode in [PEXExtractMode.cOnly, .rOnly] {
                 let options = PEXRunOptions(extractMode: mode, includeCouplingCaps: true, minCapacitanceF: nil,
                     minResistanceOhm: nil, maxParallelJobs: 1, emitRawArtifacts: true, emitIRJSON: true, strictValidation: true)
@@ -161,8 +162,104 @@ struct NativePEXAdapterTests {
             #expect(rejected.generatedArtifacts.isEmpty)
         }
     }
+    @Test func requiredSPEFTopologyFailureRetainsCanonicalAndEarlierStandardEvidence() async throws {
+        try await fixture(short: true) { f in
+            let result = try await DefaultPEXEngine.withDefaults().run(f.request)
+            #expect(result.status == .failed && result.cornerResults[0].ir == nil)
+            #expect(result.artifactManifest.corners[0].failure?.stage == .persistence)
+            #expect(result.artifactManifest.corners[0].failure?.message.contains("SPEF") == true)
+            #expect(result.artifactManifest.artifacts(kind: .spefRoundTrip).first?.availability == .missing)
+            #expect(result.artifactManifest.artifacts(kind: .spiceBackannotation).first?.availability == .available)
+            #expect(result.artifactManifest.artifacts(kind: .parasiticIR).first?.availability == .available)
+            #expect(result.artifactManifest.artifacts(kind: .processEvidence).count == 2)
+            #expect(result.artifactManifest.backendExecutions.count == 1)
+            let store = PEXArtifactStore(workspace: .init(baseURL: f.root, runID: result.runID))
+            let diagnosticIR = try store.loadIR(for: "tt")
+            #expect(diagnosticIR.elements.contains { $0.kind == .resistor && $0.nodeB?.netName != $0.nodeA.netName })
+            let restored = try store.loadResult()
+            #expect(restored.status == .failed && restored.cornerResults[0].ir == nil)
+            // Manifest clock observations are encoded at ISO-8601 precision;
+            // retained declarations, content identity, availability and failure remain exact.
+            #expect(restored.artifactManifest.corners == result.artifactManifest.corners)
+            #expect(restored.artifactManifest.backendExecutions == result.artifactManifest.backendExecutions)
+            #expect(restored.artifactManifest.artifacts.map(\.declaration) == result.artifactManifest.artifacts.map(\.declaration))
+            #expect(restored.artifactManifest.artifacts.map(\.payload) == result.artifactManifest.artifacts.map(\.payload))
+            #expect(restored.artifactManifest.artifacts.map(\.provenance) == result.artifactManifest.artifacts.map(\.provenance))
+            let completeness = try PEXArtifactResolver(manifestURL: result.manifestURL).completenessReport()
+            #expect(!completeness.issues.contains { $0.kind == .duplicateArtifactID || $0.kind == .failedCornerWithoutEvidence })
+        }
+    }
+
+    @Test func defaultNativeRetryUsesCapturedInputsAfterEveryOriginalIsRemoved() async throws {
+        try await fixture { f in
+            let engine = DefaultPEXEngine.withDefaults()
+            let failed = try await engine.run(f.request, cancellationCheck: { true })
+            #expect(failed.status == .failed)
+            let store = PEXArtifactStore(workspace: .init(baseURL: f.root, runID: failed.runID))
+            let captured = try store.loadRequest()
+            try removeOriginals(f)
+            let resumed = try await engine.retryFailedCorners(captured, from: try store.loadResult())
+            #expect(resumed.status == .success && resumed.resumedFromRunID == failed.runID)
+            #expect(resumed.requestHash == failed.requestHash)
+            let ir = try #require(resumed.cornerResults.first?.ir)
+            #expect(abs(ir.elements.filter { $0.kind == .resistor }.reduce(0) { $0 + $1.value } - 0.02) < 1e-14)
+            #expect(resumed.artifactManifest.artifacts(kind: .spiceBackannotation).first?.availability == .available)
+            #expect(resumed.artifactManifest.artifacts(kind: .spefRoundTrip).first?.availability == .available)
+        }
+    }
+
+    @Test func executableCLIExtractAndCapturedRetryExecuteTheActualNativeBackend() async throws {
+        try await fixture { f in
+            let executable = try cliExecutable()
+            let technology = f.root.appending(path: "technology.json")
+            let reference = f.root.appending(path: "native-input.json")
+            try JSONEncoder().encode(f.technology).write(to: technology)
+            try JSONEncoder().encode(try #require(f.request.nativeInput)).write(to: reference)
+            let output = f.root.appending(path: "cli-runs")
+            let runner = TimedProcessRunner(timeoutSeconds: 20)
+            let extraction = try await runner.run(executableURL: executable, arguments: ["extract", "--layout", f.request.layoutURL.path,
+                "--netlist", f.request.sourceNetlistURL.path, "--top-cell", "TOP", "--technology", technology.path,
+                "--native-input", reference.path, "--backend", "native", "--corner", "tt", "--out", output.path, "--json"])
+            #expect(extraction.exitCode == 0, "\(extraction.standardError)\n\(extraction.standardOutput)")
+            let json = try #require(try JSONSerialization.jsonObject(with: extraction.standardOutputData) as? [String: Any])
+            let manifest = URL(filePath: try #require((json["manifestURL"] as? String).flatMap { URL(string: $0)?.path }))
+            let resolver = try PEXArtifactResolver(manifestURL: manifest)
+            #expect(resolver.manifest.backendID == "native" && resolver.manifest.status == .success)
+            #expect(resolver.manifest.backendExecutions.first?.invocation.mode == .inProcess)
+            let failed = try await DefaultPEXEngine.withDefaults().run(f.request, cancellationCheck: { true })
+            try removeOriginals(f)
+            try FileManager.default.removeItem(at: technology)
+            try FileManager.default.removeItem(at: reference)
+            let retry = try await runner.run(executableURL: executable, arguments: ["retry", "--run", failed.manifestURL.path, "--json"])
+            #expect(retry.exitCode == 0, "\(retry.standardError)\n\(retry.standardOutput)")
+            let retried = try #require(try JSONSerialization.jsonObject(with: retry.standardOutputData) as? [String: Any])
+            let retryManifest = try #require((retried["manifestURL"] as? String).flatMap { URL(string: $0) })
+            let resumed = try PEXArtifactResolver(manifestURL: retryManifest)
+            #expect(resumed.manifest.status == .success && resumed.manifest.requestHash == failed.requestHash)
+            #expect(resumed.manifest.resumedFromRunID == failed.runID)
+        }
+    }
+
+    private func removeOriginals(_ f: NativeBackendFixture) throws {
+        try FileManager.default.removeItem(at: f.request.layoutURL)
+        try FileManager.default.removeItem(at: f.request.sourceNetlistURL)
+        try FileManager.default.removeItem(at: try #require(f.request.nativeInput).configurationURL)
+        try FileManager.default.removeItem(at: f.calibrationURL)
+    }
+
+    private func cliExecutable() throws -> URL {
+        // Bundle.module ties discovery to this test product's built resources.
+        var directory = Bundle.module.bundleURL.deletingLastPathComponent()
+        for _ in 0..<5 {
+            let candidate = directory.appending(path: "pexengine")
+            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
+            directory.deleteLastPathComponent()
+        }
+        throw PEXError.invalidInput("The test product's pexengine executable is missing; build the CLI before native integration")
+    }
+
     private func execute(_ f: NativeBackendFixture) async throws -> PEXAdapterExecutionResult {
-        let adapter = try NativePEXAdapter(); try await adapter.prepare(f.context); return try await adapter.execute(f.context)
+        let adapter = NativePEXAdapter(); try await adapter.prepare(f.context); return try await adapter.execute(f.context)
     }
     private func topology(_ result: PEXAdapterExecutionResult) throws -> NativePEXTopologyEvidence {
         let artifact = try #require(result.generatedArtifacts.first { $0.url.lastPathComponent == "native-topology.json" })

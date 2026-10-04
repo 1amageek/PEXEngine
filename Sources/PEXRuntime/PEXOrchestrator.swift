@@ -758,20 +758,21 @@ public actor PEXOrchestrator {
             producer: execution.executionIdentity.producer
         ))
         retainedArtifacts = artifacts
-        let spiceOutcome = recordSPICEBackannotationArtifact(
-            validatedIR,
-            context: context,
-            recorder: recorder,
-            producer: execution.executionIdentity.producer
-        )
-        let spefOutcome = recordSPEFRoundTripArtifact(
-            validatedIR,
-            context: context,
-            recorder: recorder,
-            producer: execution.executionIdentity.producer
-        )
-        artifacts.append(contentsOf: spiceOutcome.artifacts)
-        artifacts.append(contentsOf: spefOutcome.artifacts)
+        try recordRequiredStandardArtifact(
+            kind: .spiceBackannotation, relativePath: "spice/\(cornerID.value).cir",
+            id: "spice-backannotation-\(cornerID.value)", context: context, recorder: recorder,
+            producer: execution.executionIdentity.producer, retainedArtifacts: &retainedArtifacts
+        ) { url in
+            try PEXSPICEWriter(options: .init(subcircuitName: "PEX_\(context.topCell)_\(cornerID.value)")).write(validatedIR, to: url)
+        }
+        try recordRequiredStandardArtifact(
+            kind: .spefRoundTrip, relativePath: "spef/\(cornerID.value).spef",
+            id: "spef-roundtrip-\(cornerID.value)", context: context, recorder: recorder,
+            producer: execution.executionIdentity.producer, retainedArtifacts: &retainedArtifacts
+        ) { url in
+            try SPEFWriter().write(validatedIR, to: url)
+        }
+        artifacts = retainedArtifacts
 
         let rawURLs: [URL]
         let logURL: URL?
@@ -788,7 +789,7 @@ public actor PEXOrchestrator {
             ir: validatedIR,
             rawOutputURLs: rawURLs,
             logURL: logURL,
-            warnings: validationWarnings + connectivityWarnings + spiceOutcome.warnings + spefOutcome.warnings,
+            warnings: validationWarnings + connectivityWarnings,
             metrics: PEXCornerMetrics(
                 durationSeconds: cornerEnd.timeIntervalSince(cornerStart),
                 netCount: validatedIR.nets.count,
@@ -867,118 +868,34 @@ public actor PEXOrchestrator {
         )
     }
 
-    private func recordSPEFRoundTripArtifact(
-        _ ir: ParasiticIR,
+    private func recordRequiredStandardArtifact(
+        kind: PEXArtifactKind,
+        relativePath: String,
+        id: String,
         context: PEXExecutionContext,
         recorder: PEXArtifactRecorder,
-        producer: ProducerIdentity
-    ) -> PEXCornerArtifactRecordingOutcome {
-        let cornerID = context.corner.id
-        let spefURL = context.workingDirectory.appending(path: "spef").appending(path: "\(cornerID.value).spef")
+        producer: ProducerIdentity,
+        retainedArtifacts: inout [PEXArtifactRecord],
+        write: (URL) throws -> Void
+    ) throws {
+        let url = context.workingDirectory.appending(path: relativePath)
         do {
-            try SPEFWriter().write(ir, to: spefURL)
-            let artifact = try recorder.recordExistingArtifact(
-                url: spefURL,
-                kind: .spefRoundTrip,
-                stage: .persistence,
-                cornerID: cornerID,
-                id: "spef-roundtrip-\(cornerID.value)",
-                provenance: PEXArtifactProvenance(note: "SPEF regenerated from canonical ParasiticIR"),
-                producer: producer
-            )
-            return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [])
-        } catch {
-            return missingSPEFRoundTripOutcome(
-                error: error,
-                context: context,
-                recorder: recorder,
-                spefURL: spefURL
-            )
-        }
-    }
-
-    private func recordSPICEBackannotationArtifact(
-        _ ir: ParasiticIR,
-        context: PEXExecutionContext,
-        recorder: PEXArtifactRecorder,
-        producer: ProducerIdentity
-    ) -> PEXCornerArtifactRecordingOutcome {
-        let cornerID = context.corner.id
-        let spiceURL = context.workingDirectory.appending(path: "spice").appending(path: "\(cornerID.value).cir")
-        do {
-            try PEXSPICEWriter(options: PEXSPICEWriterOptions(
-                subcircuitName: "PEX_\(context.topCell)_\(cornerID.value)"
-            )).write(ir, to: spiceURL)
-            let artifact = try recorder.recordExistingArtifact(
-                url: spiceURL,
-                kind: .spiceBackannotation,
-                stage: .persistence,
-                cornerID: cornerID,
-                id: "spice-backannotation-\(cornerID.value)",
-                provenance: PEXArtifactProvenance(note: "Deterministic SPICE fragment generated from canonical ParasiticIR"),
-                producer: producer
-            )
-            return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [])
-        } catch {
-            let warning = PEXWarning(
-                stage: .persistence,
-                cornerID: cornerID,
-                message: "Failed to write SPICE backannotation artifact: \(error)"
-            )
-            do {
-                let artifact = try recorder.recordMissingArtifact(
-                    kind: .spiceBackannotation,
-                    stage: .persistence,
-                    cornerID: cornerID,
-                    expectedURL: spiceURL,
-                    id: "spice-backannotation-\(cornerID.value)",
-                    note: "SPICE backannotation generation failed: \(error)"
-                )
-                return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: [warning])
-            } catch {
-                return PEXCornerArtifactRecordingOutcome(
-                    artifacts: [],
-                    warnings: [warning, PEXWarning(
-                        stage: .persistence,
-                        cornerID: cornerID,
-                        message: "Failed to record missing SPICE backannotation artifact: \(error)"
-                    )]
-                )
-            }
-        }
-    }
-
-    private func missingSPEFRoundTripOutcome(
-        error: any Error,
-        context: PEXExecutionContext,
-        recorder: PEXArtifactRecorder,
-        spefURL: URL
-    ) -> PEXCornerArtifactRecordingOutcome {
-        let cornerID = context.corner.id
-        var warnings = [
-            PEXWarning(
-                stage: .persistence,
-                cornerID: cornerID,
-                message: "Failed to write SPEF round-trip artifact: \(error)"
-            ),
-        ]
-        do {
-            let artifact = try recorder.recordMissingArtifact(
-                kind: .spefRoundTrip,
-                stage: .persistence,
-                cornerID: cornerID,
-                expectedURL: spefURL,
-                id: "spef-roundtrip-\(cornerID.value)",
-                note: "SPEF round-trip generation failed: \(error)"
-            )
-            return PEXCornerArtifactRecordingOutcome(artifacts: [artifact], warnings: warnings)
-        } catch {
-            warnings.append(PEXWarning(
-                stage: .persistence,
-                cornerID: cornerID,
-                message: "Failed to record missing SPEF round-trip artifact: \(error)"
+            try write(url)
+            retainedArtifacts.append(try recorder.recordExistingArtifact(
+                url: url, kind: kind, stage: .persistence, cornerID: context.corner.id, id: id,
+                provenance: .init(note: "Required standard output generated from canonical ParasiticIR"), producer: producer
             ))
-            return PEXCornerArtifactRecordingOutcome(artifacts: [], warnings: warnings)
+        } catch {
+            let message = "Required \(kind.rawValue) output failed: \(error)"
+            do {
+                retainedArtifacts.append(try recorder.recordMissingArtifact(
+                    kind: kind, stage: .persistence, cornerID: context.corner.id,
+                    expectedURL: url, id: id, note: message
+                ))
+            } catch {
+                throw PEXError.persistenceFailed("\(message); missing-artifact recording also failed: \(error)")
+            }
+            throw PEXError.persistenceFailed(message, underlying: error)
         }
     }
 
@@ -1076,6 +993,7 @@ public actor PEXOrchestrator {
             return
         }
         let cornerID = context.corner.id
+        guard !artifacts.contains(where: { $0.matches(kind: .parasiticIR) && $0.cornerID == cornerID }) else { return }
         do {
             artifacts.append(try recorder.recordMissingArtifact(
                 kind: .parasiticIR,
@@ -1161,9 +1079,4 @@ private struct PEXCornerExecutionOutcome: Sendable {
         self.failure = failure
         self.executionIdentity = executionIdentity
     }
-}
-
-private struct PEXCornerArtifactRecordingOutcome: Sendable {
-    let artifacts: [PEXArtifactRecord]
-    let warnings: [PEXWarning]
 }

@@ -237,7 +237,7 @@ public struct PEXArtifactStore: Sendable {
                 logURL = nil
             }
             let ir: ParasiticIR?
-            if resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, availability: .available).isEmpty {
+            if corner.status != .success || resolver.records(kind: .parasiticIR, cornerID: corner.cornerID, availability: .available).isEmpty {
                 ir = nil
             } else {
                 ir = try resolver.loadIR(cornerID: corner.cornerID)
