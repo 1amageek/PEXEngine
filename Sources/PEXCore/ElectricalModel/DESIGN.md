@@ -33,11 +33,47 @@ flowchart LR
 
 ## Contracts and Invariants
 
-The only law is `rectilinearSheetV1`: isotropic sheet resistance `rho / thickness`
-in ohms per square; ground capacitance `areaCoefficient * unionArea +
-perimeterCoefficient * exposedPerimeter`; per-cut via resistance; pair capacitance
-`areaCoefficient * facingOverlapArea + sidewallCoefficient * parallelLength / gap`.
-The model is an explicitly calibrated approximation, not an electromagnetic solver.
+The law is selected explicitly. `analyticalRectilinearV1` declares isotropic sheet
+resistance `rho / thickness`, independent ground area/perimeter capacitance,
+per-cut via resistance, and visible interlayer overlap/facing-patch fringe
+`areaCoefficient * overlapArea + sidewallCoefficient * exposedPatchPerimeter / verticalGap`.
+Its coplanar coupling is `sidewallCoefficient * parallelLength / gap`.
+This is an analytical approximation without substrate shielding by other planes.
+
+`singlePlaneCoplanarGroundV1` has exactly one conductor, one self pair with a zero
+area coefficient, no cut/via, and a continuous implicit reference. It requires
+explicit `coplanarScreening` SI parameters: nonnegative offset, positive interaction
+halo, and nonnegative ground-fringe inverse length. The caller supplies retained
+calibration identities; source-derived coefficients remain an approximation, not
+foundry qualification. This version owns the Magic 8.3.652 source algebra
+`s(g) = 0.6366 * atan(groundFringeInverseMeters * g)` for an interacting exposed
+edge. The owner retains `perimeterCoefficient * length * s(g)` ground fringe,
+while the unordered edge pair adds `sidewallCoefficient * length / (g + offset)`.
+Outside the strictly open halo (`g < halo`) there is no pair operator or fringe
+consumption. Unblocked edges retain full ground fringe. Area ground capacitance
+is counted once. The full pair coefficient is not halved; directional accumulation
+in the reference implementation accounts for its own half coefficients.
+
+`coplanarScreening` is present only for the single-plane law; the analytical law
+requires explicit nil at the Swift construction boundary. Decoding the former law
+without its parameters, or combining either law with incompatible parameters,
+fails admission. The removed `rectilinearSheetV1` spelling has no alias.
+Calculation additionally rejects any reachable source shape outside the modeled
+plane and all via records, including geometry excluded from selected footprints.
+Unknown source roles are unsupported rather than inferred as noninteracting.
+The approximation is not an electromagnetic solver.
+
+`PEXElectricalModel.domainDigest()` owns the per-model numerical domain identity.
+It SHA-256 hashes sorted-key JSON of the same model value after sorting conductors,
+vias, calibration content identities, and unordered layer pairs with canonical
+orientation. Every law/SI parameter, process/corner/PVT/parameter/reference,
+coefficient/applicability interval and calibration identity participates. Layout,
+run, corner-subset selection and native configuration do not. The existing Core
+SHA-256 primitive is reused; callers do not copy the normalization/hash algorithm.
+Catalog admission validates TechnologyIR before comparing this identity. Digest
+equality proves model membership, not foundry accuracy or process calibration.
+Qualified rule-deck and process-profile scope digests remain raw-file SHA-256 values;
+they are not replaced by this numerical identity.
 Calculation must use exact union coverage, distinguish exposed from internal edges,
 respect the calibrated dimensional ranges and reject unsupported geometries. These
 calculation obligations are B3.2.3-owned and not established by this input component.
@@ -50,6 +86,8 @@ calculation obligations are B3.2.3-owned and not established by this input compo
 | Ground area / perimeter coefficients | farads per square meter / farads per meter >= 0, finite |
 | Via coefficient | ohms per individual cut > 0, finite; no aggregate-via shortcut |
 | Pair area / sidewall coefficients | farads per square meter / farads >= 0, finite |
+| Coplanar offset / interaction halo | meters >= 0 / meters > 0, finite; halo is distinct from gap applicability |
+| Ground-fringe multiplier | inverse meters >= 0, finite; never inferred from another SI coefficient |
 | Dimensional interval | closed meter interval, finite positive ordered endpoints |
 | Calibration artifacts | distinct nonempty SHA-256 ArtifactID content identities with nonzero byte counts |
 
@@ -91,3 +129,7 @@ pair coverage, JSON round-trip and coefficient/calibration request-hash invalida
 `PEXRuntimeTests/PEXElectricalModelResolutionTests` rejects invalid inline and JSON
 models before backend execution. Verification is native CPU only. This evidence does
 not qualify a foundry process, WASM/Embedded target or native extraction backend.
+`PEXNativeTests/NativePEXScreenedCapacitanceTests` owns source-law positive and
+negative behavior, nearest-neighbor ownership, halo boundary, exact geometry units,
+mesh refinement, same-net distinct nodes, and bounded atomic failure. Law/schema
+changes require fixture migration and adapter producer/algorithm identity updates.

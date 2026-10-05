@@ -25,7 +25,7 @@ struct NativePEXCalculationTests {
                             stack: [TechnologyLayer]? = nil) throws -> TechnologyIR {
         let source = try fixture.technology(), old = source.electricalModels![0]
         let selectedVias = vias ?? old.vias
-        let model = PEXElectricalModel(law: old.law, processName: old.processName, cornerID: old.cornerID,
+        let model = PEXElectricalModel(law: old.law, coplanarScreening: nil, processName: old.processName, cornerID: old.cornerID,
             temperatureKelvin: old.temperatureKelvin, voltageVolts: old.voltageVolts, parameters: old.parameters,
             referenceNodeName: old.referenceNodeName, calibrationArtifacts: old.calibrationArtifacts,
             conductors: conductors ?? old.conductors, vias: selectedVias, couplings: couplings ?? old.couplings)

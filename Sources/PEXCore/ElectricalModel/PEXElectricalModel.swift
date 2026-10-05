@@ -3,10 +3,12 @@ import CircuiteFoundationFoundation
 
 public struct PEXElectricalModel: Sendable, Codable, Hashable {
     public enum Law: String, Sendable, Codable, Hashable {
-        case rectilinearSheetV1
+        case analyticalRectilinearV1
+        case singlePlaneCoplanarGroundV1
     }
 
     public let law: Law
+    public let coplanarScreening: PEXCoplanarScreening?
     public let processName: String
     public let cornerID: PEXCornerID
     public let temperatureKelvin: Double
@@ -18,11 +20,12 @@ public struct PEXElectricalModel: Sendable, Codable, Hashable {
     public let vias: [PEXViaElectricalModel]
     public let couplings: [PEXCouplingElectricalModel]
 
-    public init(law: Law, processName: String, cornerID: PEXCornerID, temperatureKelvin: Double,
+    public init(law: Law, coplanarScreening: PEXCoplanarScreening?, processName: String, cornerID: PEXCornerID, temperatureKelvin: Double,
                 voltageVolts: Double, parameters: [String: String], referenceNodeName: String,
                 calibrationArtifacts: [ArtifactID], conductors: [PEXConductorElectricalModel],
                 vias: [PEXViaElectricalModel], couplings: [PEXCouplingElectricalModel]) {
         self.law = law
+        self.coplanarScreening = coplanarScreening
         self.processName = processName
         self.cornerID = cornerID
         self.temperatureKelvin = temperatureKelvin
@@ -36,6 +39,19 @@ public struct PEXElectricalModel: Sendable, Codable, Hashable {
     }
 
     public func validate(in technology: TechnologyIR) throws(PEXElectricalModelError) {
+        switch law {
+        case .analyticalRectilinearV1:
+            guard coplanarScreening == nil else { throw .unsupportedLawScope(field: "analyticalRectilinearV1.coplanarScreening") }
+        case .singlePlaneCoplanarGroundV1:
+            guard let coplanarScreening else { throw .missing(field: "coplanarScreening") }
+            try coplanarScreening.validate()
+            guard conductors.count == 1, vias.isEmpty, technology.vias.isEmpty, technology.stack.count == 1,
+                  couplings.count == 1, let conductor = conductors.first, let pair = couplings.first,
+                  pair.firstLayerName == conductor.layerName, pair.secondLayerName == conductor.layerName,
+                  pair.areaFaradsPerSquareMeter == 0 else {
+                throw .unsupportedLawScope(field: "singlePlaneCoplanarGroundV1.topology")
+            }
+        }
         try ElectricalModelAdmission.identity(processName, field: "processName")
         try ElectricalModelAdmission.identity(cornerID.value, field: "cornerID")
         try ElectricalModelAdmission.identity(referenceNodeName, field: "referenceNodeName")

@@ -1,4 +1,5 @@
 import PEXCore
+import LayoutCore
 
 public enum NativePEXCalculationError: Error, Sendable, Equatable {
     public enum Resource: String, Sendable, Equatable {
@@ -9,6 +10,8 @@ public enum NativePEXCalculationError: Error, Sendable, Equatable {
     case emptyGeometry
     case electricalModel(PEXElectricalModelError)
     case invalidLayerMapping
+    case unsupportedSourceLayer(LayoutLayerID)
+    case unsupportedSourceVias
     case inconsistentSnapshot
     case ambiguousCutModel
     case unknownViaDefinition(String)

@@ -83,6 +83,37 @@ parallel edge length is the exposed perimeter of the visible facing patch and ga
 the vertical dielectric distance. This is the declared calibrated approximation,
 not a general electromagnetic field solution or independent physical qualification.
 
+For `singlePlaneCoplanarGroundV1`, admission occurs before mesh allocation and
+requires one modeled conductor, no cuts/vias, and every reachable source shape on
+that conductor. The reference is a continuous implicit plane. All source inventory
+is checked, including unselected geometry retained by the capture hierarchy.
+`analyticalRectilinearV1` is a separate explicit law; its independent ground and
+visible interlayer approximation cannot act as a fallback for unsupported screened
+inputs. Existing layered analytical fixtures select that law explicitly.
+
+One nearest-neighbor partition of exposed faces owns both coplanar pair capacitance
+and the two owners' ground fringe fractions. Each face begins fully exposed to the
+reference; an admitted pair with physical `0 < gap < interactionHaloMeters` records
+`s = 0.6366 * atan(groundFringeInverseMeters * gap)` on its two opposing faces.
+The pair emits full `sidewallFarads * physicalLength / (gap + offsetMeters)` once.
+Ground emission follows partitioning and uses `areaCoefficient * unionArea` plus
+the nonnegative face remainders. It does not subtract aggregate values after graph
+publication or force ground loss to equal pair capacitance. At/beyond the halo,
+faces remain unblocked and no pair is emitted. Gap applicability is checked only
+for admitted interacting pairs. Connected components and logical net names do not
+remove capacitance between distinct resistive numeric nodes.
+
+The shared coordinate lines partition partial facing edges exactly. Sorting occupied
+cells into rows/columns identifies only adjacent occupied cells, avoiding all-pairs
+search and empty Cartesian allocation. Face-fraction storage is bounded by occupied
+metal cells, charged to existing mesh/work budgets; pair and ground emission use the
+existing network-element budget. Every visit is cancellable and failures publish no
+partial network. Positive numeric intermediates must remain representable; overflow
+and underflow fail explicitly. Nonnegative branch capacitances preserve passivity;
+including the reference in the capacitance matrix preserves row sums and charge.
+Neither a fixed sum of scalar capacitances nor `groundLoss == pairCapacitance` is
+a conservation law.
+
 Pin incidence records positive-area overlap with metal cells, matching the captured
 annotation contract; edge/corner-only annotations add no contact. It adds no resistor/ideal wire.
 Finite-volume nodes are not terminal electrodes: [ElectrodeConstruction](../ElectrodeConstruction/DESIGN.md) must construct
@@ -111,6 +142,12 @@ independent cut conductance, visible plate/sidewall C, shielding, floating/islan
 pin incidence, exact corner/units, deterministic mesh and typed limits/cancellation.
 Mesh/physics changes invalidate native graph evidence; backend terminal projection and
 qualification additionally require their own end-to-end and independent evidence.
+`NativePEXScreenedCapacitanceTests` verifies isolated and paired strips, both source-law
+observables at two gaps, three-strip and partial-edge shielding, halo boundary,
+refinement/coordinate units, same-net distinct nodes, source-inventory rejection,
+bad model/numerics, budgets and cancellation through the public preparation and
+calculation path. Analytical layered tests continue to prove only the explicit
+facing-patch approximation. Source algebra correlation is not foundry qualification.
 `NativePEXContactAdmissionTests` prepares the real selected configuration, captures
 same-cut/same-top alternative contacts, checks public actual-contact queries and runs
 the calculator. Metal-only selection preserves the analytical cut R and ground C;

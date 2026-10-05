@@ -1,4 +1,5 @@
 import PEXCore
+import Foundation
 
 extension NativePEXCalculation {
     private struct Projection: Hashable { let x: Int; let y: Int }
@@ -27,13 +28,36 @@ extension NativePEXCalculation {
                 guard gap > 0 else { continue }
                 guard let model = pairModels[Set([mesh.layers[first.layer].name])] else { throw .inconsistentSnapshot }
                 let gapMeters = try NativePEXMath.positive(Double(gap) * mesh.metersPerDatabaseUnit)
+                let screening = mesh.model.coplanarScreening
+                if let screening, gapMeters >= screening.interactionHaloMeters { continue }
                 do { try model.gapRange.requireContains(gapMeters, field: "\(mesh.layers[first.layer].name).coplanarGap") }
                 catch { throw .electricalModel(error) }
                 let length = alongX ? height(first) : width(first)
-                let value = try NativePEXMath.term(coefficient: model.sidewallFarads, geometry: Double(length) / Double(gap))
+                let ratio: Double
+                if let screening {
+                    let physicalLength = try NativePEXMath.positive(Double(length) * mesh.metersPerDatabaseUnit)
+                    let denominator = try NativePEXMath.positive(gapMeters + screening.offsetMeters)
+                    ratio = model.sidewallFarads == 0 ? 0 : try NativePEXMath.positive(physicalLength / denominator)
+                    // Magic 8.3.652 ExtCouple.c extRemoveSubcap uses this source-law
+                    // constant; its multiplier is explicit inverse meters, not permittivity.
+                    let argument = try NativePEXMath.term(coefficient: screening.groundFringeInverseMeters, geometry: gapMeters)
+                    let fraction = try NativePEXMath.term(coefficient: 0.6366, geometry: atan(argument))
+                    guard fraction <= 1 else { throw .numericFailure }
+                    try mesh.budget.visit(isCancelled)
+                    if alongX { groundFringe[first, default: GroundFringe()].maxX = fraction }
+                    else { groundFringe[first, default: GroundFringe()].maxY = fraction }
+                    try mesh.budget.visit(isCancelled)
+                    if alongX { groundFringe[second, default: GroundFringe()].minX = fraction }
+                    else { groundFringe[second, default: GroundFringe()].minY = fraction }
+                } else {
+                    ratio = Double(length) / Double(gap)
+                }
+                let value = try NativePEXMath.term(coefficient: model.sidewallFarads, geometry: ratio)
                 try addCapacitance(nodeIDs[first]!, nodeIDs[second]!, value, kind: .coplanar)
             }
         }
+        // This law admits no other conductor plane; there is no interlayer fallback.
+        if mesh.model.law == .singlePlaneCoplanarGroundV1 { return }
         var columns: [Projection: [Key]] = [:]
         for key in metalKeys {
             try mesh.budget.visit(isCancelled)

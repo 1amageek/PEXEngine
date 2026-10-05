@@ -24,7 +24,7 @@ struct NativeBackendFixture {
         let calibration = try ArtifactID(digest: ContentDigest(algorithm: .sha256, hexadecimalValue:
             SHA256.hash(data: calibrationBytes).map { String(format: "%02x", $0) }.joined()), byteCount: UInt64(calibrationBytes.count))
         let range = PEXDimensionRangeMeters(minimumMeters: 1e-12, maximumMeters: 1)
-        let model = PEXElectricalModel(law: .rectilinearSheetV1, processName: "analytic", cornerID: "tt",
+        let model = PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "analytic", cornerID: "tt",
             temperatureKelvin: 298.15, voltageVolts: 1.8, parameters: [:], referenceNodeName: "0", calibrationArtifacts: [calibration],
             conductors: [.init(layerName: "M1", bottomHeightMeters: 0, thicknessMeters: 1e-6, resistivityOhmMeters: 2e-8,
                 groundAreaFaradsPerSquareMeter: 1e-4, groundPerimeterFaradsPerMeter: 1e-10, widthRange: range, lengthRange: range)],
@@ -48,10 +48,10 @@ struct NativeBackendFixture {
                 + (short ? [.init(occurrenceIndex: 0, netID: otherNetID, netName: NetName("OTHER"))] : []),
             electrodeBindings: [
                 .init(pinIndex: 0, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("A")),
-                    faces: [.init(side: .minX, coordinate: 0, begin: 0, end: 1000)]),
+                    faces: [.init(side: .minX, coordinate: 0, begin: 0, end: 2000)]),
                 .init(pinIndex: 1, terminal: .init(netName: NetName(short ? "OTHER" : "SIGNAL"), nodeName: NodeName("B")),
-                    faces: [.init(side: .maxX, coordinate: 1000, begin: 0, end: 1000)])],
-            expectedCoordinateUnits: .defaultUnits, maximumCellSpanDatabaseUnits: span,
+                    faces: [.init(side: .maxX, coordinate: 2000, begin: 0, end: 2000)])],
+            expectedCoordinateUnits: .init(scale: try .init(databaseUnitsPerMicrometer: 2000)), maximumCellSpanDatabaseUnits: span * 2,
             calculationLimits: .init(maximumMeshCells: meshLimit))
         let layout = root.appending(path: format == .gds ? "input.gds" : "input.oas")
         try MaskDataFormatConverter(tech: config.layoutTechnology).exportDocument(document, to: layout, format: format)

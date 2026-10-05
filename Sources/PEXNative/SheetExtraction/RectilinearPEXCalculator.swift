@@ -16,8 +16,14 @@ public struct RectilinearPEXCalculator: NativePEXCalculating {
         var calculation = try NativePEXCalculation(mesh: mesh, isCancelled: isCancelled)
         try calculation.sheetResistance(isCancelled)
         try calculation.cutResistance(isCancelled)
-        try calculation.groundCapacitance(isCancelled)
-        try calculation.couplingCapacitance(isCancelled)
+        switch mesh.model.law {
+        case .analyticalRectilinearV1:
+            try calculation.groundCapacitance(isCancelled)
+            try calculation.couplingCapacitance(isCancelled)
+        case .singlePlaneCoplanarGroundV1:
+            try calculation.couplingCapacitance(isCancelled)
+            try calculation.groundCapacitance(isCancelled)
+        }
         return try calculation.finish(isCancelled)
     }
 }

@@ -68,6 +68,9 @@ struct NativePEXMesh {
         do { model = try technology.electricalModel(for: corner) }
         catch { throw .electricalModel(error) }
         guard !snapshot.footprints.isEmpty else { throw .emptyGeometry }
+        if model.law == .singlePlaneCoplanarGroundV1, !snapshot.hierarchy.vias.isEmpty {
+            throw .unsupportedSourceVias
+        }
         let meters = 1e-6 / snapshot.coordinateUnits.scale.databaseUnitsPerMicrometer
         guard meters.isFinite, meters > 0 else { throw .invalidUnits }
         let metal = Dictionary(uniqueKeysWithValues: model.conductors.map { ($0.layerName, $0) })
@@ -81,6 +84,15 @@ struct NativePEXMesh {
             throw .invalidLayerMapping
         }
         let layerIndices = Dictionary(uniqueKeysWithValues: layers.enumerated().map { ($0.element.id, $0.offset) })
+        if model.law == .singlePlaneCoplanarGroundV1 {
+            try budget.charge(.inputRecords, snapshot.hierarchy.shapes.count)
+            guard let conductorLayer = layers.first?.id else { throw .invalidLayerMapping }
+            // Capture retains all reachable source records, even outside selected footprints.
+            for shape in snapshot.hierarchy.shapes {
+                try budget.visit(isCancelled)
+                guard shape.layer == conductorLayer else { throw .unsupportedSourceLayer(shape.layer) }
+            }
+        }
         let viaModels = Dictionary(uniqueKeysWithValues: model.vias.map { ($0.viaName, $0) })
         var components = [Int](repeating: -1, count: snapshot.footprints.count)
         for (index, component) in snapshot.components.enumerated() {

@@ -18,7 +18,7 @@ struct NativePEXTestFixture {
         let range = PEXDimensionRangeMeters(minimumMeters: 1e-12, maximumMeters: 1)
         let artifact = try ArtifactID(digest: ContentDigest(algorithm: .sha256,
                         hexadecimalValue: String(repeating: "ac", count: 32)), byteCount: 17)
-        let model = PEXElectricalModel(law: .rectilinearSheetV1, processName: "analytic",
+        let model = PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "analytic",
             cornerID: "tt", temperatureKelvin: 298.15, voltageVolts: 1.8, parameters: [:], referenceNodeName: "0",
             calibrationArtifacts: [artifact], conductors: [0.0, 2e-6].enumerated().map {
                 PEXConductorElectricalModel(layerName: "M\($0.offset + 1)", bottomHeightMeters: $0.element,

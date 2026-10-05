@@ -2,12 +2,20 @@ import PEXCore
 
 struct NativePEXCalculation {
     typealias Key = NativePEXMesh.Key
+    struct GroundFringe {
+        var minX = 1.0
+        var maxX = 1.0
+        var minY = 1.0
+        var maxY = 1.0
+    }
     var mesh: NativePEXMesh
     let metalKeys: [Key]
     let nodeIDs: [Key: Int]
     var nodes: [NativePEXNetwork.Node]
     var resistors: [NativePEXNetwork.Resistor] = []
     var capacitors: [NativePEXNetwork.Capacitor] = []
+    // At most one four-face record per occupied metal cell, bounded by meshCells.
+    var groundFringe: [Key: GroundFringe] = [:]
 
     init(mesh: NativePEXMesh, isCancelled: () -> Bool) throws(NativePEXCalculationError) {
         var budget = mesh.budget

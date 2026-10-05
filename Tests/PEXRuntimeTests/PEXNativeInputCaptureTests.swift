@@ -179,7 +179,7 @@ private struct NativeCaptureFixture {
     }
     func request(configuration: URL? = nil, calibration: URL? = nil, configurationBudget: Int? = nil, declareCalibration: Bool = true) throws -> PEXRunRequest {
         let range = PEXDimensionRangeMeters(minimumMeters: 1e-12, maximumMeters: 1)
-        let model = PEXElectricalModel(law: .rectilinearSheetV1, processName: "capture-fixture", cornerID: "tt", temperatureKelvin: 298.15,
+        let model = PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "capture-fixture", cornerID: "tt", temperatureKelvin: 298.15,
             voltageVolts: 1.8, parameters: [:], referenceNodeName: "0", calibrationArtifacts: [identity],
             conductors: [.init(layerName: "M1", bottomHeightMeters: 0, thicknessMeters: 1e-6, resistivityOhmMeters: 2e-8,
                 groundAreaFaradsPerSquareMeter: 1e-4, groundPerimeterFaradsPerMeter: 1e-10, widthRange: range, lengthRange: range)],

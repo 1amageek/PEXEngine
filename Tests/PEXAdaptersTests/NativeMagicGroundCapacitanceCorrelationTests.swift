@@ -12,17 +12,22 @@ import LayoutTech
 import LayoutIO
 import SignoffToolSupport
 
-@Suite("Native and actual Magic isolated-sheet ground capacitance", .timeLimit(.minutes(1)))
+@Suite("Native and actual Magic single-plane capacitance", .timeLimit(.minutes(1)))
 struct NativeMagicGroundCapacitanceCorrelationTests {
     struct Rectangle: Sendable, CustomStringConvertible {
         let length: Double
         let width: Double
-        var description: String { "\(length)x\(width)um" }
+        let gap: Double?
+        init(length: Double, width: Double, gap: Double? = nil) {
+            self.length = length; self.width = width; self.gap = gap
+        }
+        var description: String { "\(length)x\(width)um-gap\(gap.map(String.init(describing:)) ?? "isolated")" }
     }
 
     @Test(.enabled(if: MagicPEXAdapterTests.toolchain != nil), arguments: [
         Rectangle(length: 10, width: 10), Rectangle(length: 20, width: 5),
         Rectangle(length: 20, width: 10), Rectangle(length: 100, width: 1),
+        Rectangle(length: 10, width: 1, gap: 1), Rectangle(length: 10, width: 1, gap: 2),
     ])
     func capturedStandardRectangleAgreesWithActualMagic(rectangle: Rectangle) async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "native-magic-correlation-\(UUID())")
@@ -38,7 +43,8 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
         let deckText = try #require(String(data: deckBytes, encoding: .utf8))
         let nominalCaps = try section(deckText, after: "# Nominal capacitances", before: "# Parasitic capacitance values for minimum corner")
         let nominalResistance = try section(deckText, after: "# Resistances are in milliohms per square", before: "# High-end corner resistances")
-        let area = try coefficient(["defaultareacap", "allm1", "metal1"], in: nominalCaps) * 1e-6
+        let areaSource = try coefficient(["defaultareacap", "allm1", "metal1"], in: nominalCaps)
+        let area = areaSource * 1e-6
         let perimeter = try coefficient(["defaultperimeter", "allm1", "metal1"], in: nominalCaps) * 1e-12
         let sheet = try coefficient(["resist", "(allm1)/metal1"], in: nominalResistance) * 1e-3
         let height = try coefficient(["height", "allm1"], in: deckText) * 1e-6
@@ -51,7 +57,13 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
         let sidewall = try coefficient(["defaultsidewall", "allm1", "metal1"], in: nominalCaps) * 1e-18
         // Both observables use the ideal substrate; native standard output names
         // its implicit reference 0, while the installed Magic deck names it VSUBS.
-        let model = PEXElectricalModel(law: .rectilinearSheetV1, processName: "sky130A", cornerID: "nominal",
+        let screening = PEXCoplanarScreening(
+            offsetMeters: try coefficient(["defaultsidewall", "allm1", "metal1"], in: nominalCaps, valueIndex: 1) * 1e-6,
+            interactionHaloMeters: try coefficient(["sidehalo"], in: deckText) * 1e-6,
+            // Magic 8.3.652 ExtTech.c FRINGE_MULT is a source-law approximation.
+            // Convert its 0.02 * area(aF/um^2) inverse-micron result to inverse meters.
+            groundFringeInverseMeters: 0.02 * areaSource * 1e6)
+        let model = PEXElectricalModel(law: .singlePlaneCoplanarGroundV1, coplanarScreening: screening, processName: "sky130A", cornerID: "nominal",
             temperatureKelvin: 298.15, voltageVolts: 1.8, parameters: [:], referenceNodeName: "0",
             calibrationArtifacts: [calibrationID], conductors: [.init(layerName: "M1", bottomHeightMeters: height,
                 thicknessMeters: thickness, resistivityOhmMeters: sheet * thickness,
@@ -69,8 +81,13 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
             layers: [.init(layerID: layer, electricalName: "M1", isConductive: true)], supplementalPins: [],
             netBindings: [], electrodeBindings: [], expectedCoordinateUnits: .defaultUnits,
             maximumCellSpanDatabaseUnits: 1000, calculationLimits: .init(maximumMeshCells: 512))
-        let cell = LayoutCell(name: "cap_rectangle", shapes: [.init(layer: layer,
-            geometry: .rect(.init(origin: .init(x: 0, y: 0), size: .init(width: rectangle.length, height: rectangle.width))))])
+        func strip(_ y: Double) -> LayoutShape {
+            .init(layer: layer, geometry: .rect(.init(origin: .init(x: 0, y: y),
+                size: .init(width: rectangle.length, height: rectangle.width))))
+        }
+        var shapes = [strip(0)]
+        if let gap = rectangle.gap { shapes.append(strip(rectangle.width + gap)) }
+        let cell = LayoutCell(name: "cap_rectangle", shapes: shapes)
         let document = LayoutDocument(name: "correlation", cells: [cell], topCellID: cell.id)
         let layoutURL = root.appending(path: "rectangle.gds")
         try MaskDataFormatConverter(tech: layoutTechnology).exportDocument(document, to: layoutURL, format: .gds)
@@ -103,16 +120,26 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
         let rawBytes = try Data(contentsOf: rawURL)
         let rawText = try #require(String(data: rawBytes, encoding: .utf8))
         let capacitorLines = rawText.split(whereSeparator: \.isNewline).filter { $0.first == "C" }
-        let capacitorLine = try #require(capacitorLines.count == 1 ? capacitorLines.first : nil)
-        let literal = try #require(capacitorLine.split(whereSeparator: \.isWhitespace).dropFirst(3).first)
-        try #require(literal.hasSuffix("f"))
-        let fraction = try #require(literal.dropLast().split(separator: ".", omittingEmptySubsequences: false).dropFirst().first)
-        let printBudget = 0.5 * pow(10.0, -Double(fraction.count)) * 1e-15
+        try #require(capacitorLines.count == (rectangle.gap == nil ? 1 : 3))
+        var printBudget = 0.0
+        for capacitorLine in capacitorLines {
+            let literal = try #require(capacitorLine.split(whereSeparator: \.isWhitespace).dropFirst(3).first)
+            try #require(literal.hasSuffix("f"))
+            let fraction = try #require(literal.dropLast().split(separator: ".", omittingEmptySubsequences: false).dropFirst().first)
+            printBudget += 0.5 * pow(10.0, -Double(fraction.count)) * 1e-15
+        }
         let operationCount = 4 * nativeIR.elements.count + nativeIR.nets.count
-        let floatingBudget = Double(operationCount) * Double.ulpOfOne * abs(nativeValue)
+        let nativeCoupling = nativeIR.elements.filter { $0.kind == .coupling }.reduce(0) { $0 + $1.value }
+        let oracleCoupling = oracleIR.elements.filter { $0.kind == .coupling }.reduce(0) { $0 + $1.value }
+        let floatingBudget = Double(operationCount) * Double.ulpOfOne * abs(nativeValue + nativeCoupling)
         #expect(abs(nativeValue - oracleValue) <= printBudget + floatingBudget)
-        #expect(nativeIR.elements.allSatisfy { $0.kind != .coupling })
-        #expect(oracleIR.elements.count == 1 && oracleIR.elements[0].kind == .capacitor)
+        #expect(abs(nativeCoupling - oracleCoupling) <= printBudget + floatingBudget)
+        if rectangle.gap == nil {
+            #expect(nativeIR.elements.allSatisfy { $0.kind != .coupling })
+            #expect(oracleIR.elements.count == 1 && oracleIR.elements[0].kind == .capacitor)
+        } else {
+            #expect(nativeCoupling > 0 && oracleCoupling > 0)
+        }
         #expect(try artifactID(Data(contentsOf: sourceDeck)) == calibrationID)
         #expect(try artifactID(Data(contentsOf: layoutURL)) == layoutID)
         let nativeIdentity = try #require(native.artifactManifest.backendExecutions.first)
@@ -121,8 +148,8 @@ struct NativeMagicGroundCapacitanceCorrelationTests {
         #expect(oracleIdentity.invocation.mode == .externalProcess && oracleIdentity.producer.identifier == "pex-magic")
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let summary = """
-        geometry_um,native_ground_F,magic_ground_F,print_budget_F,floating_budget_F,layout_sha256,calibration_sha256
-        \(rectangle.description),\(nativeValue),\(oracleValue),\(printBudget),\(floatingBudget),\(layoutID.digest.hexadecimalValue),\(calibrationID.digest.hexadecimalValue)
+        geometry_um,native_ground_F,magic_ground_F,native_coupling_F,magic_coupling_F,print_budget_F,floating_budget_F,layout_sha256,calibration_sha256
+        \(rectangle.description),\(nativeValue),\(oracleValue),\(nativeCoupling),\(oracleCoupling),\(printBudget),\(floatingBudget),\(layoutID.digest.hexadecimalValue),\(calibrationID.digest.hexadecimalValue)
         """
         Attachment.record(summary, named: "\(rectangle.description)-comparison.csv")
         Attachment.record(Array(deckBytes), named: "\(rectangle.description)-calibration.tech")

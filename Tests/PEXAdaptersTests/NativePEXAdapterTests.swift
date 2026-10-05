@@ -29,13 +29,20 @@ struct NativePEXAdapterTests {
             let image = try NativePEXCodeImage.measure()
             #expect(identity.binaryDigest == image.digest && identity.producer.build == image.digest.hexadecimalValue)
             #expect(identity.invocation.mode == .inProcess && identity.producer.identifier == "pex-native")
+            #expect(identity.producer.version == "2.0.0")
             let workspace = PEXRunWorkspace(baseURL: f.root, runID: result.runID)
             let resolver = try PEXArtifactResolver(workspace: workspace, manifest: result.artifactManifest)
             let record = try #require(resolver.records(kind: .processEvidence, availability: .available).first {
                 $0.declaration.relativePath.stringValue.hasSuffix("native-topology.json")
             })
             let report = try JSONDecoder().decode(NativePEXTopologyEvidence.self, from: Data(contentsOf: resolver.validatedURL(for: record)))
-            #expect(report.version == 1 && report.image == image && report.executionIdentity == identity)
+            #expect(report.version == 2 && report.image == image && report.executionIdentity == identity)
+            #expect(try report.model.domainDigest() == f.technology.electricalModels![0].domainDigest())
+            var obsolete = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any])
+            obsolete["version"] = 1
+            #expect(throws: DecodingError.self) {
+                try JSONDecoder().decode(NativePEXTopologyEvidence.self, from: JSONSerialization.data(withJSONObject: obsolete))
+            }
             #expect(report.policy == NativePEXBackendPolicy(adapter: adapter))
             #expect(report.components.count == 1 && report.pins.count == 2 && report.numericNodes.count == 1)
             #expect(report.electrodeContacts.count == 2 && report.opens.isEmpty && report.shortComponentIndices.isEmpty)
@@ -208,7 +215,7 @@ struct NativePEXAdapterTests {
         }
     }
 
-    @Test func executableCLIExtractAndCapturedRetryExecuteTheActualNativeBackend() async throws {
+    @Test func executableCLIExtractsAndRejectsRetryFromAnotherActualImage() async throws {
         try await fixture { f in
             let executable = try cliExecutable()
             let technology = f.root.appending(path: "technology.json")
@@ -230,13 +237,19 @@ struct NativePEXAdapterTests {
             try removeOriginals(f)
             try FileManager.default.removeItem(at: technology)
             try FileManager.default.removeItem(at: reference)
+            let retainedBefore = try FileManager.default.contentsOfDirectory(at: f.root, includingPropertiesForKeys: nil)
+                .filter { FileManager.default.fileExists(atPath: $0.appending(path: "manifest.json").path) }
             let retry = try await runner.run(executableURL: executable, arguments: ["retry", "--run", failed.manifestURL.path, "--json"])
-            #expect(retry.exitCode == 0, "\(retry.standardError)\n\(retry.standardOutput)")
-            let retried = try #require(try JSONSerialization.jsonObject(with: retry.standardOutputData) as? [String: Any])
-            let retryManifest = try #require((retried["manifestURL"] as? String).flatMap { URL(string: $0) })
-            let resumed = try PEXArtifactResolver(manifestURL: retryManifest)
-            #expect(resumed.manifest.status == .success && resumed.manifest.requestHash == failed.requestHash)
-            #expect(resumed.manifest.resumedFromRunID == failed.runID)
+            let cliIdentity = try #require(resolver.manifest.backendExecutions.first)
+            let parentIdentity = try #require(failed.artifactManifest.backendExecutions.first)
+            #expect(cliIdentity.binaryDigest != parentIdentity.binaryDigest)
+            #expect(retry.exitCode == 3, "\(retry.standardError)\n\(retry.standardOutput)")
+            #expect(retry.standardError.contains("Retry observed a different backend implementation"))
+            #expect(retry.standardOutputData.isEmpty)
+            let retainedAfter = try FileManager.default.contentsOfDirectory(at: f.root, includingPropertiesForKeys: nil)
+                .filter { FileManager.default.fileExists(atPath: $0.appending(path: "manifest.json").path) }
+            #expect(Set(retainedAfter) == Set(retainedBefore))
+            #expect(try PEXArtifactResolver(manifestURL: failed.manifestURL).manifest.status == .failed)
         }
     }
 

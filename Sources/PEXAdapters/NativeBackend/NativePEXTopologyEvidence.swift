@@ -5,6 +5,8 @@ import LayoutCore
 
 /// Physical-to-canonical observations. Numeric operators are retained in the canonical IR.
 public struct NativePEXTopologyEvidence: Sendable, Codable {
+    /// Retained process-evidence filename used to identify the typed topology record.
+    public static let artifactFileName = "native-topology.json"
     public struct Net: Sendable, Codable {
         public let occurrenceIndex: Int
         public let netID: UUID
@@ -87,10 +89,40 @@ public struct NativePEXTopologyEvidence: Sendable, Codable {
     public let numericResistorElementIDs: [String]
     public let numericCapacitorElementIDs: [String]
 
+    private enum CodingKeys: String, CodingKey {
+        case version, policy, image, executionIdentity, coordinateUnits, model, netBindings, occurrences, footprints, components, pins, opens, shortComponentIndices, numericNodes, ports, electrodeContacts, numericResistorElementIDs, numericCapacitorElementIDs
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        guard version == 2 else {
+            throw DecodingError.dataCorruptedError(forKey: .version, in: c,
+                debugDescription: "Native topology requires explicit-capacitance model schema version 2.")
+        }
+        policy = try c.decode(NativePEXBackendPolicy.self, forKey: .policy)
+        image = try c.decode(NativePEXCodeImage.self, forKey: .image)
+        executionIdentity = try c.decode(PEXBackendExecutionIdentity.self, forKey: .executionIdentity)
+        coordinateUnits = try c.decode(LayoutUnits.self, forKey: .coordinateUnits)
+        model = try c.decode(PEXElectricalModel.self, forKey: .model)
+        netBindings = try c.decode([NativePEXNetBinding].self, forKey: .netBindings)
+        occurrences = try c.decode([Occurrence].self, forKey: .occurrences)
+        footprints = try c.decode([Footprint].self, forKey: .footprints)
+        components = try c.decode([Component].self, forKey: .components)
+        pins = try c.decode([Pin].self, forKey: .pins)
+        opens = try c.decode([Open].self, forKey: .opens)
+        shortComponentIndices = try c.decode([Int].self, forKey: .shortComponentIndices)
+        numericNodes = try c.decode([NumericNode].self, forKey: .numericNodes)
+        ports = try c.decode([Port].self, forKey: .ports)
+        electrodeContacts = try c.decode([Contact].self, forKey: .electrodeContacts)
+        numericResistorElementIDs = try c.decode([String].self, forKey: .numericResistorElementIDs)
+        numericCapacitorElementIDs = try c.decode([String].self, forKey: .numericCapacitorElementIDs)
+    }
+
     init(projection: NativePEXProjection, image: NativePEXCodeImage, identity: PEXBackendExecutionIdentity, policy: NativePEXBackendPolicy) {
         let electrodes = projection.electrodes, network = electrodes.network, snapshot = network.snapshot
         func net(_ occurrence: Int, _ id: UUID) -> Net { .init(occurrenceIndex: occurrence, netID: id) }
-        version = 1; self.policy = policy; self.image = image; executionIdentity = identity
+        version = 2; self.policy = policy; self.image = image; executionIdentity = identity
         coordinateUnits = snapshot.coordinateUnits; model = network.model; netBindings = projection.netBindings
         occurrences = snapshot.hierarchy.occurrences.map { value in
             .init(sourceCellID: value.sourceCellID, parentIndex: value.parentIndex,

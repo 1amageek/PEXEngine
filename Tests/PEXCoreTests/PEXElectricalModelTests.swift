@@ -16,7 +16,7 @@ struct PEXElectricalModelTests {
                 resistivityOhmMeters: 2e-8, groundAreaFaradsPerSquareMeter: 1e-4,
                 groundPerimeterFaradsPerMeter: 1e-10, widthRange: range, lengthRange: range)
         }
-        let model = PEXElectricalModel(law: .rectilinearSheetV1, processName: "analytical-fixture",
+        let model = PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "analytical-fixture",
             cornerID: PEXCornerID("tt"), temperatureKelvin: 298.15, voltageVolts: 1.8, parameters: [:],
             referenceNodeName: "0", calibrationArtifacts: [artifact], conductors: [metal("M1", 0), metal("M2", 2e-6)],
             vias: [PEXViaElectricalModel(viaName: "V1", cutLayerName: "C1", bottomLayerName: "M1", topLayerName: "M2",
@@ -257,6 +257,115 @@ struct PEXElectricalModelTests {
 
     @Test func unknownModelLawCannotDecodeAsSupported() throws {
         #expect(throws: DecodingError.self) { try changedModel { $0["law"] = "unqualifiedLaw" } }
+    }
+
+    @Test func removedImplicitLawSpellingCannotDecode() throws {
+        #expect(throws: DecodingError.self) { try changedModel { $0["law"] = "rectilinearSheetV1" } }
+    }
+
+    private func screenedFixture() throws -> TechnologyIR {
+        try changed { object in
+            object["stack"] = [["name": "M1", "order": 0]]
+            object["logicalToPhysicalLayerMap"] = [String: String]()
+            object["vias"] = [[String: Any]]()
+            var model = (object["electricalModels"] as! [[String: Any]])[0]
+            model["law"] = "singlePlaneCoplanarGroundV1"
+            model["coplanarScreening"] = ["offsetMeters": 0.25e-6,
+                "interactionHaloMeters": 8e-6, "groundFringeInverseMeters": 515_600]
+            model["conductors"] = Array((model["conductors"] as! [[String: Any]]).prefix(1))
+            model["vias"] = [[String: Any]]()
+            var pair = (model["couplings"] as! [[String: Any]])[0]
+            pair["areaFaradsPerSquareMeter"] = 0
+            model["couplings"] = [pair]
+            object["electricalModels"] = [model]
+        }
+    }
+
+    @Test func screenedModelRoundTripsOnlyWithExplicitRequiredParameters() throws {
+        let technology = try screenedFixture()
+        try technology.validateElectricalModels()
+        #expect(try JSONDecoder().decode(TechnologyIR.self, from: JSONEncoder().encode(technology)) == technology)
+        let model = try technology.electricalModel(for: .init(id: "tt"))
+        #expect(model.coplanarScreening?.groundFringeInverseMeters == 515_600)
+        let missing = try changedModel { $0["law"] = "singlePlaneCoplanarGroundV1" }
+        #expect(throws: PEXElectricalModelError.missing(field: "coplanarScreening")) { try missing.validateElectricalModels() }
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXCoplanarScreening.self, from: Data("{\"offsetMeters\":0,\"interactionHaloMeters\":1}".utf8))
+        }
+    }
+
+    @Test func explicitAnalyticalLawRejectsScreeningAndScreenedLawRejectsLayeredTopology() throws {
+        let parameters: [String: Double] = ["offsetMeters": 0.25e-6,
+            "interactionHaloMeters": 8e-6, "groundFringeInverseMeters": 515_600]
+        let analytical = try changedModel { $0["coplanarScreening"] = parameters }
+        #expect(throws: PEXElectricalModelError.unsupportedLawScope(field: "analyticalRectilinearV1.coplanarScreening")) {
+            try analytical.validateElectricalModels()
+        }
+        let layered = try changedModel {
+            $0["law"] = "singlePlaneCoplanarGroundV1"; $0["coplanarScreening"] = parameters
+        }
+        #expect(throws: PEXElectricalModelError.unsupportedLawScope(field: "singlePlaneCoplanarGroundV1.topology")) {
+            try layered.validateElectricalModels()
+        }
+    }
+
+    @Test(arguments: [-1.0, Double.infinity, Double.nan])
+    func screeningSIParametersRejectInvalidValues(_ value: Double) throws {
+        #expect(throws: PEXElectricalModelError.invalidNumber(field: "coplanarScreening.offsetMeters")) {
+            try PEXCoplanarScreening(offsetMeters: value, interactionHaloMeters: 8e-6, groundFringeInverseMeters: 515_600).validate()
+        }
+        #expect(throws: PEXElectricalModelError.invalidNumber(field: "coplanarScreening.groundFringeInverseMeters")) {
+            try PEXCoplanarScreening(offsetMeters: 0, interactionHaloMeters: 8e-6, groundFringeInverseMeters: value).validate()
+        }
+        #expect(throws: PEXElectricalModelError.invalidNumber(field: "coplanarScreening.interactionHaloMeters")) {
+            try PEXCoplanarScreening(offsetMeters: 0, interactionHaloMeters: value, groundFringeInverseMeters: 0).validate()
+        }
+    }
+
+    @Test func haloMustBePositiveButZeroOffsetAndMultiplierAreExplicitlyValid() throws {
+        try PEXCoplanarScreening(offsetMeters: 0, interactionHaloMeters: 8e-6, groundFringeInverseMeters: 0).validate()
+        #expect(throws: PEXElectricalModelError.invalidNumber(field: "coplanarScreening.interactionHaloMeters")) {
+            try PEXCoplanarScreening(offsetMeters: 0, interactionHaloMeters: 0, groundFringeInverseMeters: 0).validate()
+        }
+    }
+
+    @Test func numericalDomainIdentityNormalizesUnorderedCollectionsAndPairOrientation() throws {
+        let original = try fixture().electricalModel(for: .init(id: "tt"))
+        let reordered = try changedModel { model in
+            model["conductors"] = Array((model["conductors"] as! [[String: Any]]).reversed())
+            model["vias"] = Array((model["vias"] as! [[String: Any]]).reversed())
+            model["calibrationArtifacts"] = Array((model["calibrationArtifacts"] as! [String]).reversed())
+            model["couplings"] = (model["couplings"] as! [[String: Any]]).reversed().map { pair in
+                var pair = pair
+                let first = pair["firstLayerName"]
+                pair["firstLayerName"] = pair["secondLayerName"]; pair["secondLayerName"] = first
+                return pair
+            }
+        }.electricalModel(for: .init(id: "tt"))
+        #expect(try original.domainDigest() == reordered.domainDigest())
+        #expect(try original.domainDigest().algorithm == .sha256)
+        for field in ["processName", "referenceNodeName"] {
+            let changed = try changedModel { $0[field] = "different" }.electricalModels![0]
+            #expect(try changed.domainDigest() != original.domainDigest())
+        }
+    }
+
+    @Test func numericalDomainIdentityIncludesEachScreeningParameterAndLaw() throws {
+        let model = try screenedFixture().electricalModel(for: .init(id: "tt"))
+        let original = try model.domainDigest()
+        for field in ["offsetMeters", "interactionHaloMeters", "groundFringeInverseMeters"] {
+            var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(model)) as? [String: Any])
+            var screening = object["coplanarScreening"] as! [String: Double]
+            screening[field] = screening[field]! * 2
+            object["coplanarScreening"] = screening
+            let changed = try JSONDecoder().decode(PEXElectricalModel.self,
+                from: JSONSerialization.data(withJSONObject: object))
+            #expect(try changed.domainDigest() != original)
+        }
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(model)) as? [String: Any])
+        object["law"] = "analyticalRectilinearV1"; object.removeValue(forKey: "coplanarScreening")
+        let analytical = try JSONDecoder().decode(PEXElectricalModel.self, from: JSONSerialization.data(withJSONObject: object))
+        #expect(try analytical.domainDigest() != original)
     }
 
     @Test(arguments: ["thickness", "resistivity"])

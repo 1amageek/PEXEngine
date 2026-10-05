@@ -233,7 +233,7 @@ struct NativePEXElectrodeTests {
                 groundAreaFaradsPerSquareMeter: 0, groundPerimeterFaradsPerMeter: 0,
                 widthRange: range, lengthRange: range)
         }
-        let tiny = PEXElectricalModel(law: model.law, processName: model.processName, cornerID: model.cornerID,
+        let tiny = PEXElectricalModel(law: model.law, coplanarScreening: nil, processName: model.processName, cornerID: model.cornerID,
             temperatureKelvin: model.temperatureKelvin, voltageVolts: model.voltageVolts, parameters: model.parameters,
             referenceNodeName: model.referenceNodeName, calibrationArtifacts: model.calibrationArtifacts,
             conductors: conductors, vias: model.vias, couplings: model.couplings)

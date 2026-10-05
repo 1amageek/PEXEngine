@@ -10,7 +10,7 @@ struct PEXElectricalModelResolutionTests {
     private func invalidTechnology() -> TechnologyIR {
         TechnologyIR(processName: "fixture", stack: [], logicalToPhysicalLayerMap: [:], vias: [],
             defaultExtractionRules: .default, backendHints: [:], electricalModels: [
-                PEXElectricalModel(law: .rectilinearSheetV1, processName: "fixture", cornerID: PEXCornerID("tt"),
+                PEXElectricalModel(law: .analyticalRectilinearV1, coplanarScreening: nil, processName: "fixture", cornerID: PEXCornerID("tt"),
                     temperatureKelvin: -1, voltageVolts: 1, parameters: [:], referenceNodeName: "0",
                     calibrationArtifacts: [], conductors: [], vias: [], couplings: [])
             ])

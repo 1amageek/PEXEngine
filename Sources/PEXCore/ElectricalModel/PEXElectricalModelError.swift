@@ -7,4 +7,5 @@ public enum PEXElectricalModelError: Error, Sendable, Equatable {
     case missing(field: String)
     case cornerMismatch(field: String)
     case outOfRange(field: String)
+    case unsupportedLawScope(field: String)
 }

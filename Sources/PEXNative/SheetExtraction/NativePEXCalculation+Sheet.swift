@@ -63,15 +63,23 @@ extension NativePEXCalculation {
             let dx = try NativePEXMath.positive(Double(width(key)) * mesh.metersPerDatabaseUnit)
             let dy = try NativePEXMath.positive(Double(height(key)) * mesh.metersPerDatabaseUnit)
             var perimeterDatabaseUnits: Int64 = 0
-            for (neighbor, length) in [(Key(layer: key.layer, x: key.x - 1, y: key.y), height(key)),
-                (Key(layer: key.layer, x: key.x + 1, y: key.y), height(key)),
-                (Key(layer: key.layer, x: key.x, y: key.y - 1), width(key)),
-                (Key(layer: key.layer, x: key.x, y: key.y + 1), width(key))] {
+            var perimeterMeters = 0.0
+            let screened = mesh.model.law == .singlePlaneCoplanarGroundV1
+            let fractions = groundFringe[key] ?? GroundFringe()
+            for (neighbor, length, fraction) in [(Key(layer: key.layer, x: key.x - 1, y: key.y), height(key), fractions.minX),
+                (Key(layer: key.layer, x: key.x + 1, y: key.y), height(key), fractions.maxX),
+                (Key(layer: key.layer, x: key.x, y: key.y - 1), width(key), fractions.minY),
+                (Key(layer: key.layer, x: key.x, y: key.y + 1), width(key), fractions.maxY)] {
                 try mesh.budget.visit(isCancelled)
-                if nodeIDs[neighbor] == nil { perimeterDatabaseUnits += length }
+                guard nodeIDs[neighbor] == nil else { continue }
+                if screened {
+                    let physicalLength = try NativePEXMath.positive(Double(length) * mesh.metersPerDatabaseUnit)
+                    perimeterMeters = try NativePEXMath.nonnegative(perimeterMeters
+                        + NativePEXMath.term(coefficient: fraction, geometry: physicalLength))
+                } else { perimeterDatabaseUnits += length }
             }
             let area = conductor.groundAreaFaradsPerSquareMeter == 0 ? 0 : try NativePEXMath.positive(dx * dy)
-            let perimeter = Double(perimeterDatabaseUnits) * mesh.metersPerDatabaseUnit
+            let perimeter = screened ? perimeterMeters : Double(perimeterDatabaseUnits) * mesh.metersPerDatabaseUnit
             let value = try NativePEXMath.term(coefficient: conductor.groundAreaFaradsPerSquareMeter, geometry: area)
                 + NativePEXMath.term(coefficient: conductor.groundPerimeterFaradsPerMeter, geometry: perimeter)
             try addCapacitance(nodeIDs[key]!, nil, value, kind: .ground)

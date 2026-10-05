@@ -54,7 +54,7 @@ struct NativePEXContactAdmissionTests {
                 secondLayerName: conductors[second].layerName, areaFaradsPerSquareMeter: 1e-5,
                 sidewallFarads: 1e-16, gapRange: source.couplings[0].gapRange))
         } }
-        let model = PEXElectricalModel(law: source.law, processName: source.processName, cornerID: source.cornerID,
+        let model = PEXElectricalModel(law: source.law, coplanarScreening: nil, processName: source.processName, cornerID: source.cornerID,
             temperatureKelvin: source.temperatureKelvin, voltageVolts: source.voltageVolts,
             parameters: source.parameters, referenceNodeName: source.referenceNodeName,
             calibrationArtifacts: source.calibrationArtifacts, conductors: conductors,

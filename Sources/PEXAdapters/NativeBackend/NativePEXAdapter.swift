@@ -64,7 +64,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             let projection = try await calculate(context, state: state)
             state.enter("topologyEvidence")
             let topology = NativePEXTopologyEvidence(projection: projection, image: observed, identity: measuredIdentity, policy: NativePEXBackendPolicy(adapter: self))
-            artifacts.append(try write(topology, name: "native-topology.json", context: context, identity: measuredIdentity))
+            artifacts.append(try write(topology, name: NativePEXTopologyEvidence.artifactFileName, context: context, identity: measuredIdentity))
             state.enter("imageStability")
             try observed.verifyUnchanged(maximumBytes: maximumCodeImageBytes)
             try Task.checkCancellation()
@@ -213,7 +213,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             provenance: .init(note: "native CPU extraction observation"), producer: identity?.producer)
     }
     private func executionIdentity(image: NativePEXCodeImage) throws -> PEXBackendExecutionIdentity {
-        let producer = try ProducerIdentity(kind: .tool, identifier: "pex-native", version: "1.0.0", build: image.digest.hexadecimalValue)
+        let producer = try ProducerIdentity(kind: .tool, identifier: "pex-native", version: "2.0.0", build: image.digest.hexadecimalValue)
         #if arch(arm64)
         let architecture = "arm64"
         #elseif arch(x86_64)
@@ -222,7 +222,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         let architecture = "unsupported"
         #endif
         let digest = try ContentDigest(algorithm: .sha256,
-            hexadecimalValue: SHA256.hash(data: Data("native-rectilinear-sheet-v1".utf8)).map { String(format: "%02x", $0) }.joined())
+            hexadecimalValue: SHA256.hash(data: Data("native-explicit-capacitance-laws-v2".utf8)).map { String(format: "%02x", $0) }.joined())
         return try .init(producer: producer, binaryDigest: image.digest,
             invocation: .inProcess(entryPoint: "PEXAdapters.NativePEXAdapter.execute"),
             environment: .init(platform: ProcessInfo.processInfo.operatingSystemVersionString, architecture: architecture,
