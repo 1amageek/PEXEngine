@@ -36,6 +36,16 @@ The native consumer selects an admitted electrical model by exact process and co
 External deck metadata does not establish a native electrical model. Immutable values
 retain calibration content identity independently of file availability or trust.
 
+`PEXRequestHash` owns the canonical request projection. Retry comparison projects
+only the requested corner selection; it retains each selected corner's PVT and
+parameters, all base/per-corner technology, native configuration and calibration
+content references and budgets, options, backend configuration, process/deck
+content, and declared execution input references. Input roles/descriptors remain
+part of identity. Capture locations and run IDs are availability, not meaning.
+The ordinary persisted request hash encoding remains unchanged. Measured backend
+implementation identity is checked separately through BackendExecution, because
+it is an observation rather than an input-content identity.
+
 ## Verification and Change Impact
 
 Electrical model behavior is owned by `PEXCoreTests/PEXElectricalModelTests`;

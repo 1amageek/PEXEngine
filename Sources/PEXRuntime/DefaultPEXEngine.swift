@@ -84,7 +84,7 @@ public final class DefaultPEXEngine: PEXExecuting, Sendable {
         return try await orchestrator.run(
             retryRequest,
             cancellationCheck: nil,
-            resumedFromRunID: previousResult.runID
+            retrying: previousResult
         )
     }
 }

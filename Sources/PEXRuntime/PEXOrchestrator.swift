@@ -42,6 +42,51 @@ public actor PEXOrchestrator {
         cancellationCheck: PEXExecutionContext.CancellationCheck?,
         resumedFromRunID: PEXRunID?
     ) async throws -> PEXRunResult {
+        let parent: PEXRunResult?
+        if let resumedFromRunID {
+            guard let baseURL = request.workingDirectory else {
+                throw PEXError.invalidInput("A parent-linked run requires its retained parent working directory")
+            }
+            parent = try PEXArtifactStore(workspace: .init(baseURL: baseURL, runID: resumedFromRunID)).loadResult()
+        } else {
+            parent = nil
+        }
+        return try await executeRun(request, cancellationCheck: cancellationCheck, retrying: parent)
+    }
+
+    func run(
+        _ request: PEXRunRequest,
+        cancellationCheck: PEXExecutionContext.CancellationCheck?,
+        retrying previousResult: PEXRunResult
+    ) async throws -> PEXRunResult {
+        try await executeRun(request, cancellationCheck: cancellationCheck, retrying: previousResult)
+    }
+
+    private func executeRun(
+        _ suppliedRequest: PEXRunRequest,
+        cancellationCheck: PEXExecutionContext.CancellationCheck?,
+        retrying previousResult: PEXRunResult?
+    ) async throws -> PEXRunResult {
+        let parent = try previousResult.map(loadRetryParent)
+        let request: PEXRunRequest
+        if let parent {
+            let failedIDs = Set(parent.manifest.corners.filter { $0.status == .failed }.map(\.cornerID))
+            let selectedIDs = Set(suppliedRequest.corners.map(\.id))
+            guard parent.manifest.status == .failed || parent.manifest.status == .partialSuccess,
+                  !selectedIDs.isEmpty, selectedIDs.isSubset(of: failedIDs),
+                  let observed = parent.manifest.backendExecutions.first,
+                  parent.manifest.backendExecutions.allSatisfy({ $0.hasSameImplementation(as: observed) }),
+                  parent.request.backendSelection.expectedProducer.map({ $0 == observed.producer }) ?? true else {
+                throw PEXError.invalidInput("Retry requires failed parent corners and a consistent retained implementation identity")
+            }
+            if let expected = suppliedRequest.backendSelection.expectedProducer, expected != observed.producer {
+                throw PEXError.invalidInput("Retry producer differs from the retained parent implementation")
+            }
+            request = bindingRetryProducer(suppliedRequest, to: observed.producer)
+        } else {
+            request = suppliedRequest
+        }
+        let resumedFromRunID = parent?.manifest.runID
         let runID = PEXRunID()
         let startedAt = Date()
         var allWarnings: [PEXWarning] = []
@@ -64,6 +109,10 @@ public actor PEXOrchestrator {
             readiness: extractorReadiness
         )
         let baseURL = effectiveRequest.workingDirectory ?? URL(filePath: FileManager.default.temporaryDirectory.path(percentEncoded: false))
+        if let previousResult,
+           baseURL.standardizedFileURL != previousResult.manifestURL.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL {
+            throw PEXError.invalidInput("A parent-linked retry must retain its parent's lineage base; relocate the complete history before retrying")
+        }
         let workspace = PEXRunWorkspace(baseURL: baseURL, runID: runID)
         let cornerIDs = effectiveRequest.corners.map(\.id)
         try workspace.createDirectories(corners: cornerIDs)
@@ -73,6 +122,16 @@ public actor PEXOrchestrator {
         let capturedInputs = try captureInputs(request: effectiveRequest, recorder: recorder)
         let inputArtifacts = capturedInputs.artifacts
         let capturedRequest = capturedInputs.request
+        if let parent {
+            let selectedIDs = Set(capturedRequest.corners.map(\.id))
+            let previousIdentity = try PEXRequestHash.computeRetryIdentity(for: parent.request,
+                inputArtifacts: retryInputArtifacts(parent.manifest), selecting: selectedIDs)
+            let currentIdentity = try PEXRequestHash.computeRetryIdentity(for: capturedRequest,
+                inputArtifacts: inputArtifacts, selecting: selectedIDs)
+            guard previousIdentity == currentIdentity else {
+                throw PEXError.invalidInput("Retry inputs, model, configuration or selected corner conditions differ from the retained parent")
+            }
+        }
         try validateDeclaredExecutionInputs(capturedRequest.executionInputArtifacts, request: capturedRequest)
         let technology = try technologyResolver.resolve(capturedRequest.technology)
         let technologiesByCorner = try capturedRequest.technologyByCorner.reduce(into: [:]) { result, entry in
@@ -101,6 +160,13 @@ public actor PEXOrchestrator {
         let cornerResults = cornerOutcomes.map(\.result)
 
         let backendExecutions = try validatedBackendExecutions(from: cornerOutcomes)
+        if let parent, let observed = parent.manifest.backendExecutions.first {
+            guard backendExecutions.allSatisfy({ $0.hasSameImplementation(as: observed) }) else {
+                throw PEXError(kind: .backendExecutionFailed, stage: .backendExecution,
+                    runID: runID, backendID: request.backendSelection.backendID,
+                    message: "Retry observed a different backend implementation; no parent-linked result was published")
+            }
+        }
         guard let primaryExecution = backendExecutions.first else {
             throw PEXError(
                 kind: .backendExecutionFailed,
@@ -228,6 +294,49 @@ public actor PEXOrchestrator {
             extractorRun: extractorRun,
             resumedFromRunID: resumedFromRunID
         )
+    }
+
+    private func retryInputArtifacts(_ manifest: PEXArtifactManifest) -> [PEXArtifactRecord] {
+        manifest.artifacts.filter { $0.stage == .inputValidation || $0.stage == .technologyResolution }
+    }
+
+    private func loadRetryParent(_ result: PEXRunResult) throws -> (request: PEXRunRequest, manifest: PEXArtifactManifest) {
+        let workspace = PEXRunWorkspace(baseURL: result.manifestURL.deletingLastPathComponent().deletingLastPathComponent(), runID: result.runID)
+        guard workspace.manifestURL.standardizedFileURL == result.manifestURL.standardizedFileURL else {
+            throw PEXError.invalidInput("Retry manifest location does not identify the retained parent run")
+        }
+        let store = PEXArtifactStore(workspace: workspace)
+        let manifest = try store.loadManifest()
+        // Compare the persisted date representation rather than treating its subsecond truncation as a changed run.
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys; encoder.dateEncodingStrategy = .iso8601
+        guard manifest.runID == result.runID, manifest.requestHash == result.requestHash,
+              manifest.status == result.status,
+              try encoder.encode(manifest) == encoder.encode(result.artifactManifest),
+              manifest.corners.count == result.cornerResults.count,
+              Set(result.cornerResults.map(\.cornerID)).count == result.cornerResults.count,
+              result.cornerResults.allSatisfy({ corner in
+                  manifest.corners.contains { $0.cornerID == corner.cornerID && $0.status == corner.status }
+              }) else {
+            throw PEXError.invalidInput("Retry result does not match its immutable retained parent manifest")
+        }
+        let request = try store.loadRequest()
+        guard try PEXRequestHash.compute(for: request, inputArtifacts: retryInputArtifacts(manifest)) == manifest.requestHash else {
+            throw PEXError.persistenceFailed("Retained parent request hash does not match its captured inputs")
+        }
+        return (request, manifest)
+    }
+
+    private func bindingRetryProducer(_ request: PEXRunRequest, to producer: ProducerIdentity) -> PEXRunRequest {
+        PEXRunRequest(layoutURL: request.layoutURL, layoutFormat: request.layoutFormat,
+            sourceNetlistURL: request.sourceNetlistURL, sourceNetlistFormat: request.sourceNetlistFormat,
+            topCell: request.topCell, corners: request.corners, technology: request.technology,
+            technologyByCorner: request.technologyByCorner, nativeInput: request.nativeInput,
+            processProfile: request.processProfile,
+            backendSelection: .init(backendID: request.backendSelection.backendID,
+                executablePath: request.backendSelection.executablePath,
+                environmentOverrides: request.backendSelection.environmentOverrides, expectedProducer: producer),
+            options: request.options, workingDirectory: request.workingDirectory,
+            executionInputArtifacts: request.executionInputArtifacts)
     }
 
     private func toolReadiness(
@@ -624,12 +733,7 @@ public actor PEXOrchestrator {
         guard let primary = identities.first else {
             return []
         }
-        guard identities.allSatisfy({ identity in
-            identity.producer == primary.producer
-                && identity.binaryDigest == primary.binaryDigest
-                && identity.invocation.mode == primary.invocation.mode
-                && identity.invocation.entryPoint == primary.invocation.entryPoint
-        }) else {
+        guard identities.allSatisfy({ $0.hasSameImplementation(as: primary) }) else {
             throw PEXError(
                 kind: .backendExecutionFailed,
                 stage: .backendExecution,

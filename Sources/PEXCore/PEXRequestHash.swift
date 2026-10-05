@@ -21,6 +21,37 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         for request: PEXRunRequest,
         inputArtifacts: [PEXArtifactRecord]
     ) throws -> PEXRequestHash {
+        try encode(canonicalInput(for: request, inputArtifacts: inputArtifacts, corners: request.corners))
+    }
+
+    /// Compares captured retry meaning while permitting only corner selection and relocation.
+    public static func computeRetryIdentity(
+        for request: PEXRunRequest,
+        inputArtifacts: [PEXArtifactRecord],
+        selecting cornerIDs: Set<PEXCornerID>
+    ) throws -> PEXRequestHash {
+        let corners = request.corners.filter { cornerIDs.contains($0.id) }.sorted { $0.id.value < $1.id.value }
+        guard !cornerIDs.isEmpty, corners.count == cornerIDs.count,
+              Set(corners.map(\.id)) == cornerIDs else {
+            throw PEXError.invalidInput("Retry identity requires exactly one requested value for every selected corner")
+        }
+        return try encode(PEXCanonicalRetryHashInput(
+            request: canonicalInput(for: request, inputArtifacts: inputArtifacts, corners: corners),
+            executionInputArtifacts: request.executionInputArtifacts
+        ))
+    }
+
+    private static func encode<Value: Encodable>(_ value: Value) throws -> PEXRequestHash {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return compute(from: try encoder.encode(value))
+    }
+
+    private static func canonicalInput(
+        for request: PEXRunRequest,
+        inputArtifacts: [PEXArtifactRecord],
+        corners: [PEXCorner]
+    ) throws -> PEXCanonicalRequestHashInput {
         // The recorded request is derived metadata; hashing it would bind identity to capture locations.
         let canonicalArtifacts = try inputArtifacts
             .filter { !$0.matches(kind: .request) }
@@ -31,11 +62,11 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
                 }
                 return PEXCanonicalInputArtifact(id: record.id, reference: reference)
             }
-        let snapshot = PEXCanonicalRequestHashInput(
+        return PEXCanonicalRequestHashInput(
             topCell: request.topCell,
             layoutFormat: request.layoutFormat,
             sourceNetlistFormat: request.sourceNetlistFormat,
-            corners: request.corners,
+            corners: corners,
             technology: PEXCanonicalTechnologyInput(input: request.technology),
             technologyByCorner: request.technologyByCorner.mapValues(PEXCanonicalTechnologyInput.init(input:)),
             nativeInput: request.nativeInput.map(PEXCanonicalNativeInput.init),
@@ -45,9 +76,6 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
             options: request.options,
             inputArtifacts: canonicalArtifacts
         )
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        return compute(from: try encoder.encode(snapshot))
     }
 
     private static func processProfileDeckSHA256(_ profile: PEXProcessProfileReference?) throws -> [String: String] {
@@ -80,6 +108,11 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         }
         return hashes
     }
+}
+
+private struct PEXCanonicalRetryHashInput: Encodable {
+    let request: PEXCanonicalRequestHashInput
+    let executionInputArtifacts: [ArtifactReference]
 }
 
 private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {

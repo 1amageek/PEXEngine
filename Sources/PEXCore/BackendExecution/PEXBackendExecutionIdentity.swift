@@ -30,6 +30,13 @@ public struct PEXBackendExecutionIdentity: Sendable, Codable, Hashable {
         self.invocation = invocation
         self.environment = environment
     }
+
+    /// Implementation identity excludes external run-local arguments and availability.
+    public func hasSameImplementation(as other: Self) -> Bool {
+        producer == other.producer && binaryDigest == other.binaryDigest
+            && invocation.mode == other.invocation.mode
+            && invocation.entryPoint == other.invocation.entryPoint
+    }
     private enum CodingKeys: String, CodingKey { case producer, binaryDigest, invocation, environment }
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)

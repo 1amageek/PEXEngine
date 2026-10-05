@@ -284,7 +284,8 @@ public struct PEXArtifactStore: Sendable {
     /// Loads the complete parent-to-leaf retry history and computes an
     /// effective corner view without copying or mutating any run artifacts.
     public func loadLineage() throws -> PEXRunLineage {
-        var currentResult = try loadResult()
+        var currentStore = self
+        var currentResult = try currentStore.loadResult()
         var visited: Set<PEXRunID> = []
         var results: [PEXRunResult] = []
 
@@ -298,16 +299,54 @@ public struct PEXArtifactStore: Sendable {
             }
 
             let parentWorkspace = PEXRunWorkspace(baseURL: workspace.baseURL, runID: parentRunID)
-            let parentResult = try PEXArtifactStore(workspace: parentWorkspace).loadResult()
+            let parentStore = PEXArtifactStore(workspace: parentWorkspace)
+            let parentResult = try parentStore.loadResult()
             guard parentResult.runID == parentRunID else {
                 throw PEXError.persistenceFailed(
                     "PEX parent manifest run ID \(parentResult.runID) does not match \(parentRunID)"
                 )
             }
+            try currentStore.validateRetryEdge(currentResult, parent: parentResult, parentStore: parentStore)
+            currentStore = parentStore
             currentResult = parentResult
         }
 
         return PEXRunLineage(results: results.reversed())
+    }
+
+    private func validateRetryEdge(
+        _ child: PEXRunResult,
+        parent: PEXRunResult,
+        parentStore: PEXArtifactStore
+    ) throws {
+        let selectedIDs = Set(child.cornerResults.map(\.cornerID))
+        let failedIDs = Set(parent.cornerResults.filter { $0.status == .failed }.map(\.cornerID))
+        guard parent.status == .failed || parent.status == .partialSuccess,
+              child.artifactManifest.backendID == parent.artifactManifest.backendID,
+              !selectedIDs.isEmpty, selectedIDs.count == child.cornerResults.count,
+              selectedIDs.isSubset(of: failedIDs),
+              let implementation = parent.artifactManifest.backendExecutions.first,
+              !child.artifactManifest.backendExecutions.isEmpty,
+              (parent.artifactManifest.backendExecutions + child.artifactManifest.backendExecutions)
+                .allSatisfy({ $0.hasSameImplementation(as: implementation) }) else {
+            throw PEXError.persistenceFailed("Retained retry lineage has incompatible corner or implementation identities")
+        }
+        let childRequest = try loadRequest()
+        let parentRequest = try parentStore.loadRequest()
+        func inputArtifacts(_ result: PEXRunResult) -> [PEXArtifactRecord] {
+            result.artifactManifest.artifacts.filter { $0.stage == .inputValidation || $0.stage == .technologyResolution }
+        }
+        let childInputs = inputArtifacts(child), parentInputs = inputArtifacts(parent)
+        guard Set(childRequest.corners.map(\.id)) == selectedIDs,
+              childRequest.corners.count == selectedIDs.count,
+              try PEXRequestHash.compute(for: childRequest, inputArtifacts: childInputs) == child.requestHash,
+              try PEXRequestHash.compute(for: parentRequest, inputArtifacts: parentInputs) == parent.requestHash,
+              try PEXRequestHash.computeRetryIdentity(for: childRequest, inputArtifacts: childInputs, selecting: selectedIDs)
+                == PEXRequestHash.computeRetryIdentity(for: parentRequest, inputArtifacts: parentInputs, selecting: selectedIDs),
+              childRequest.backendSelection.expectedProducer.map({ $0 == implementation.producer }) ?? true,
+              parentRequest.backendSelection.expectedProducer.map({ $0 == implementation.producer }) ?? true else {
+            throw PEXError.persistenceFailed("Retained retry lineage does not bind the same captured request meaning")
+        }
     }
 
     private func resolveProcessProfile(

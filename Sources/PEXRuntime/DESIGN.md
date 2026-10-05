@@ -35,6 +35,24 @@ flowchart TD
 Native input references are propagated through initial execution, exact retry and captured reload. Selected corner electrical-model calibration IDs must be a subset of actually captured calibration identities before adapter callbacks. No parser or synthetic raw file is required for canonical payloads. Actual raw files/logs are retained only for raw payloads; generated evidence remains retained in both paths. Exact corner mismatch and backend/expected-producer mismatch fail explicitly. Canonical graph admission validates once at the immutable backend-result boundary; runtime reuses its derived warning evidence. Canonical graph validation cannot be disabled by non-strict raw-parser options. Cross-corner producer/image identity and invocation mode/entrypoint remain consistent. Both SPICE backannotation and portable-profile SPEF are required run deliverables. Generation or recording failure fails the corner at persistence, retaining observed identity and all previously recorded canonical/topology/standard artifacts. The failed result publishes no successful IR; persisted canonical bytes remain diagnostic evidence, not completion. A missing-record entry retains the exact failure reason; failure to persist that entry is also explicit. Format-profile applicability belongs to PEXParsers, and is never silently relaxed by Runtime.
 
 ## Runtime Flows
+Selective retry loads the exact retained parent manifest/request and verifies its
+captured input integrity. The caller may supply the failed-corner subset or the
+original full corner selection; every retried corner must have failed in the
+parent. Before adapter callbacks, captured child inputs must match the parent's
+Core-owned retry projection. A changed model/law, calibration, native configuration,
+technology, shared source input, option, process/deck or selected PVT fails explicitly.
+The retry requires the parent's measured producer even when the caller did not
+declare an expected producer. Observed producer/image and invocation mode/entry
+point must still match after execution, before a parent-linked manifest is published.
+External invocation arguments and run-local working paths are not implementation
+identity. Changed semantics require a new root run; historical artifacts are never
+rewritten. The public orchestrator parent-ID entry point applies the same checks.
+Parent links contain only a run ID, so publication requires the child's output
+base to contain its retained parent. Changing only the child base is an explicit
+availability failure before adapter callbacks. Relocating complete retained
+history preserves meaning; source-byte relocation within a valid lineage base
+also remains valid.
+
 Validate/capture request, resolve captured technology, execute corners under existing concurrency policy, retain output evidence, select raw parsing or canonical graph by payload, validate, persist, aggregate exact execution identities and save manifest. Existing public load reconstructs canonical IR and an empty raw-output list for fileless results without depending on raw files.
 
 ## State, Ownership, and Lifecycle

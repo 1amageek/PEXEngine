@@ -52,6 +52,56 @@ struct PEXNativeInputCaptureTests {
         }
     }
 
+    @Test(arguments: ["model", "calibration", "configuration"])
+    func changedRetryMeaningFailsBeforeAdapterCallbacks(change: String) async throws {
+        try await fixture { f in
+            let failed = try await engine(.init(originals: [], remove: false,
+                observer: NativeInputObserver(), failExecution: true)).run(f.request())
+            let captured = try PEXArtifactStore(workspace: .init(baseURL: f.root, runID: failed.runID)).loadRequest()
+            var technology = captured.technology
+            var input = try #require(captured.nativeInput)
+            if change == "model" {
+                guard case .inline(let value) = technology else { throw PEXError.invalidInput("Expected inline fixture") }
+                var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? [String: Any])
+                var models = try #require(object["electricalModels"] as? [[String: Any]])
+                var conductors = try #require(models[0]["conductors"] as? [[String: Any]])
+                conductors[0]["groundAreaFaradsPerSquareMeter"] = 2e-4
+                models[0]["conductors"] = conductors
+                object["electricalModels"] = models
+                technology = .inline(try JSONDecoder().decode(TechnologyIR.self, from: JSONSerialization.data(withJSONObject: object)))
+            } else if change == "calibration" {
+                let bytes = Data("different-calibration-fixture".utf8)
+                let url = f.root.appending(path: "different-calibration.bin")
+                try bytes.write(to: url)
+                let id = try ArtifactID(digest: .init(algorithm: .sha256,
+                    hexadecimalValue: PEXRequestHash.compute(from: bytes).value), byteCount: UInt64(bytes.count))
+                input = try PEXNativeInputReference(configurationURL: input.configurationURL,
+                    calibrations: input.calibrations + [.init(artifactID: id, url: url)],
+                    maximumConfigurationBytes: input.maximumConfigurationBytes)
+            } else {
+                let url = f.root.appending(path: "different-configuration.json")
+                try Data("{\"nativeContractFixture\":null}".utf8).write(to: url)
+                input = try input.replacingLocations(configurationURL: url, calibrations: input.calibrations)
+            }
+            let request = PEXRunRequest(layoutURL: captured.layoutURL, layoutFormat: captured.layoutFormat,
+                sourceNetlistURL: captured.sourceNetlistURL, sourceNetlistFormat: captured.sourceNetlistFormat,
+                topCell: captured.topCell, corners: captured.corners, technology: technology,
+                technologyByCorner: captured.technologyByCorner, nativeInput: input,
+                processProfile: captured.processProfile, backendSelection: captured.backendSelection,
+                options: captured.options, workingDirectory: captured.workingDirectory,
+                executionInputArtifacts: captured.executionInputArtifacts)
+            let observer = NativeInputObserver()
+            do {
+                _ = try await engine(.init(originals: [], remove: false, observer: observer))
+                    .retryFailedCorners(request, from: failed)
+                Issue.record("Changed retry meaning was accepted: \(change)")
+            } catch let error as PEXError {
+                #expect(error.kind == .invalidInput)
+            }
+            #expect(await observer.prepares == 0)
+        }
+    }
+
     @Test(arguments: [false, true], [false, true])
     func capturedTamperAndMissingBytesRejectReload(calibration: Bool, remove: Bool) async throws {
         try await fixture { f in
