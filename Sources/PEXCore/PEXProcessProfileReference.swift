@@ -1,6 +1,9 @@
 import Foundation
 
 public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
+    /// Required-view role for the actual profile source bytes used by release qualification.
+    public static let qualificationProfileViewRole = "processProfile"
+
     public let profileID: String?
     public let pdkID: String?
     public let source: String?
@@ -50,15 +53,24 @@ public struct PEXProcessProfileReference: Sendable, Codable, Hashable {
 
     /// Transforms every declared file input while preserving process identity and discovery context.
     public func mapInputPaths(_ transform: (String) throws -> String) rethrows -> Self {
+        try mapInputPathsByRole { _, path in try transform(path) }
+    }
+
+    /// Transforms input locations without losing their exact semantic associations.
+    public func mapInputPathsByRole(_ transform: (PEXProcessProfileInputRole, String) throws -> String) rethrows -> Self {
         Self(
             profileID: profileID,
             pdkID: pdkID,
             source: source,
             requirementID: requirementID,
             pdkRoot: pdkRoot,
-            primaryDeckPath: try primaryDeckPath.map(transform),
-            cornerDeckPaths: try cornerDeckPaths.mapValues(transform),
-            requiredViewPaths: try requiredViewPaths.mapValues(transform),
+            primaryDeckPath: try primaryDeckPath.map { try transform(.primaryDeck, $0) },
+            cornerDeckPaths: try cornerDeckPaths.reduce(into: [:]) { result, entry in
+                result[entry.key] = try transform(.cornerDeck(entry.key), entry.value)
+            },
+            requiredViewPaths: try requiredViewPaths.reduce(into: [:]) { result, entry in
+                result[entry.key] = try transform(.requiredView(entry.key), entry.value)
+            },
             metadata: metadata
         )
     }

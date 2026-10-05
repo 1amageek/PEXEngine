@@ -60,6 +60,7 @@ public struct PEXArtifactRecorder: Sendable {
         return records
     }
 
+    /// Captures an unassociated deck for inspection; runnable profile capture uses captureProcessProfileInputs.
     public func captureProcessProfileDeck(
         path: String,
         identifier: String
@@ -77,6 +78,43 @@ public struct PEXArtifactRecorder: Sendable {
             url: capturedURL,
             provenance: PEXArtifactProvenance(sourcePath: sourceURL.path(percentEncoded: false))
         )
+    }
+
+    /// Captures each physical input once while retaining every declared semantic role.
+    public func captureProcessProfileInputs(_ profile: PEXProcessProfileReference) throws -> [PEXArtifactRecord] {
+        var entries: [(role: PEXProcessProfileInputRole, path: String, id: String)] = []
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        _ = try profile.mapInputPathsByRole { role, path in
+            let id = "input-process-profile-\(PEXRequestHash.compute(from: try encoder.encode(role)).value)"
+            entries.append((role, path, id))
+            return path
+        }
+        var captures: [String: PEXArtifactRecord] = [:]
+        var records: [PEXArtifactRecord] = []
+        for entry in entries.sorted(by: { $0.id < $1.id }) {
+            if let captured = captures[entry.path] {
+                let url = workspace.runDirectory.appending(path: captured.relativePath.stringValue)
+                let descriptor = try artifactDescriptor(kind: entry.role.artifactKind, url: url)
+                guard let reference = captured.reference, let availability = captured.artifactAvailability else {
+                    throw PEXError.internalInvariantViolation("A captured process-profile input has no content identity")
+                }
+                records.append(try PEXArtifactRecord(
+                    declaration: .init(id: try .init(rawValue: entry.id), descriptor: descriptor, relativePath: captured.relativePath),
+                    payload: .available(try .init(reference: .init(id: reference.id, descriptor: descriptor), availability: availability)),
+                    stage: .inputValidation, provenance: captured.provenance, processProfileInputRole: entry.role))
+            } else {
+                let source = URL(filePath: entry.path)
+                let destination = workspace.inputsDirectory.appending(path: "process-profile-decks")
+                    .appending(path: "\(entry.id)-\(sanitizedFileName(source.lastPathComponent))")
+                let url = try copy(source, to: destination)
+                let record = try availableRecord(id: entry.id, kind: entry.role.artifactKind,
+                    stage: .inputValidation, cornerID: nil, url: url,
+                    provenance: .init(sourcePath: entry.path), processProfileInputRole: entry.role)
+                captures[entry.path] = record
+                records.append(record)
+            }
+        }
+        return records
     }
 
     public func captureInlineTechnology(
@@ -156,12 +194,18 @@ public struct PEXArtifactRecorder: Sendable {
             )
         }
         let capturedProfile = try request.processProfile.map { profile in
-            try profile.mapInputPaths { path in
-                try capturedInputURL(
-                    kind: .processProfileDeckInput,
-                    sourcePath: path,
-                    inputArtifacts: inputArtifacts
-                ).path(percentEncoded: false)
+            var validated: [ArtifactRelativePath: Set<ArtifactID>] = [:]
+            return try profile.mapInputPathsByRole { role, _ in
+                let matches = inputArtifacts.filter { $0.processProfileInputRole == role }
+                guard matches.count == 1, let record = matches.first, record.availability == .available,
+                      let reference = record.reference else {
+                    throw PEXError.persistenceFailed("Expected exactly one captured process-profile input for \(role)")
+                }
+                if validated[record.relativePath]?.contains(reference.id) != true {
+                    _ = try capturedInputURL(kind: role.artifactKind, artifactID: record.id.rawValue, inputArtifacts: inputArtifacts)
+                    validated[record.relativePath, default: []].insert(reference.id)
+                }
+                return workspace.runDirectory.appending(path: record.relativePath.stringValue).path(percentEncoded: false)
             }
         }
         return PEXRunRequest(
@@ -250,17 +294,15 @@ public struct PEXArtifactRecorder: Sendable {
     private func capturedInputURL(
         kind: PEXArtifactKind,
         artifactID: String? = nil,
-        sourcePath: String? = nil,
         inputArtifacts: [PEXArtifactRecord],
         maximumBytes: Int? = nil
     ) throws -> URL {
         let matches = inputArtifacts.filter {
             $0.matches(kind: kind) && $0.availability == .available
                 && (artifactID == nil || $0.id.rawValue == artifactID)
-                && (sourcePath == nil || $0.provenance?.sourcePath == sourcePath)
         }
         guard matches.count == 1, let record = matches.first, let reference = record.reference else {
-            throw PEXError.persistenceFailed("Expected one captured input for \(artifactID ?? sourcePath ?? kind.rawValue)")
+            throw PEXError.persistenceFailed("Expected one captured input for \(artifactID ?? kind.rawValue)")
         }
         let url = workspace.runDirectory.appending(path: record.relativePath.stringValue)
         try ensureExistingFileTargetIsInsideRunDirectory(url)
@@ -377,7 +419,8 @@ public struct PEXArtifactRecorder: Sendable {
         url: URL,
         provenance: PEXArtifactProvenance?,
         producer: ProducerIdentity? = nil,
-        maximumBytes: Int? = nil
+        maximumBytes: Int? = nil,
+        processProfileInputRole: PEXProcessProfileInputRole? = nil
     ) throws -> PEXArtifactRecord {
         let data: Data
         do {
@@ -417,7 +460,8 @@ public struct PEXArtifactRecorder: Sendable {
             )),
             stage: stage,
             cornerID: cornerID,
-            provenance: provenance
+            provenance: provenance,
+            processProfileInputRole: processProfileInputRole
         )
     }
 
@@ -460,7 +504,7 @@ public struct PEXArtifactRecorder: Sendable {
         }
         let name = sanitizedFileName(artifact.url.lastPathComponent)
         switch artifact.kind {
-        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .request:
+        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .processProfileViewInput, .request:
             return workspace.inputsDirectory.appending(path: name)
         case .sourceConnectivityReport:
             let cornerID = artifact.cornerID ?? PEXCornerID("uncornered")
@@ -587,7 +631,7 @@ public struct PEXArtifactRecorder: Sendable {
 
     private func artifactRole(for kind: PEXArtifactKind) -> ArtifactRole {
         switch kind {
-        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .request:
+        case .layoutInput, .netlistInput, .technologyInput, .nativeConfigurationInput, .calibrationInput, .processProfileDeckInput, .processProfileViewInput, .request:
             .input
         case .processDriver, .processEvidence, .sourceConnectivityReport, .rawOutput, .log, .parasiticIR,
              .spefRoundTrip, .spiceBackannotation, .report:

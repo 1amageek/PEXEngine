@@ -8,6 +8,23 @@ import CircuiteFoundationFoundation
 
 @Suite("PEXPersistence Tests")
 struct PEXPersistenceTests {
+    @Test func manifestOwnerCodecMatchesSavedBytesAtFractionalDatePrecision() throws {
+        let root = makeTemporaryDirectory("pex_manifest_owner_codec")
+        defer { removeTemporaryItem(root) }
+        let workspace = PEXRunWorkspace(baseURL: root, runID: PEXRunID())
+        try workspace.createDirectories(corners: [])
+        let manifest = try PEXTestExecutionIdentity.manifest(runID: workspace.runID,
+            requestHash: .init("manifest-codec"), backendID: "mock", status: .failed,
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000.125),
+            finishedAt: Date(timeIntervalSince1970: 1_700_000_001.875),
+            corners: [], artifacts: [], warnings: [])
+        let store = PEXArtifactStore(workspace: workspace)
+        try store.saveManifest(manifest)
+        let bytes = try PEXArtifactStore.encodeManifest(manifest)
+        #expect(try bytes == Data(contentsOf: workspace.manifestURL))
+        #expect(try PEXArtifactStore.encodeManifest(store.loadManifest()) == bytes)
+    }
+
     @Test func canonicalManifestFixtureUsesCurrentSchema() throws {
         let url = try #require(Bundle.module.url(
             forResource: "pex-artifact-manifest-v5",
@@ -182,10 +199,8 @@ struct PEXPersistenceTests {
         let recorder = PEXArtifactRecorder(workspace: workspace)
         let layout = try recorder.captureInput(url: request.layoutURL, kind: .layoutInput)
         let netlist = try recorder.captureInput(url: request.sourceNetlistURL, kind: .netlistInput)
-        let deck = try recorder.captureProcessProfileDeck(
-            path: deckURL.path(percentEncoded: false),
-            identifier: "primary"
-        )
+        let processProfile = try #require(request.processProfile)
+        let deck = try #require(recorder.captureProcessProfileInputs(processProfile).first)
         let technology = try recorder.captureInlineTechnology(TechnologyIR(
             processName: "test",
             stack: [],

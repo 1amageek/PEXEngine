@@ -9,6 +9,40 @@ import PEXTestSupport
 
 @Suite("PEX captured input execution", .timeLimit(.minutes(1)))
 struct PEXCapturedInputExecutionTests {
+    @Test func aliasedDeckAndViewsPreserveEveryRetainedRole() async throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "pex-profile-alias-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            do { try FileManager.default.removeItem(at: root) }
+            catch { Issue.record("Profile alias fixture cleanup failed: \(error)") }
+        }
+        let layout = root.appending(path: "layout.gds"), netlist = root.appending(path: "source.sp")
+        let shared = root.appending(path: "shared-profile.json")
+        try Data("layout-v1".utf8).write(to: layout)
+        try Data(".subckt TOP\n.ends TOP\n".utf8).write(to: netlist)
+        try Data("{\"profile\":\"shared-bytes\"}".utf8).write(to: shared)
+        let observer = CapturedInputObserver()
+        let adapter = SourceChangingAdapter(originals: [layout, netlist, shared], removeOriginals: true, observer: observer)
+        let request = PEXRunRequest(layoutURL: layout, layoutFormat: .gds,
+            sourceNetlistURL: netlist, sourceNetlistFormat: .spice, topCell: "TOP", corners: [.init(id: "tt")],
+            technology: .inline(makeTechnology("profile-alias")),
+            processProfile: .init(primaryDeckPath: shared.path, cornerDeckPaths: ["tt": shared.path],
+                requiredViewPaths: ["processProfile": shared.path, "technologyLEF": shared.path, "libraryLEF:test": shared.path]),
+            backendSelection: .mock(), options: options, workingDirectory: root)
+        let result = try await engine(adapter).run(request)
+        #expect(result.status == .success)
+        let records = result.artifactManifest.artifacts.filter { $0.provenance?.sourcePath == shared.path }
+        #expect(records.count == 5)
+        #expect(records.filter { $0.descriptor.kind.rawValue == "pex.processProfileViewInput" }.count == 3)
+        #expect(Set(records.map(\.relativePath)).count == 1)
+        #expect(Set(records.compactMap { $0.reference?.id }).count == 1)
+        let store = PEXArtifactStore(workspace: .init(baseURL: root, runID: result.runID))
+        let restored = try store.loadRequest()
+        #expect(restored.processProfile?.requiredViewPaths.count == 3)
+        let inputs = result.artifactManifest.artifacts.filter { $0.stage == .inputValidation || $0.stage == .technologyResolution }
+        #expect(try PEXRequestHash.compute(for: restored, inputArtifacts: inputs) == result.requestHash)
+    }
+
     @Test(arguments: [false, true])
     func executionUsesCapturedFilesWhenOriginalsChange(removeOriginals: Bool) async throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "pex-captured-\(UUID())")

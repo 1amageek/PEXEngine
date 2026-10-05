@@ -511,7 +511,8 @@ struct PEXRuntimeTests {
         let workspace = PEXRunWorkspace(baseURL: tempDir, runID: result.runID)
         let manifest = try PEXArtifactStore(workspace: workspace).loadManifest()
         let deckArtifacts = manifest.artifacts(kind: .processProfileDeckInput)
-        #expect(deckArtifacts.count == 2)
+        #expect(deckArtifacts.count == 3)
+        #expect(Set(deckArtifacts.map(\.relativePath)).count == 2)
         #expect(deckArtifacts.allSatisfy {
             $0.availability == .available
                 && $0.reference?.digest.hexadecimalValue != nil

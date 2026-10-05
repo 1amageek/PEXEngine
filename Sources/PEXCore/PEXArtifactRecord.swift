@@ -4,6 +4,7 @@ import Foundation
 public enum PEXArtifactRecordError: Error, Sendable, Equatable {
     case availableDescriptorMismatch
     case availablePathMismatch
+    case processProfileRoleMismatch
 }
 
 public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
@@ -13,6 +14,7 @@ public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
     public let cornerID: PEXCornerID?
     public let createdAt: Date
     public let provenance: PEXArtifactProvenance?
+    public let processProfileInputRole: PEXProcessProfileInputRole?
 
     public var id: PEXArtifactRecordID { declaration.id }
     public var descriptor: ArtifactDescriptor { declaration.descriptor }
@@ -28,8 +30,18 @@ public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
         stage: PEXStage,
         cornerID: PEXCornerID? = nil,
         createdAt: Date = Date(),
-        provenance: PEXArtifactProvenance? = nil
+        provenance: PEXArtifactProvenance? = nil,
+        processProfileInputRole: PEXProcessProfileInputRole? = nil
     ) throws {
+        if let processProfileInputRole {
+            try processProfileInputRole.validate()
+            guard declaration.descriptor.kind.rawValue == processProfileInputRole.artifactKind.foundationRawValue,
+                  declaration.descriptor.role == .input else {
+                throw PEXArtifactRecordError.processProfileRoleMismatch
+            }
+        } else if declaration.descriptor.kind.rawValue == PEXArtifactKind.processProfileViewInput.foundationRawValue {
+            throw PEXArtifactRecordError.processProfileRoleMismatch
+        }
         if case .available(let artifact) = payload {
             guard artifact.reference.descriptor == declaration.descriptor else {
                 throw PEXArtifactRecordError.availableDescriptorMismatch
@@ -45,6 +57,7 @@ public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
         self.cornerID = cornerID
         self.createdAt = createdAt
         self.provenance = provenance
+        self.processProfileInputRole = processProfileInputRole
     }
 
     public func matches(kind: PEXArtifactKind) -> Bool {
@@ -59,7 +72,8 @@ public struct PEXArtifactRecord: Sendable, Codable, Hashable, Identifiable {
             stage: container.decode(PEXStage.self, forKey: .stage),
             cornerID: container.decodeIfPresent(PEXCornerID.self, forKey: .cornerID),
             createdAt: container.decode(Date.self, forKey: .createdAt),
-            provenance: container.decodeIfPresent(PEXArtifactProvenance.self, forKey: .provenance)
+            provenance: container.decodeIfPresent(PEXArtifactProvenance.self, forKey: .provenance),
+            processProfileInputRole: container.decodeIfPresent(PEXProcessProfileInputRole.self, forKey: .processProfileInputRole)
         )
     }
 }

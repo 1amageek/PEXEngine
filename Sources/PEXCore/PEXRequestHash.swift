@@ -60,7 +60,8 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
                 guard let reference = record.reference else {
                     throw PEXError.persistenceFailed("Request input is not available: \(record.id)")
                 }
-                return PEXCanonicalInputArtifact(id: record.id, reference: reference)
+                return PEXCanonicalInputArtifact(id: record.id, reference: reference,
+                    processProfileInputRole: record.processProfileInputRole)
             }
         return PEXCanonicalRequestHashInput(
             topCell: request.topCell,
@@ -92,7 +93,12 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
         }
 
         var hashes: [String: String] = [:]
+        var contentByPath: [String: String] = [:]
         for (key, path) in paths {
+            if let digest = contentByPath[path] {
+                hashes[key] = digest
+                continue
+            }
             let url = URL(filePath: path)
             var isDirectory: ObjCBool = false
             guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), !isDirectory.boolValue else {
@@ -102,6 +108,7 @@ public struct PEXRequestHash: Sendable, Codable, Hashable, CustomStringConvertib
                 hashes[key] = SHA256.hash(data: try Data(contentsOf: url))
                     .map { String(format: "%02x", $0) }
                     .joined()
+                contentByPath[path] = hashes[key]
             } catch {
                 throw PEXError.persistenceFailed("Failed to fingerprint process profile deck \(path)", underlying: error)
             }
@@ -133,6 +140,7 @@ private struct PEXCanonicalRequestHashInput: Sendable, Codable, Hashable {
 private struct PEXCanonicalInputArtifact: Sendable, Codable, Hashable {
     let id: PEXArtifactRecordID
     let reference: ArtifactReference
+    let processProfileInputRole: PEXProcessProfileInputRole?
 }
 
 private struct PEXCanonicalTechnologyInput: Sendable, Codable, Hashable {

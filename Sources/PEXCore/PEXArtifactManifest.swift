@@ -8,6 +8,7 @@ public enum PEXArtifactKind: String, Sendable, Codable, Hashable, CaseIterable {
     case calibrationInput
     case technologyInput
     case processProfileDeckInput
+    case processProfileViewInput
     case processDriver
     case processEvidence
     case sourceConnectivityReport

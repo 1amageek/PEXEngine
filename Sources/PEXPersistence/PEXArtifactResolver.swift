@@ -82,6 +82,16 @@ public struct PEXArtifactResolver: Sendable {
         runDirectory.appending(path: record.relativePath.stringValue)
     }
 
+    /// Selects exact retained metadata. Use completenessReport or loadRequest to verify bytes.
+    public func processProfileInputRecord(for role: PEXProcessProfileInputRole) throws -> PEXArtifactRecord {
+        let matches = manifest.artifacts.filter { $0.processProfileInputRole == role }
+        guard matches.count == 1, let record = matches.first, record.availability == .available,
+              record.matches(kind: role.artifactKind) else {
+            throw PEXError.persistenceFailed("Expected exactly one available process-profile input for \(role)")
+        }
+        return record
+    }
+
     public func validatedURL(for record: PEXArtifactRecord) throws -> URL {
         let artifactURL = url(for: record)
         if artifactTargetEscapesRunDirectory(artifactURL) {
@@ -113,8 +123,25 @@ public struct PEXArtifactResolver: Sendable {
 
     public func completenessReport() -> PEXArtifactCompletenessReport {
         let artifactIDSet = Set(manifest.artifacts.map { $0.id.rawValue })
+        var verified: [ArtifactRelativePath: [ArtifactID: [PEXArtifactCompletenessIssue]]] = [:]
+        var artifactIssues: [PEXArtifactCompletenessIssue] = []
+        for record in manifest.artifacts {
+            if record.processProfileInputRole != nil, let reference = record.reference,
+               let cached = verified[record.relativePath]?[reference.id] {
+                artifactIssues.append(contentsOf: cached.map {
+                    .init(kind: $0.kind, artifactID: record.id.rawValue, cornerID: record.cornerID,
+                        location: $0.location, message: $0.message)
+                })
+            } else {
+                let issues = artifactCompletenessIssues(for: record)
+                artifactIssues.append(contentsOf: issues)
+                if record.processProfileInputRole != nil, let reference = record.reference {
+                    verified[record.relativePath, default: [:]][reference.id] = issues
+                }
+            }
+        }
         let issues = duplicateArtifactIDIssues()
-            + manifest.artifacts.flatMap(artifactCompletenessIssues(for:))
+            + artifactIssues
             + manifest.corners.flatMap { cornerCompletenessIssues(for: $0, artifactIDSet: artifactIDSet) }
 
         return PEXArtifactCompletenessReport(status: completenessStatus(for: issues), issues: issues)

@@ -307,11 +307,9 @@ public actor PEXOrchestrator {
         }
         let store = PEXArtifactStore(workspace: workspace)
         let manifest = try store.loadManifest()
-        // Compare the persisted date representation rather than treating its subsecond truncation as a changed run.
-        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys; encoder.dateEncodingStrategy = .iso8601
         guard manifest.runID == result.runID, manifest.requestHash == result.requestHash,
               manifest.status == result.status,
-              try encoder.encode(manifest) == encoder.encode(result.artifactManifest),
+              try PEXArtifactStore.encodeManifest(manifest) == PEXArtifactStore.encodeManifest(result.artifactManifest),
               manifest.corners.count == result.cornerResults.count,
               Set(result.cornerResults.map(\.cornerID)).count == result.cornerResults.count,
               result.cornerResults.allSatisfy({ corner in
@@ -564,39 +562,7 @@ public actor PEXOrchestrator {
             }
         }
         if let profile = request.processProfile {
-            var deckEntries: [(identifier: String, path: String)] = []
-            if let primaryDeckPath = profile.primaryDeckPath {
-                deckEntries.append((identifier: "primary", path: primaryDeckPath))
-            }
-            deckEntries.append(contentsOf: profile.cornerDeckPaths.map { entry in
-                (identifier: "corner-\(entry.key)", path: entry.value)
-            })
-            deckEntries.append(contentsOf: profile.requiredViewPaths.map { entry in
-                (identifier: "view-\(entry.key)", path: entry.value)
-            })
-            var capturedPaths: Set<String> = []
-            var capturedDeckIDs: Set<String> = []
-            for entry in deckEntries.sorted(by: { $0.identifier < $1.identifier }) {
-                guard capturedPaths.insert(entry.path).inserted else { continue }
-                var deckArtifact = try recorder.captureProcessProfileDeck(
-                    path: entry.path,
-                    identifier: entry.identifier
-                )
-                if !capturedDeckIDs.insert(deckArtifact.id.rawValue).inserted {
-                    let collisionSeed = Data("\(entry.identifier)\n\(entry.path)".utf8)
-                    let suffix = String(PEXRequestHash.compute(from: collisionSeed).value.prefix(10))
-                    deckArtifact = try recorder.captureProcessProfileDeck(
-                        path: entry.path,
-                        identifier: "\(entry.identifier)-\(suffix)"
-                    )
-                    guard capturedDeckIDs.insert(deckArtifact.id.rawValue).inserted else {
-                        throw PEXError.internalInvariantViolation(
-                            "Process profile deck artifact identifiers are not unique"
-                        )
-                    }
-                }
-                artifacts.append(deckArtifact)
-            }
+            artifacts.append(contentsOf: try recorder.captureProcessProfileInputs(profile))
         }
         if let nativeInput = request.nativeInput {
             artifacts.append(contentsOf: try recorder.captureNativeInputs(nativeInput))

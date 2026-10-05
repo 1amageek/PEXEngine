@@ -11,16 +11,20 @@ public struct PEXArtifactStore: Sendable {
         self.serializer = PEXIRSerializer()
     }
 
-    public func saveManifest(_ manifest: PEXArtifactManifest) throws {
+    /// Encodes the exact representation used by saveManifest, including persisted date precision.
+    public static func encodeManifest(_ manifest: PEXArtifactManifest) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        let data: Data
         do {
-            data = try encoder.encode(manifest)
+            return try encoder.encode(manifest)
         } catch {
             throw PEXError.persistenceFailed("Failed to encode artifact manifest", underlying: error)
         }
+    }
+
+    public func saveManifest(_ manifest: PEXArtifactManifest) throws {
+        let data = try Self.encodeManifest(manifest)
         do {
             try data.write(to: workspace.manifestURL)
         } catch {
@@ -354,25 +358,13 @@ public struct PEXArtifactStore: Sendable {
         inputRecords: [PEXArtifactRecord],
         resolver: PEXArtifactResolver
     ) throws -> PEXProcessProfileReference {
-        func capturedPath(_ originalPath: String?) throws -> String? {
-            guard let originalPath else { return nil }
-            guard let record = inputRecords.first(where: {
-                $0.matches(kind: .processProfileDeckInput)
-                    && $0.availability == .available
-                    && $0.provenance?.sourcePath == originalPath
-            }) else {
-                throw PEXError.persistenceFailed(
-                    "Captured process-profile deck is missing for \(originalPath)"
-                )
+        let inputIDs = Set(inputRecords.map(\.id))
+        return try profile.mapInputPathsByRole { role, _ in
+            let record = try resolver.processProfileInputRecord(for: role)
+            guard inputIDs.contains(record.id) else {
+                throw PEXError.persistenceFailed("The captured request does not retain the process-profile role \(role)")
             }
             return try resolver.validatedURL(for: record).path(percentEncoded: false)
-        }
-
-        return try profile.mapInputPaths { path in
-            guard let resolvedPath = try capturedPath(path) else {
-                throw PEXError.persistenceFailed("Captured process-profile input is missing for \(path)")
-            }
-            return resolvedPath
         }
     }
 }

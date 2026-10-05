@@ -34,6 +34,12 @@ flowchart TD
 ## Contracts and Invariants
 Native input references are propagated through initial execution, exact retry and captured reload. Selected corner electrical-model calibration IDs must be a subset of actually captured calibration identities before adapter callbacks. No parser or synthetic raw file is required for canonical payloads. Actual raw files/logs are retained only for raw payloads; generated evidence remains retained in both paths. Exact corner mismatch and backend/expected-producer mismatch fail explicitly. Canonical graph admission validates once at the immutable backend-result boundary; runtime reuses its derived warning evidence. Canonical graph validation cannot be disabled by non-strict raw-parser options. Cross-corner producer/image identity and invocation mode/entrypoint remain consistent. Both SPICE backannotation and portable-profile SPEF are required run deliverables. Generation or recording failure fails the corner at persistence, retaining observed identity and all previously recorded canonical/topology/standard artifacts. The failed result publishes no successful IR; persisted canonical bytes remain diagnostic evidence, not completion. A missing-record entry retains the exact failure reason; failure to persist that entry is also explicit. Format-profile applicability belongs to PEXParsers, and is never silently relaxed by Runtime.
 
+Process-profile capture delegates the full declared role inventory to Persistence.
+Path aliasing must preserve every primary/corner/view association while capturing
+the shared bytes once. Runtime consumes the returned captured paths and records;
+it does not infer view roles from file names or private record identifiers.
+Existing backend cancellation propagation and native byte budgets remain unchanged.
+
 ## Runtime Flows
 Selective retry loads the exact retained parent manifest/request and verifies its
 captured input integrity. The caller may supply the failed-corner subset or the

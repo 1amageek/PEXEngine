@@ -42,9 +42,21 @@ parameters, all base/per-corner technology, native configuration and calibration
 content references and budgets, options, backend configuration, process/deck
 content, and declared execution input references. Input roles/descriptors remain
 part of identity. Capture locations and run IDs are availability, not meaning.
-The ordinary persisted request hash encoding remains unchanged. Measured backend
+Historical records without new role associations keep their request hash encoding. Measured backend
 implementation identity is checked separately through BackendExecution, because
 it is an observation rather than an input-content identity.
+
+Process-profile input associations are semantic values, not source-path provenance.
+`PEXProcessProfileInputRole` distinguishes the primary deck, an exact corner deck,
+and an exact required-view key. Each logical role has one artifact record; a view
+uses `processProfileViewInput` while a deck uses `processProfileDeckInput`.
+`PEXArtifactRecord.processProfileInputRole` is optional for historical inspection,
+but new role-based reconstruction requires it. Kind/role mismatches and invalid
+role tokens are rejected at the record boundary, including decoding. Canonical
+input identity includes the association; absence preserves the historical hash
+encoding. The reserved `PEXProcessProfileReference.qualificationProfileViewRole`
+is the required-view key used by the host qualification consumer; qualification
+semantics remain with that consumer.
 
 ## Verification and Change Impact
 
