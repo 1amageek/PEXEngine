@@ -30,7 +30,7 @@ let package = Package(
         circuiteFoundationDependency,
         signoffToolSupportDependency,
         .package(url: "https://github.com/1amageek/semiconductor-layout.git",
-                 revision: "f762eb318d4d4a527d418eb83eff5d2c1cdd5604"),
+                 revision: "3782d80a8038118ec0e4d18d550391d4e6587da1"),
     ],
     targets: [
         .target(
