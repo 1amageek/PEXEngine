@@ -3,9 +3,22 @@ import Testing
 import CircuiteFoundation
 @testable import PEXCLICore
 import PEXCore
+import PEXRuntime
 
 @Suite("Native extract command admission", .timeLimit(.minutes(1)))
 struct PEXNativeExtractCommandTests {
+    @Test(arguments: ["bin/extractor", "/opt/extractor"])
+    func configExecutablePathResolvesAtDocumentBase(path: String) async throws {
+        let directory = try temporaryDirectory()
+        defer { remove(directory) }
+        let configURL = directory.appending(path: "project.json")
+        try writeConfig(["backendID": "magic", "executablePath": path], to: configURL)
+        let command = try ExtractCommand(arguments: ["--config", configURL.path])
+        let request = try await command.buildRequestFromConfigFile(configURL)
+        let expected = path.hasPrefix("/") ? path : directory.appending(path: path).path(percentEncoded: false)
+        #expect(request.backendSelection.executablePath == expected)
+    }
+
     @Test func directRequestLoadsTypedReferenceWithoutRewritingURLs() throws {
         let directory = try temporaryDirectory()
         defer { remove(directory) }

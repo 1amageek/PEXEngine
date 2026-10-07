@@ -10,6 +10,18 @@ import PEXTestSupport
 
 @Suite("PEXRuntime Tests")
 struct PEXRuntimeTests {
+    @Test func configMapperRejectsMissingDeclaredNativeReference() throws {
+        let data = Data(#"{"version":1,"enabled":true,"topCell":"TOP","backendID":"native","corners":["tt"],"inputs":{"layout":"top.gds","netlist":"top.cir","technology":"tech.json","technologyByCorner":{},"nativeInput":"missing-reference.json"},"output":{"workspace":"runs"},"options":{"includeCouplingCaps":true,"maxParallelJobs":1,"strictValidation":true,"sourceConnectivityPolicy":"warn"}}"#.utf8)
+        let config = try JSONDecoder().decode(PEXProjectConfig.self, from: data)
+        let configURL = FileManager.default.temporaryDirectory
+            .appending(path: "pex-native-config-red-\(UUID().uuidString)")
+            .appending(path: "project.json")
+
+        #expect(throws: PEXError.self) {
+            _ = try PEXConfigMapper().mapToRunRequest(config: config, configFileURL: configURL)
+        }
+    }
+
     @Test func configMapperMapsCorrectly() throws {
         let config = PEXProjectConfig(
             topCell: "INVERTER",
@@ -24,6 +36,67 @@ struct PEXRuntimeTests {
         #expect(request.backendSelection.backendID == "mock")
         #expect(request.corners.count == 2)
         #expect(request.layoutURL.path(percentEncoded: false).contains("top.oas"))
+    }
+
+    @Test(arguments: [false, true])
+    func configMapperLoadsNativeDocumentWithoutRewritingInputs(absolute: Bool) throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "pex-native-mapper-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer {
+            do { try FileManager.default.removeItem(at: root) }
+            catch { Issue.record("Failed to remove native mapper fixture: \(error)") }
+        }
+        let referenceURL = root.appending(path: "reference.json")
+        let content = try ArtifactID(
+            digest: ContentDigest(algorithm: .sha256, hexadecimalValue: String(repeating: "a", count: 64)),
+            byteCount: 8
+        )
+        let reference = try PEXNativeInputReference(
+            configurationURL: root.appending(path: "outside/configuration.json"),
+            calibrations: [.init(artifactID: content, url: root.appending(path: "outside/calibration.bin"))],
+            maximumConfigurationBytes: 32, maximumCalibrationBytes: 8,
+            maximumTotalCalibrationBytes: 8, maximumCalibrationArtifacts: 1
+        )
+        try JSONEncoder().encode(reference).write(to: referenceURL)
+        let config = PEXProjectConfig(
+            backendID: "native", corners: ["tt"],
+            inputs: .init(nativeInput: absolute ? referenceURL.path(percentEncoded: false) : "reference.json")
+        )
+        let decoded = try JSONDecoder().decode(PEXProjectConfig.self, from: JSONEncoder().encode(config))
+        let request = try PEXConfigMapper().mapToRunRequest(config: decoded, configFileURL: root.appending(path: "project.json"))
+        #expect(request.nativeInput == reference)
+        #expect(request.backendSelection.backendID == "native")
+        #expect(request.corners.map(\.id) == ["tt"])
+    }
+
+    @Test func configMapperRejectsMissingOrBlankNativePath() throws {
+        let paths: [String?] = [nil, "", " \t"]
+        for path in paths {
+            let config = PEXProjectConfig(backendID: "native", inputs: .init(nativeInput: path))
+            #expect(throws: PEXError.self) {
+                try PEXConfigMapper().mapToRunRequest(config: config, configFileURL: URL(filePath: "/tmp/pex/project.json"))
+            }
+        }
+    }
+
+    @Test func configMapperRejectsNativePathForOtherBackendBeforeReading() throws {
+        let config = PEXProjectConfig(backendID: "magic", inputs: .init(nativeInput: "missing.json"))
+        do {
+            _ = try PEXConfigMapper().mapToRunRequest(config: config, configFileURL: URL(filePath: "/tmp/pex/project.json"))
+            Issue.record("Expected unused native reference to fail before I/O")
+        } catch let error as PEXError {
+            #expect(error.kind == .invalidInput)
+        }
+    }
+
+    @Test(arguments: ["bin/extractor", "/opt/extractor"])
+    func configMapperResolvesConfiguredExecutableAtDocumentBase(path: String) throws {
+        var config = PEXProjectConfig(backendID: "mock")
+        config.executablePath = path
+        let configURL = URL(filePath: "/tmp/pex-executable/project.json")
+        let request = try PEXConfigMapper().mapToRunRequest(config: config, configFileURL: configURL)
+        let expected = path.hasPrefix("/") ? path : "/tmp/pex-executable/\(path)"
+        #expect(request.backendSelection.executablePath == expected)
     }
 
     @Test func configMapperRejectsMissingBackendID() throws {

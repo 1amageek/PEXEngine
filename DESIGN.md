@@ -26,7 +26,7 @@ and independent physical process qualification remain separate gaps.
 | [PEXAdapters](Sources/PEXAdapters/DESIGN.md) | child | Concrete backend execution | Native/external composition | Process trust remains independent |
 | [PEXParsers](Sources/PEXParsers/DESIGN.md) | child | Scoped standard identity and portable export profile | SPICE/SPEF semantics | Unsupported topology fails required output |
 | [PEXCLICore](Sources/PEXCLICore/DESIGN.md) | child | Explicit native CLI input and corners | Developer operation | Typed reference URLs must be local |
-| [PEXRuntime](Sources/PEXRuntime/DESIGN.md) | child | Captured execution and typed output dispatch | Run lifecycle composition | Native inputs/calibration/backend remain unfinished until independently verified |
+| [PEXRuntime](Sources/PEXRuntime/DESIGN.md) | child | Shared bounded native reference loading, typed config mapping, captured execution and output dispatch | Config intake and run lifecycle | Referenced URLs retain Core meaning; physical process qualification remains independent |
 | [PEXPersistence](Sources/PEXPersistence/DESIGN.md) | child | Immutable input/output capture and reload | Run artifact owner | Integrity does not qualify process physics |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
 | [ToolQualification](../ToolQualification/DESIGN.md) | used by | Raw measured observations | Independent trust decision | PEX does not self-qualify a process |

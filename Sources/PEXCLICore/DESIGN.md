@@ -1,7 +1,7 @@
 # PEXCLICore
 
 ## Purpose and Scope
-Owns developer-facing command admission, typed requests, and structured result presentation. Parent: [PEXEngine](../../DESIGN.md). Child: [NativeInputLoading](NativeInputLoading/DESIGN.md). Existing commands remain module entry points.
+Owns developer-facing command admission, typed requests, and structured result presentation. Parent: [PEXEngine](../../DESIGN.md). No children. Existing commands remain module entry points.
 
 ## Responsibilities and Boundaries
 CLI resolves project-relative paths and validates explicitly supplied input types. Core owns native reference schema; Persistence owns bounded local reads and later immutable capture; Runtime and adapters own execution and numerical interpretation.
@@ -10,7 +10,7 @@ CLI resolves project-relative paths and validates explicitly supplied input type
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [PEXEngine](../../DESIGN.md) | parent | Default engine composition | Command execution | Admission alone does not prove extraction |
-| [NativeInputLoading](NativeInputLoading/DESIGN.md) | child | Typed reference loading | Native request admission | Four MiB reference ceiling |
+| [NativeInputLoading](../PEXRuntime/NativeInputLoading/DESIGN.md) | depends on | Shared typed reference/backend admission | Native request admission | Four MiB reference ceiling |
 | [Core NativeInput](../PEXCore/NativeInput/DESIGN.md) | depends on | PEXNativeInputReference | Schema and budgets | Preserve decoded availability URLs |
 | [Persistence](../PEXPersistence/DESIGN.md) | depends on | Bounded local read | Read and capture failure | No success fallback on failed reads |
 | [PEXParsers](../PEXParsers/DESIGN.md) | depends on | Portable electrical export and standard parsing | SPEF emission and round-trip | Pinless coordinates may be omitted; full comparison must reject loss |
@@ -27,9 +27,12 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
-Native requests require explicit nonempty unique corner IDs and a native input reference. `--native-input` overrides `inputs.nativeInput`; the config value resolves against the config directory, while the CLI value resolves against the process working directory. Non-native backends reject supplied native references. Explicit wrong types, empty corners, duplicate corners, invalid finite numbers and overflowing integers fail with typed PEXError. Omitted external corners retain their existing default. Numeric JSON values never coerce to booleans.
+Native requests require explicit nonempty unique corner IDs and a native input reference. `--native-input` overrides `inputs.nativeInput`; the config value resolves against the config directory, while the CLI value resolves against the process working directory. Shared Runtime loading rejects native selection without a reference and non-native backends with a supplied native reference. Explicit wrong types, empty corners, duplicate corners, invalid finite numbers and overflowing integers fail with typed PEXError. Omitted external corners retain their existing default. Numeric JSON values never coerce to booleans.
 
 ## Runtime Flows
+Configured executable file paths resolve against the configuration document
+directory. Absolute paths and direct-CLI caller-selected paths are preserved.
+
 Extract arguments/config -> resolve reference file -> bounded read -> Core JSONDecoder admission -> typed request -> engine capture/execution -> persisted results -> CLI output. Direct request construction throws when admission fails.
 
 `write-spef` emits the portable electrical profile defined by [PEXParsers](../PEXParsers/DESIGN.md). The profile retains scoped electrical identity and operators; pinless-net coordinates have no admitted standard connection record and are omitted. `--round-trip` requires full semantic equivalence, including coordinate presence and values, so such loss is rejected with typed `PEXError.invalidInput` rather than reported as a successful round-trip. Without `--round-trip`, report status `passed` certifies successful file output and IR validation; it does not certify preservation of all metadata. The command retains the existing strict comparator and does not reconstruct coordinates from shadow annotations.

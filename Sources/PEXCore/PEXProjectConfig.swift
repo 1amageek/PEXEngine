@@ -9,17 +9,20 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public var netlist: String
         public var technology: String
         public var technologyByCorner: [String: String]
+        public var nativeInput: String?
 
         public init(
             layout: String = "top.oas",
             netlist: String = "top.cir",
             technology: String = "tech.json",
-            technologyByCorner: [String: String] = [:]
+            technologyByCorner: [String: String] = [:],
+            nativeInput: String? = nil
         ) {
             self.layout = layout
             self.netlist = netlist
             self.technology = technology
             self.technologyByCorner = technologyByCorner
+            self.nativeInput = nativeInput
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -27,6 +30,7 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
             case netlist
             case technology
             case technologyByCorner
+            case nativeInput
         }
 
         public init(from decoder: Decoder) throws {
@@ -38,7 +42,8 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
                 technologyByCorner: try container.decode(
                     [String: String].self,
                     forKey: .technologyByCorner
-                )
+                ),
+                nativeInput: try container.decodeIfPresent(String.self, forKey: .nativeInput)
             )
         }
     }

@@ -32,6 +32,14 @@ flowchart LR
 
 ## Contracts and Invariants
 
+`PEXProjectConfig` owns the version-1 persisted project input paths shared by
+Studio and the CLI. `InputPaths.nativeInput` is an optional native reference
+document path. Codable preserves the supplied path; Runtime resolves it against
+the actual configuration document directory. It does not encode or rewrite the
+configuration and calibration URLs inside `PEXNativeInputReference`. A missing
+path is meaningful only for a non-native backend; backend admission is Runtime's
+responsibility. No legacy schema or implicit native reference is supplied.
+
 The native consumer selects an admitted electrical model by exact process and corner.
 External deck metadata does not establish a native electrical model. Immutable values
 retain calibration content identity independently of file availability or trust.
@@ -59,6 +67,11 @@ is the required-view key used by the host qualification consumer; qualification
 semantics remain with that consumer.
 
 ## Verification and Change Impact
+
+PEXProjectConfigTests owns native path JSON round-trip and field-type refusal.
+PEXRuntimeTests owns actual document-relative loading and backend admission;
+PEXNativeExtractCommandTests owns the explicit CLI override. Studio persistence
+must preserve this field through its project-view/document-view projection.
 
 Electrical model behavior is owned by `PEXCoreTests/PEXElectricalModelTests`;
 captured decoding is owned by `PEXRuntimeTests/PEXElectricalModelResolutionTests`.

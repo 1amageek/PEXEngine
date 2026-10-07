@@ -63,14 +63,14 @@ let package = Package(
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationCrypto", package: "CircuiteFoundation"),
-        ], exclude: ["DESIGN.md"]),
+        ], exclude: ["DESIGN.md", "NativeInputLoading/DESIGN.md"]),
         .target(name: "PEXEngine", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence", "PEXRuntime",
         ]),
         .target(name: "PEXCLICore", dependencies: [
             "PEXEngine",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
-        ], exclude: ["DESIGN.md", "NativeInputLoading/DESIGN.md"]),
+        ], exclude: ["DESIGN.md"]),
         .executableTarget(name: "PEXCLI", dependencies: ["PEXCLICore"], path: "Sources/PEXCLI"),
 
         .testTarget(
@@ -153,7 +153,7 @@ let package = Package(
             ]
         ),
         .testTarget(name: "PEXCLITests", dependencies: [
-            "PEXCLICore", "PEXEngine", "PEXCore", "PEXTestSupport",
+            "PEXCLICore", "PEXEngine", "PEXRuntime", "PEXCore", "PEXTestSupport",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
         ]),

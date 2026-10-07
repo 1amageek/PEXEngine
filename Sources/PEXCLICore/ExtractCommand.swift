@@ -270,7 +270,9 @@ public struct ExtractCommand: Sendable {
         let baseDir = configURL.deletingLastPathComponent()
         let topCell = try config.string(forKey: "topCell", default: "TOP")
         let backendID = try Self.requiredBackendID(config.string(forKey: "backendID"), source: "config backendID")
-        let executablePath = try config.string(forKey: "executablePath")
+        let executablePath = try config.string(forKey: "executablePath").map {
+            Self.resolveURL($0, relativeTo: baseDir).path(percentEncoded: false)
+        }
         let layoutPath = try config.string(forKey: "inputs.layout", default: "top.oas")
         let netlistPath = try config.string(forKey: "inputs.netlist", default: "top.cir")
         let technologyPath = try config.string(forKey: "inputs.technology", default: "tech.json")
@@ -293,7 +295,7 @@ public struct ExtractCommand: Sendable {
             corners: try Self.configuredCorners(from: config, backendID: backendID),
             technology: .jsonFile(Self.resolveURL(technologyPath, relativeTo: baseDir)),
             technologyByCorner: technologyByCorner,
-            nativeInput: try Self.loadNativeInput(backendID: backendID, url: nativeInputURL),
+            nativeInput: try PEXNativeInputLoader().load(backendID: backendID, referenceURL: nativeInputURL),
             processProfile: Self.mergedProcessProfile(
                 try Self.configuredProcessProfile(from: config, relativeTo: baseDir),
                 override: processProfileOverride
@@ -407,19 +409,6 @@ public struct ExtractCommand: Sendable {
         return trimmed.map { PEXCorner(id: $0) }
     }
 
-    private static func loadNativeInput(backendID: String, url: URL?) throws -> PEXNativeInputReference? {
-        guard backendID == "native" else {
-            guard url == nil else {
-                throw PEXError.invalidInput("Native input reference requires backend native")
-            }
-            return nil
-        }
-        guard let url else {
-            throw PEXError.invalidInput("Native extraction requires --native-input or inputs.nativeInput")
-        }
-        return try PEXNativeInputLoader().load(url)
-    }
-
     fileprivate static func requiredBackendID(_ value: String?, source: String) throws -> String {
         guard let value else {
             throw PEXError.invalidInput("\(source) is required; pass --backend <id> or set backendID explicitly")
@@ -500,7 +489,7 @@ public struct ExtractCommand: Sendable {
             technologyByCorner: params.technologyByCorner.reduce(into: [String: TechnologyInput]()) { result, entry in
                 result[entry.key] = .jsonFile(URL(filePath: entry.value))
             },
-            nativeInput: try Self.loadNativeInput(backendID: params.backendID, url: params.nativeInputURL),
+            nativeInput: try PEXNativeInputLoader().load(backendID: params.backendID, referenceURL: params.nativeInputURL),
             processProfile: params.processProfile,
             backendSelection: PEXBackendSelection(backendID: params.backendID),
             options: options,

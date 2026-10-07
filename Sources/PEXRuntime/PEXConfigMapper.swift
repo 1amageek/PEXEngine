@@ -2,7 +2,11 @@ import Foundation
 import PEXCore
 
 public struct PEXConfigMapper: Sendable {
-    public init() {}
+    private let nativeInputLoader: any PEXNativeInputLoading
+
+    public init(nativeInputLoader: any PEXNativeInputLoading = PEXNativeInputLoader()) {
+        self.nativeInputLoader = nativeInputLoader
+    }
 
     public func mapToRunRequest(
         config: PEXProjectConfig,
@@ -50,6 +54,13 @@ public struct PEXConfigMapper: Sendable {
         )
 
         let backendID = try Self.requiredBackendID(config.backendID)
+        let nativeInputURL = try config.inputs.nativeInput.map { path in
+            guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw PEXError.invalidInput("Configuration inputs.nativeInput must not be empty")
+            }
+            return Self.resolveURL(path, relativeTo: baseDir)
+        }
+        let nativeInput = try nativeInputLoader.load(backendID: backendID, referenceURL: nativeInputURL)
 
         return PEXRunRequest(
             layoutURL: layoutURL,
@@ -60,10 +71,11 @@ public struct PEXConfigMapper: Sendable {
             corners: corners,
             technology: .jsonFile(technologyURL),
             technologyByCorner: technologyByCorner,
+            nativeInput: nativeInput,
             processProfile: processProfile,
             backendSelection: PEXBackendSelection(
                 backendID: backendID,
-                executablePath: config.executablePath
+                executablePath: Self.resolveOptionalPath(config.executablePath, relativeTo: baseDir)
             ),
             options: options,
             workingDirectory: workspaceURL

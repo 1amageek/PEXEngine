@@ -1,7 +1,7 @@
 # PEXRuntime
 
 ## Purpose and Scope
-Composes extraction request validation, captured-input resolution, backend corner execution, canonical admission, artifact persistence and run lineage. Parent: [PEXEngine](../../DESIGN.md). No child introduced by the execution-payload change.
+Composes extraction request validation, captured-input resolution, backend corner execution, canonical admission, artifact persistence and run lineage. Parent: [PEXEngine](../../DESIGN.md). Child: [NativeInputLoading](NativeInputLoading/DESIGN.md).
 
 ## Responsibilities and Boundaries
 PEXOrchestrator and PEXPipeline are module composition roots. They consume public backend/parser/persistence contracts, retain available evidence on failure and bind every successful result to its executing backend/corner. Numerical extraction, standard codec semantics, filesystem artifact integrity and process qualification remain with their owners.
@@ -15,6 +15,7 @@ PEXOrchestrator and PEXPipeline are module composition roots. They consume publi
 | [PEXCore](../PEXCore/DESIGN.md) | depends on | Exact requests/corners and IR | Domain admission | Do not infer connectivity from name coverage |
 
 | [NativeInputCapture](../PEXPersistence/NativeInputCapture/DESIGN.md) | depends on | Bounded native configuration/calibration capture | Exact run inputs | Model calibration coverage is checked after captured technology resolution |
+| [NativeInputLoading](NativeInputLoading/DESIGN.md) | child | Shared native document/backend admission | Config mapper and CLI loading | Preserve decoded input URLs |
 
 ## Architecture
 ```mermaid
@@ -32,6 +33,17 @@ flowchart TD
 ```
 
 ## Contracts and Invariants
+
+PEXConfigMapper uses the actual configuration document URL as the base for every
+persisted input path, including `inputs.nativeInput`. It delegates native backend
+and document admission to the shared PEXNativeInputLoading service. Native
+selection requires a nonempty reference path; other backends reject a supplied
+native reference. The mapper forwards the complete admitted reference and its
+capture budgets to PEXRunRequest. No frontend-specific base, schema, fallback,
+or decoded-URL rewrite is introduced.
+Configured executable file paths also resolve at the document base; absolute
+paths remain unchanged. Explicit direct-CLI paths retain their caller-selected
+base and are not reinterpreted as configuration paths.
 Native input references are propagated through initial execution, exact retry and captured reload. Selected corner electrical-model calibration IDs must be a subset of actually captured calibration identities before adapter callbacks. No parser or synthetic raw file is required for canonical payloads. Actual raw files/logs are retained only for raw payloads; generated evidence remains retained in both paths. Exact corner mismatch and backend/expected-producer mismatch fail explicitly. Canonical graph admission validates once at the immutable backend-result boundary; runtime reuses its derived warning evidence. Canonical graph validation cannot be disabled by non-strict raw-parser options. Cross-corner producer/image identity and invocation mode/entrypoint remain consistent. Both SPICE backannotation and portable-profile SPEF are required run deliverables. Generation or recording failure fails the corner at persistence, retaining observed identity and all previously recorded canonical/topology/standard artifacts. The failed result publishes no successful IR; persisted canonical bytes remain diagnostic evidence, not completion. A missing-record entry retains the exact failure reason; failure to persist that entry is also explicit. Format-profile applicability belongs to PEXParsers, and is never silently relaxed by Runtime.
 
 Process-profile capture delegates the full declared role inventory to Persistence.

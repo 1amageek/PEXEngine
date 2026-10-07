@@ -4,6 +4,27 @@ import Foundation
 
 @Suite("PEXProjectConfig Tests")
 struct PEXProjectConfigTests {
+    @Test func nativeReferencePathSurvivesJSONAndRejectsWrongType() throws {
+        let config = PEXProjectConfig(
+            backendID: "native",
+            inputs: .init(nativeInput: "inputs/native-reference.json")
+        )
+        let encoded = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(PEXProjectConfig.self, from: encoded)
+        #expect(decoded == config)
+        #expect(decoded.inputs.nativeInput == "inputs/native-reference.json")
+        #expect(decoded.version == PEXProjectConfig.currentVersion)
+
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var inputs = try #require(object["inputs"] as? [String: Any])
+        inputs["nativeInput"] = true
+        object["inputs"] = inputs
+        let invalid = try JSONSerialization.data(withJSONObject: object)
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(PEXProjectConfig.self, from: invalid)
+        }
+    }
+
     @Test func decodeFromJSON() throws {
         let json = """
         {
