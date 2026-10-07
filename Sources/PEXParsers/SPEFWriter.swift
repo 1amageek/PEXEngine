@@ -12,6 +12,7 @@ public struct SPEFWriter: Sendable {
         try validateHeaderIdentifiers()
         try validateGraph(ir)
         let nameMap = try makeNameMap(for: ir)
+        let incidentCapacitances = try incidentCapacitances(in: ir)
 
         var lines: [String] = []
         lines.append("*SPEF \"\(escapedString(options.spefVersion))\"")
@@ -48,7 +49,7 @@ public struct SPEFWriter: Sendable {
         }
 
         for net in ir.nets.sorted(by: { $0.name.value < $1.name.value }) {
-            try appendNet(net, ir: ir, nameMap: nameMap, lines: &lines)
+            try appendNet(net, ir: ir, totalCapF: incidentCapacitances[net.name, default: 0], nameMap: nameMap, lines: &lines)
         }
 
         return lines.joined(separator: "\n") + "\n"
@@ -66,6 +67,7 @@ public struct SPEFWriter: Sendable {
     private func appendNet(
         _ net: ParasiticNet,
         ir: ParasiticIR,
+        totalCapF: Double,
         nameMap: SPEFNameMap,
         lines: inout [String]
     ) throws {
@@ -87,8 +89,6 @@ public struct SPEFWriter: Sendable {
             return ParasiticElement(id: element.id, kind: element.kind, nodeA: element.nodeA,
                                     nodeB: element.nodeB, value: value, source: element.source)
         }
-        let totalCapF = totalCapacitance(for: net, elements: elements)
-        try validateFinite(id: net.name.value, value: totalCapF)
         lines.append("*D_NET \(netName) \(formatCapacitance(totalCapF))")
 
         let connections = net.nodes.filter { $0.kind == .pin }.sorted { $0.name.value < $1.name.value }
@@ -182,19 +182,38 @@ public struct SPEFWriter: Sendable {
         }
     }
 
-    private func totalCapacitance(for net: ParasiticNet, elements: [ParasiticElement]) -> Double {
-        let declared = net.totalGroundCapF + net.totalCouplingCapF
-        if declared > 0 {
-            return declared
+    private func incidentCapacitances(in ir: ParasiticIR) throws -> [NetName: Double] {
+        let scale: Double
+        switch ir.units.capacitance {
+        case .farad: scale = 1
+        case .picoFarad: scale = 1e-12
+        case .femtoFarad: scale = 1e-15
         }
-        return elements.reduce(0) { partial, element in
-            switch element.kind {
-            case .capacitor, .coupling:
-                return partial + element.value
-            case .resistor, .inductor:
-                return partial
+        var totals: [NetName: Double] = [:]
+        func add(_ value: Double, to net: NetName) throws {
+            let total = totals[net, default: 0] + value
+            try validateFinite(id: net.value, value: total)
+            let outputTotal = total / options.capacitanceUnit.faradsPerUnit
+            try validateFinite(id: net.value, value: outputTotal)
+            guard total == 0 || outputTotal > 0 else {
+                throw SPEFWriterError.unrepresentableTopology(id: net.value, reason: "Positive capacitance underflows in output units")
+            }
+            totals[net] = total
+        }
+        // Header totals describe incident CAP operators, not nodeA-owned IR inventory.
+        for element in ir.elements.sorted(by: { $0.id < $1.id }) {
+            guard element.kind == .capacitor || element.kind == .coupling else { continue }
+            let value = element.value * scale
+            try validateFinite(id: element.id, value: value)
+            guard element.value == 0 || value > 0 else {
+                throw SPEFWriterError.unrepresentableTopology(id: element.id, reason: "Positive capacitance underflows in canonical units")
+            }
+            try add(value, to: element.nodeA.netName)
+            if let nodeB = element.nodeB, nodeB.netName != element.nodeA.netName {
+                try add(value, to: nodeB.netName)
             }
         }
+        return totals
     }
 
     private func localNodeToken(_ ref: NodeRef, nameMap: SPEFNameMap) throws -> String {

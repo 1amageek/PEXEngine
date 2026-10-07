@@ -36,6 +36,10 @@ struct ScopedStandardOutputTests {
         let ir = fixture()
         let text = try SPEFWriter().write(ir)
         #expect(text.contains("PEX_IDENTITY_V1_"))
+        var lexer = SPEFLexer(source: text)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        #expect(abs(try #require(tree.nets.first { $0.netName == "A" }).totalCap - 0.005) < 1e-14)
+        #expect(abs(try #require(tree.nets.first { $0.netName == "B" }).totalCap - 0.002) < 1e-14)
         let restored = try parse(text, format: .spef)
         try expectGraph(ir, restored)
         #expect(restored.nets.flatMap(\.nodes).filter { $0.name.value == "shared" && $0.kind == .pin }.count == 2)
@@ -52,6 +56,52 @@ struct ScopedStandardOutputTests {
         #expect(abs((restored.elements.first { $0.kind == .capacitor }?.value ?? 0) - 7e-15) < 1e-25)
         let stripped = text.split(separator: "\n").filter { !$0.contains("PEX_IDENTITY_V1_") }.joined(separator: "\n")
         #expect(throws: PEXError.self) { try parse(stripped, format: .spef) }
+    }
+
+    @Test(arguments: [false, true])
+    func spefIncidentHeadersPreserveSameNetAndParallelOperators(reverse: Bool) throws {
+        let original = fixture()
+        let a = NetName("A")
+        let b = NetName("B")
+        let refA = NodeRef(netName: a, nodeName: NodeName("shared"))
+        let refB = NodeRef(netName: b, nodeName: NodeName("shared"))
+        var elements = original.elements + [
+            ParasiticElement(id: "Cparallel", kind: .coupling, nodeA: refA, nodeB: refB, value: 7e-15, source: .extracted),
+            ParasiticElement(id: "Cintra", kind: .coupling, nodeA: refA,
+                             nodeB: NodeRef(netName: a, nodeName: NodeName("nested:leaf")), value: 4e-15, source: .extracted)
+        ]
+        if reverse {
+            elements = elements.reversed().map { element in
+                guard element.kind == .coupling, let nodeB = element.nodeB else { return element }
+                return ParasiticElement(id: element.id, kind: element.kind, nodeA: nodeB,
+                                        nodeB: element.nodeA, value: element.value, source: element.source)
+            }
+        }
+        let nets = original.nets.reversed().map { net in
+            ParasiticNet(name: net.name, nodes: net.nodes, totalGroundCapF: 99e-15,
+                         totalCouplingCapF: 77e-15, totalResistanceOhm: net.totalResistanceOhm)
+        }
+        let ir = ParasiticIR(version: original.version, cornerID: original.cornerID, units: .canonical,
+                            nets: nets, elements: elements, metadata: original.metadata)
+        let text = try SPEFWriter().write(ir)
+        var lexer = SPEFLexer(source: text)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        #expect(abs(try #require(tree.nets.first { $0.netName == "A" }).totalCap - 0.016) < 1e-14)
+        #expect(abs(try #require(tree.nets.first { $0.netName == "B" }).totalCap - 0.009) < 1e-14)
+        #expect(tree.nets.reduce(0) { $0 + $1.capacitors.count } == 4)
+        let restored = try parse(text, format: .spef)
+        #expect(restored.elements.count == elements.count)
+        for element in elements {
+            let matches = restored.elements.filter {
+                $0.kind == element.kind && $0.nodeA == element.nodeA && $0.nodeB == element.nodeB
+                    && abs($0.value - element.value) < 1e-25
+            }
+            #expect(matches.count == 1)
+        }
+        let inventory = restored.nets.reduce(0) { $0 + $1.totalGroundCapF + $1.totalCouplingCapF }
+        #expect(abs(inventory - 16e-15) < 1e-25)
+        #expect(abs(try #require(restored.nets.first { $0.name == a }).totalCouplingCapF - (reverse ? 4e-15 : 13e-15)) < 1e-25)
+        #expect(abs(try #require(restored.nets.first { $0.name == b }).totalCouplingCapF - (reverse ? 9e-15 : 0)) < 1e-25)
     }
 
     @Test func spefPinlessCoordinatesDoNotCreateInvalidConnSection() throws {
@@ -81,7 +131,11 @@ struct ScopedStandardOutputTests {
         let ir = ParasiticIR(version: ParasiticIR.currentVersion, cornerID: "tt",
                             units: .init(resistance: .kiloOhm, capacitance: .picoFarad, coordinate: .micrometer),
                             nets: nets, elements: elements, metadata: [:])
-        let restored = try parse(SPEFWriter().write(ir), format: .spef)
+        let text = try SPEFWriter().write(ir)
+        var lexer = SPEFLexer(source: text)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        #expect(tree.nets.allSatisfy { abs($0.totalCap - 3) < 1e-12 })
+        let restored = try parse(text, format: .spef)
         #expect(Set(restored.nets.map(\.name)) == Set(names))
         #expect(restored.elements.allSatisfy { abs($0.value - 3e-12) < 1e-22 })
     }

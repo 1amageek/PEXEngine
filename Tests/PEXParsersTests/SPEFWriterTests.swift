@@ -136,6 +136,57 @@ struct SPEFWriterTests {
         }
     }
 
+    @Test(arguments: [Double.nan, Double.infinity, -1.0])
+    func rejectsInvalidDeclaredInventory(value: Double) {
+        let original = makeIR()
+        let nets = original.nets.map { net in
+            ParasiticNet(name: net.name, nodes: net.nodes, totalGroundCapF: value,
+                         totalCouplingCapF: net.totalCouplingCapF, totalResistanceOhm: net.totalResistanceOhm)
+        }
+        let ir = ParasiticIR(version: original.version, cornerID: original.cornerID, units: original.units,
+                            nets: nets, elements: original.elements, metadata: original.metadata)
+        #expect(throws: SPEFWriterError.self) { try SPEFWriter().write(ir) }
+    }
+
+    @Test(arguments: [false, true])
+    func rejectsIncidentCapacitanceOverflow(inOutputUnit: Bool) {
+        let original = makeIR()
+        let ref = original.elements[0].nodeA
+        let value = inOutputUnit ? 1e300 : Double.greatestFiniteMagnitude
+        let elements = ["C1", "C2"].map { id in
+            ParasiticElement(id: id, kind: .capacitor, nodeA: ref, nodeB: nil, value: value, source: .extracted)
+        }
+        let ir = ParasiticIR(version: original.version, cornerID: original.cornerID, units: .canonical,
+                            nets: original.nets, elements: elements, metadata: original.metadata)
+        let writer = SPEFWriter(options: .init(capacitanceUnit: inOutputUnit ? .picoFarad : .farad))
+        #expect(throws: SPEFWriterError.self) { try writer.write(ir) }
+    }
+
+    @Test func rejectsPositiveCapacitanceUnderflowAndPreservesOriginalZero() throws {
+        let original = makeIR()
+        let ref = original.elements[0].nodeA
+        func input(_ value: Double) -> ParasiticIR {
+            ParasiticIR(version: original.version, cornerID: original.cornerID,
+                        units: .init(resistance: .ohm, capacitance: .femtoFarad, coordinate: .micrometer),
+                        nets: original.nets,
+                        elements: [ParasiticElement(id: "Ctiny", kind: .capacitor, nodeA: ref,
+                                                   nodeB: nil, value: value, source: .extracted)],
+                        metadata: original.metadata)
+        }
+        #expect(throws: SPEFWriterError.self) { try SPEFWriter().write(input(1e-310)) }
+        let text = try SPEFWriter().write(input(0))
+        var lexer = SPEFLexer(source: text)
+        let tree = try SPEFParser().parse(tokens: lexer.tokenize())
+        #expect(tree.nets.allSatisfy { $0.totalCap == 0 })
+        let caps = tree.nets.flatMap(\.capacitors)
+        #expect(caps.count == 1)
+        #expect(caps.first?.value == 0)
+        let restored = try parseAndLower(text)
+        let cap = try #require(restored.elements.first)
+        #expect(restored.elements.count == 1)
+        #expect(cap.nodeA == ref && cap.nodeB == nil && cap.value == 0)
+    }
+
     private func parseAndLower(_ spef: String) throws -> ParasiticIR {
         var lexer = SPEFLexer(source: spef)
         let tokens = lexer.tokenize()

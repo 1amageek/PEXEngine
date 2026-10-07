@@ -55,6 +55,20 @@ into an intra-net or global-ground operator. Representable capacitor endpoints
 must resolve to their exact declared owner. All writers reject dangling endpoints,
 duplicate identities and invalid operator values before publishing output.
 
+SPEF `D_NET` totals are an export projection of the actual CAP graph, normalized
+to the declared output unit. Ground CAP contributes to its endpoint's net;
+cross-net CAP contributes once to each incident net; same-net two-endpoint CAP
+contributes once to that net. Parallel physical CAP operators each contribute.
+Canonical nodeA-owned inventory totals remain unchanged and are not the source
+of these headers. CAP records retain their original endpoints, values and single
+nodeA-owned listing; lowering reads these records and preserves each physical
+operator once rather than using the header as an electrical load. Nonfinite
+input inventories remain invalid; nonfinite normalized values, incident sums or
+output-unit totals throw typed writer failures before output publication.
+Positive capacitance that underflows to zero at either unit-conversion boundary
+is unrepresentable and throws a typed writer failure; original zero CAP remains
+valid and is retained in the output graph.
+
 ## State, Ownership, and Lifecycle
 
 All maps and parsing state are call-local. No shared mutable storage, async
@@ -74,6 +88,15 @@ annotation rejection and composer ambiguity. Existing writer/parser tests own
 standard syntax, units and source-deck composition. Changes affect runtime export
 and CLI writers through their existing public entrypoints; package verification
 is coordinated at the task owner after the shared source snapshot stabilizes.
+
+Scoped standard-output and writer tests own raw `D_NET` incident totals,
+orientation/order independence, same-net and parallel CAP, declared inventory
+disagreement, unit conversion, invalid inventories and overflow. These changes
+do not alter canonical inventory or require native extraction requalification.
+The incident-total intent is corroborated by
+[OpenRCX SPEF export](https://github.com/The-OpenROAD-Project/OpenROAD/blob/master/src/rcx/src/extSpef.cpp)
+and the pinned raw [OpenROAD fixtures](../../Tests/PEXParsersTests/Fixtures/OpenROAD/PROVENANCE.md),
+not by a claim of complete IEEE specification qualification.
 
 The profile boundary follows [OpenSTA SpefReader](https://github.com/The-OpenROAD-Project/OpenSTA/blob/master/parasitics/SpefReader.cc):
 `makeResistor` resolves both endpoints with `local_only=true` and reports cross-net
