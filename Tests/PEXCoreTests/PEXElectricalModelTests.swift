@@ -60,6 +60,40 @@ struct PEXElectricalModelTests {
         #expect(TechnologyIRValidator().validate(decoded).isEmpty)
     }
 
+    @Test func sameCutSameTopAdmitsAlternativeBottomsAndRejectsConflictingTop() throws {
+        let old = try #require(fixture().electricalModels?.first)
+        let names = ["M0", "M1", "M2", "M3"]
+        let conductors = names.enumerated().map {
+            PEXConductorElectricalModel(layerName: $0.element, bottomHeightMeters: Double($0.offset) * 2e-6,
+                thicknessMeters: 1e-6, resistivityOhmMeters: 2e-8, groundAreaFaradsPerSquareMeter: 1e-4,
+                groundPerimeterFaradsPerMeter: 1e-10, widthRange: range, lengthRange: range)
+        }
+        var pairs: [PEXCouplingElectricalModel] = []
+        for first in names.indices { for second in first..<names.count {
+            pairs.append(.init(firstLayerName: names[first], secondLayerName: names[second],
+                areaFaradsPerSquareMeter: 1e-5, sidewallFarads: 1e-16, gapRange: range))
+        } }
+        func technology(alternativeTop: String) -> TechnologyIR {
+            let vias = [("V1", "M1", "M2"), ("V0", "M0", alternativeTop)].map {
+                PEXViaElectricalModel(viaName: $0.0, cutLayerName: "C1", bottomLayerName: $0.1, topLayerName: $0.2,
+                    resistanceOhmsPerCut: 2, cutWidthRange: range, cutHeightRange: range)
+            }
+            let model = PEXElectricalModel(law: old.law, coplanarScreening: nil, processName: old.processName,
+                cornerID: old.cornerID, temperatureKelvin: old.temperatureKelvin, voltageVolts: old.voltageVolts,
+                parameters: old.parameters, referenceNodeName: old.referenceNodeName, calibrationArtifacts: old.calibrationArtifacts,
+                conductors: conductors, vias: vias, couplings: pairs)
+            return .init(processName: old.processName, stack: ["M0", "M1", "C1", "M2", "M3"].enumerated().map { .init(name: $0.element, order: $0.offset) },
+                logicalToPhysicalLayerMap: [:], vias: vias.map { .init(name: $0.viaName, topLayer: $0.topLayerName, bottomLayer: $0.bottomLayerName) },
+                defaultExtractionRules: .default, backendHints: [:], electricalModels: [model])
+        }
+        let admitted = technology(alternativeTop: "M2")
+        try admitted.validateElectricalModels()
+        #expect(try admitted.electricalModel(for: .init(id: "tt")).vias.count == 2)
+        #expect(throws: PEXElectricalModelError.invalidTopology(field: "C1")) {
+            try technology(alternativeTop: "M3").validateElectricalModels()
+        }
+    }
+
     @Test func legacyMetadataCannotSupplyMissingNativeModel() throws {
         let technology = try changed { $0.removeValue(forKey: "electricalModels") }
         #expect(throws: PEXElectricalModelError.missing(field: "electricalModels.tt")) {

@@ -1,10 +1,12 @@
 import Foundation
 import LayoutCore
 import LayoutTech
+import LayoutVerify
 import PEXCore
 
 public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     public let version: Int
+    public let electricalContext: LayoutElectricalContext
     public let layoutTechnology: LayoutTechDatabase
     public let layers: [NativePEXLayerBinding]
     public let supplementalPins: [NativePEXPinDefinition]
@@ -19,14 +21,14 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     public let projectionLimits: NativePEXProjectionLimits
     let metadataEntriesUsed: Int
 
-    public init(version: Int = 1, layoutTechnology: LayoutTechDatabase, layers: [NativePEXLayerBinding],
+    public init(version: Int = 2, layoutTechnology: LayoutTechDatabase, layers: [NativePEXLayerBinding],
                 supplementalPins: [NativePEXPinDefinition], netBindings: [NativePEXNetBinding],
                 electrodeBindings: [NativePEXElectrodeBinding], expectedCoordinateUnits: LayoutUnits,
                 maximumCellSpanDatabaseUnits: Int32, maximumMetadataEntries: Int = 1_000_000,
                 captureLimits: NativePEXCaptureLimits = .init(), calculationLimits: NativePEXCalculationLimits = .default,
-                electrodeLimits: NativePEXElectrodeLimits = .default, projectionLimits: NativePEXProjectionLimits = .default)
+                electrodeLimits: NativePEXElectrodeLimits = .default, projectionLimits: NativePEXProjectionLimits = .default, electricalContext: LayoutElectricalContext = .geometric)
         throws(NativePEXInputError) {
-        guard version == 1 else { throw .invalidField("version") }
+        guard version == 2 else { throw .invalidField("version") }
         guard maximumCellSpanDatabaseUnits > 0 else { throw .invalidField("maximumCellSpanDatabaseUnits") }
         guard expectedCoordinateUnits.scale.databaseUnitsPerMicrometer.isFinite,
               expectedCoordinateUnits.scale.databaseUnitsPerMicrometer > 0,
@@ -50,6 +52,14 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
                   standardPairs.insert("\(layer.gdsLayer):\(layer.gdsDatatype)").inserted else {
                 throw .invalidField("technology.layerMapping")
             }
+        }
+        if case .deviceAwareMOSAndPolyResistors(let poly, let marker) = electricalContext {
+            for id in [poly, marker] {
+                try budget.identifier(id.name, field: "electricalContext.layer.name")
+                try budget.identifier(id.purpose, field: "electricalContext.layer.purpose")
+                guard known.contains(id) else { throw .invalidField("electricalContext.layers") }
+            }
+            guard poly != marker else { throw .invalidField("electricalContext.layers") }
         }
         guard !layers.isEmpty else { throw .invalidField("layers") }
         var bound = Set<LayoutLayerID>(), names = Set<String>(), conductive = Set<LayoutLayerID>()
@@ -92,7 +102,7 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
                   terminals.insert(binding.terminal).inserted,
                   binding.faces.allSatisfy({ $0.begin < $0.end }) else { throw .invalidField("electrodeBindings") }
         }
-        self.version = version; self.layoutTechnology = layoutTechnology; self.layers = layers
+        self.version = version; self.electricalContext = electricalContext; self.layoutTechnology = layoutTechnology; self.layers = layers
         self.supplementalPins = supplementalPins; self.netBindings = netBindings; self.electrodeBindings = electrodeBindings
         self.expectedCoordinateUnits = expectedCoordinateUnits; self.maximumCellSpanDatabaseUnits = maximumCellSpanDatabaseUnits
         self.maximumMetadataEntries = maximumMetadataEntries; self.captureLimits = captureLimits
@@ -104,7 +114,7 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     public var conductiveLayers: Set<LayoutLayerID> { Set(layers.filter(\.isConductive).map(\.layerID)) }
 
     private enum CodingKeys: String, CodingKey {
-        case version, layoutTechnology, layers, supplementalPins, netBindings, electrodeBindings
+        case version, electricalContext, layoutTechnology, layers, supplementalPins, netBindings, electrodeBindings
         case expectedCoordinateUnits, maximumCellSpanDatabaseUnits, maximumMetadataEntries
         case captureLimits, calculationLimits, electrodeLimits, projectionLimits
     }
@@ -116,6 +126,7 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
             expectedCoordinateUnits: c.decode(LayoutUnits.self, forKey: .expectedCoordinateUnits), maximumCellSpanDatabaseUnits: c.decode(Int32.self, forKey: .maximumCellSpanDatabaseUnits),
             maximumMetadataEntries: c.decode(Int.self, forKey: .maximumMetadataEntries), captureLimits: c.decode(NativePEXCaptureLimits.self, forKey: .captureLimits),
             calculationLimits: c.decode(NativePEXCalculationLimits.self, forKey: .calculationLimits), electrodeLimits: c.decode(NativePEXElectrodeLimits.self, forKey: .electrodeLimits),
-            projectionLimits: c.decode(NativePEXProjectionLimits.self, forKey: .projectionLimits))
+            projectionLimits: c.decode(NativePEXProjectionLimits.self, forKey: .projectionLimits),
+            electricalContext: c.decode(LayoutElectricalContext.self, forKey: .electricalContext))
     }
 }

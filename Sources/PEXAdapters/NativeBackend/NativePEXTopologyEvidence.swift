@@ -2,6 +2,7 @@ import Foundation
 import PEXCore
 import PEXNative
 import LayoutCore
+import LayoutVerify
 
 /// Physical-to-canonical observations. Numeric operators are retained in the canonical IR.
 public struct NativePEXTopologyEvidence: Sendable, Codable {
@@ -70,6 +71,7 @@ public struct NativePEXTopologyEvidence: Sendable, Codable {
         public let ohms: Double
     }
     public let version: Int
+    public let electricalContext: LayoutElectricalContext
     public let policy: NativePEXBackendPolicy
     public let image: NativePEXCodeImage
     public let executionIdentity: PEXBackendExecutionIdentity
@@ -90,16 +92,17 @@ public struct NativePEXTopologyEvidence: Sendable, Codable {
     public let numericCapacitorElementIDs: [String]
 
     private enum CodingKeys: String, CodingKey {
-        case version, policy, image, executionIdentity, coordinateUnits, model, netBindings, occurrences, footprints, components, pins, opens, shortComponentIndices, numericNodes, ports, electrodeContacts, numericResistorElementIDs, numericCapacitorElementIDs
+        case version, electricalContext, policy, image, executionIdentity, coordinateUnits, model, netBindings, occurrences, footprints, components, pins, opens, shortComponentIndices, numericNodes, ports, electrodeContacts, numericResistorElementIDs, numericCapacitorElementIDs
     }
 
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
-        guard version == 2 else {
+        guard version == 3 else {
             throw DecodingError.dataCorruptedError(forKey: .version, in: c,
-                debugDescription: "Native topology requires explicit-capacitance model schema version 2.")
+                debugDescription: "Native topology requires electrical-context schema version 3.")
         }
+        electricalContext = try c.decode(LayoutElectricalContext.self, forKey: .electricalContext)
         policy = try c.decode(NativePEXBackendPolicy.self, forKey: .policy)
         image = try c.decode(NativePEXCodeImage.self, forKey: .image)
         executionIdentity = try c.decode(PEXBackendExecutionIdentity.self, forKey: .executionIdentity)
@@ -122,7 +125,7 @@ public struct NativePEXTopologyEvidence: Sendable, Codable {
     init(projection: NativePEXProjection, image: NativePEXCodeImage, identity: PEXBackendExecutionIdentity, policy: NativePEXBackendPolicy) {
         let electrodes = projection.electrodes, network = electrodes.network, snapshot = network.snapshot
         func net(_ occurrence: Int, _ id: UUID) -> Net { .init(occurrenceIndex: occurrence, netID: id) }
-        version = 2; self.policy = policy; self.image = image; executionIdentity = identity
+        version = 3; electricalContext = snapshot.electricalContext; self.policy = policy; self.image = image; executionIdentity = identity
         coordinateUnits = snapshot.coordinateUnits; model = network.model; netBindings = projection.netBindings
         occurrences = snapshot.hierarchy.occurrences.map { value in
             .init(sourceCellID: value.sourceCellID, parentIndex: value.parentIndex,

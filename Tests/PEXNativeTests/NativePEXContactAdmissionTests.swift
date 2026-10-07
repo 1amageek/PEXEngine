@@ -1,3 +1,4 @@
+import Foundation
 import LayoutCore
 import LayoutTech
 import LayoutVerify
@@ -10,7 +11,7 @@ struct NativePEXContactAdmissionTests {
     private let fixture = NativePEXTestFixture()
     private var poly: LayoutLayerID { .init(name: "POLY", purpose: "drawing") }
 
-    private func input(selectPoly: Bool, polyX: Double = 0) throws
+    private func input(selectPoly: Bool, polyX: Double = 0, primaryPoly: Bool = false, alternateModels: Bool = false) throws
         -> (NativePEXPreparedInput, TechnologyIR) {
         var layout = LayoutTechDatabase.standard()
         var polyLayer = layout.layers[0]
@@ -34,7 +35,7 @@ struct NativePEXContactAdmissionTests {
             supplementalPins: [], netBindings: [], electrodeBindings: [], expectedCoordinateUnits: .defaultUnits,
             maximumCellSpanDatabaseUnits: 1000)
         let cell = LayoutCell(name: "CONTACT", shapes: [fixture.m1, fixture.m2, fixture.cut, poly].map {
-            LayoutShape(layer: $0, geometry: .rect(.init(origin: .init(x: $0 == poly ? polyX : 0, y: 0),
+            LayoutShape(layer: $0, geometry: .rect(.init(origin: .init(x: $0 == poly ? polyX : ($0 == fixture.m1 && primaryPoly ? 1 : 0), y: 0),
                                                         size: .init(width: 1, height: 1))))
         })
         let document = LayoutDocument(name: "contact", cells: [cell], topCellID: cell.id)
@@ -54,14 +55,17 @@ struct NativePEXContactAdmissionTests {
                 secondLayerName: conductors[second].layerName, areaFaradsPerSquareMeter: 1e-5,
                 sidewallFarads: 1e-16, gapRange: source.couplings[0].gapRange))
         } }
+        let alternatives = alternateModels ? [PEXViaElectricalModel(viaName: "POLY_CONTACT", cutLayerName: "C1",
+            bottomLayerName: "POLY", topLayerName: "M2", resistanceOhmsPerCut: 6,
+            cutWidthRange: source.vias[0].cutWidthRange, cutHeightRange: source.vias[0].cutHeightRange)] : []
         let model = PEXElectricalModel(law: source.law, coplanarScreening: nil, processName: source.processName, cornerID: source.cornerID,
             temperatureKelvin: source.temperatureKelvin, voltageVolts: source.voltageVolts,
             parameters: source.parameters, referenceNodeName: source.referenceNodeName,
             calibrationArtifacts: source.calibrationArtifacts, conductors: conductors,
-            vias: source.vias, couplings: couplings)
+            vias: source.vias + alternatives, couplings: couplings)
         let technology = TechnologyIR(processName: original.processName,
             stack: ["POLY", "M1", "C1", "M2"].enumerated().map { TechnologyLayer(name: $0.element, order: $0.offset) },
-            logicalToPhysicalLayerMap: [:], vias: original.vias, defaultExtractionRules: original.defaultExtractionRules,
+            logicalToPhysicalLayerMap: [:], vias: original.vias + (alternateModels ? [.init(name: "POLY_CONTACT", topLayer: "M2", bottomLayer: "POLY")] : []), defaultExtractionRules: original.defaultExtractionRules,
             backendHints: [:], electricalModels: [model])
         return (prepared, technology)
     }
@@ -76,6 +80,18 @@ struct NativePEXContactAdmissionTests {
         let cut = try #require(snapshot.footprints.firstIndex { $0.isCut })
         let conductor = try #require(snapshot.footprints.firstIndex { $0.layer == material })
         return try snapshot.hasElectricalContact(footprintAt: cut, with: snapshot, footprintAt: conductor)
+    }
+
+    @Test(arguments: [false, true])
+    func sameSizeRawCutChoosesActualCompletePair(primaryPoly: Bool) throws {
+        let (prepared, technology) = try input(selectPoly: true, polyX: primaryPoly ? 0 : 1,
+            primaryPoly: primaryPoly, alternateModels: true)
+        #expect(try cutAndMaterial(prepared.snapshot, material: poly) == primaryPoly)
+        #expect(try cutAndMaterial(prepared.snapshot, material: fixture.m1) != primaryPoly)
+        let network = try calculate(prepared, technology: technology)
+        #expect(network.resistors.count == 2)
+        #expect(network.resistors.allSatisfy { abs($0.ohms - (primaryPoly ? 3 : 1)) < 1e-12 })
+        #expect(network.nodes.contains { $0.kind == .cut(viaName: primaryPoly ? "POLY_CONTACT" : "VIA1") })
     }
 
     @Test func selectedMetalOnlyKeepsAnalyticalUniqueCutRC() throws {

@@ -7,6 +7,7 @@ public enum NativePEXInputError: Error, Sendable, Equatable {
     case duplicateCell(String)
     case duplicatePin(cell: String, name: String)
     case coordinateUnitsMismatch
+    case conductiveLayersMismatch
     case capture(LayoutConductorCaptureError)
     case hierarchy(LayoutHierarchyCaptureError)
     case cancelled

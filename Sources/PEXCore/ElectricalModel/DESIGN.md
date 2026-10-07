@@ -94,7 +94,7 @@ calculation obligations are B3.2.3-owned and not established by this input compo
 Models must name exactly the technology process and a unique nonempty corner.
 Every stack layer is either a modeled conductor or a declared cut layer; each via
 names an existing cut strictly between its bottom and top conductors in stack order.
-Every declared technology via has exactly one electrical model. Every unordered
+Every declared technology via has exactly one electrical model. One cut layer may register alternative bottom materials with the same top conductor; conflicting top conductors fail admission. Model admission does not choose an alternative from geometry: SheetExtraction owns actual contacted material-set equality, full electrode coverage and unique per-cut law selection. Every unordered
 conductor pair, including self pairs, declares coefficients explicitly; zero is a
 declared coefficient, never a missing-value substitute. Parameter dictionaries match
 the requested corner exactly. Unknown pairs, layers, vias, corners or ranges fail.

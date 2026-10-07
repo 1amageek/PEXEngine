@@ -103,7 +103,7 @@ public struct PEXElectricalModel: Sendable, Codable, Hashable {
         }
         var viaNames = Set<String>()
         var cuts = Set<String>()
-        var cutAdjacency: [String: Set<String>] = [:]
+        var cutTopLayers: [String: String] = [:]
         for via in vias {
             try via.validate()
             guard viaNames.insert(via.viaName).inserted else { throw .duplicate(field: via.viaName) }
@@ -115,11 +115,12 @@ public struct PEXElectricalModel: Sendable, Codable, Hashable {
                   let top = stack[via.topLayerName], bottom < cut, cut < top else {
                 throw .invalidTopology(field: via.viaName)
             }
-            let adjacency: Set<String> = [via.bottomLayerName, via.topLayerName]
-            if let existing = cutAdjacency[via.cutLayerName], existing != adjacency {
+            // Alternative bottom materials share one physical cut/top landing.
+            // Geometry-dependent unique pair admission belongs to SheetExtraction.
+            if let existing = cutTopLayers[via.cutLayerName], existing != via.topLayerName {
                 throw .invalidTopology(field: via.cutLayerName)
             }
-            cutAdjacency[via.cutLayerName] = adjacency
+            cutTopLayers[via.cutLayerName] = via.topLayerName
             cuts.insert(via.cutLayerName)
         }
         guard viaNames == Set(declaredVias.keys) else { throw .missing(field: "vias") }

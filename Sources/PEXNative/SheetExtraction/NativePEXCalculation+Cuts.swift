@@ -2,6 +2,7 @@ import PEXCore
 
 extension NativePEXCalculation {
     mutating func cutResistance(_ isCancelled: () -> Bool) throws(NativePEXCalculationError) {
+        let layerNamesByID = Dictionary(uniqueKeysWithValues: mesh.layers.map { ($0.id, $0.name) })
         let layerIndices = Dictionary(uniqueKeysWithValues: mesh.layers.enumerated().map { ($0.element.name, $0.offset) })
         var visited = Set<Key>()
         for seed in mesh.orderedKeys where mesh.layers[seed.layer].conductor == nil {
@@ -39,14 +40,11 @@ extension NativePEXCalculation {
                     candidates.append(via)
                 }
             }
-            guard candidates.count == 1 else {
-                if candidates.isEmpty { throw .electricalModel(.outOfRange(field: "\(mesh.layers[seed.layer].name).cutDimensions")) }
-                throw .ambiguousCutModel
+            guard !candidates.isEmpty else {
+                throw .electricalModel(.outOfRange(field: "\(mesh.layers[seed.layer].name).cutDimensions"))
             }
-            let via = candidates[0]
-            guard let bottom = layerIndices[via.bottomLayerName], let top = layerIndices[via.topLayerName],
-                  let lower = mesh.layers[bottom].conductor, let upper = mesh.layers[top].conductor else { throw .invalidLayerMapping }
-            // A two-electrode cut law cannot omit another actually contacted selected material.
+            // Admit every actual selected material before choosing a two-electrode law.
+            var contactedMaterials = Set<String>()
             for contact in mesh.snapshot.contacts {
                 try mesh.budget.visit(isCancelled)
                 guard mesh.snapshot.footprints.indices.contains(contact.firstFootprint),
@@ -61,26 +59,42 @@ extension NativePEXCalculation {
                 } else { continue }
                 let cut = mesh.snapshot.footprints[cutIndex], material = mesh.snapshot.footprints[materialIndex]
                 guard !material.isCut, mesh.snapshot.conductiveLayers.contains(material.layer),
-                      material.layer != mesh.layers[bottom].id, material.layer != mesh.layers[top].id,
                       cut.band.minX < mesh.x[x1], cut.band.maxX > mesh.x[x0],
                       cut.band.minY < mesh.y[y1], cut.band.maxY > mesh.y[y0] else { continue }
+                guard let materialName = layerNamesByID[material.layer] else { throw .invalidLayerMapping }
                 try mesh.budget.visit(isCancelled)
-                let hasContact: Bool
                 do {
-                    hasContact = try mesh.snapshot.hasElectricalContact(footprintAt: cutIndex,
-                        with: mesh.snapshot, footprintAt: materialIndex)
+                    if try mesh.snapshot.hasElectricalContact(footprintAt: cutIndex, with: mesh.snapshot, footprintAt: materialIndex) {
+                        contactedMaterials.insert(materialName)
+                    }
                 } catch { throw .inconsistentSnapshot }
-                guard !hasContact else { throw .ambiguousCutModel }
             }
+            guard contactedMaterials.count <= 2 else { throw .ambiguousCutModel }
             let component = mesh.cells[seed]!.componentIndex
-            // Check complete electrodes before emitting any per-cut operator.
-            for key in group {
+            var admitted: [(PEXViaElectricalModel, Int, Int)] = []
+            for candidate in candidates {
                 try mesh.budget.visit(isCancelled)
-                for layer in [bottom, top] {
-                    let electrode = Key(layer: layer, x: key.x, y: key.y)
-                    guard nodeIDs[electrode] != nil, mesh.cells[electrode]?.componentIndex == component else { throw .incompleteCutContact }
+                guard contactedMaterials == Set([candidate.bottomLayerName, candidate.topLayerName]) else { continue }
+                guard let bottom = layerIndices[candidate.bottomLayerName], let top = layerIndices[candidate.topLayerName],
+                      mesh.layers[bottom].conductor != nil, mesh.layers[top].conductor != nil else { throw .invalidLayerMapping }
+                var complete = true
+                for key in group {
+                    try mesh.budget.visit(isCancelled)
+                    for layer in [bottom, top] {
+                        try mesh.budget.visit(isCancelled)
+                        let electrode = Key(layer: layer, x: key.x, y: key.y)
+                        if nodeIDs[electrode] == nil || mesh.cells[electrode]?.componentIndex != component { complete = false }
+                    }
+                    if !complete { break }
                 }
+                if complete { admitted.append((candidate, bottom, top)) }
             }
+            guard admitted.count == 1 else {
+                if admitted.isEmpty { throw .incompleteCutContact }
+                throw .ambiguousCutModel
+            }
+            let (via, bottom, top) = admitted[0]
+            let lower = mesh.layers[bottom].conductor!, upper = mesh.layers[top].conductor!
             let cutNode = nodes.count
             nodes.append(.init(kind: .cut(viaName: via.viaName), layerName: via.cutLayerName, componentIndex: component,
                 minXDatabaseUnits: mesh.x[x0], maxXDatabaseUnits: mesh.x[x1], minYDatabaseUnits: mesh.y[y0], maxYDatabaseUnits: mesh.y[y1],

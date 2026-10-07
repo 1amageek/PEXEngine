@@ -29,17 +29,17 @@ struct NativePEXAdapterTests {
             let image = try NativePEXCodeImage.measure()
             #expect(identity.binaryDigest == image.digest && identity.producer.build == image.digest.hexadecimalValue)
             #expect(identity.invocation.mode == .inProcess && identity.producer.identifier == "pex-native")
-            #expect(identity.producer.version == "2.0.0")
+            #expect(identity.producer.version == "3.0.0")
             let workspace = PEXRunWorkspace(baseURL: f.root, runID: result.runID)
             let resolver = try PEXArtifactResolver(workspace: workspace, manifest: result.artifactManifest)
             let record = try #require(resolver.records(kind: .processEvidence, availability: .available).first {
                 $0.declaration.relativePath.stringValue.hasSuffix("native-topology.json")
             })
             let report = try JSONDecoder().decode(NativePEXTopologyEvidence.self, from: Data(contentsOf: resolver.validatedURL(for: record)))
-            #expect(report.version == 2 && report.image == image && report.executionIdentity == identity)
+            #expect(report.version == 3 && report.electricalContext == .geometric && report.image == image && report.executionIdentity == identity)
             #expect(try report.model.domainDigest() == f.technology.electricalModels![0].domainDigest())
             var obsolete = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any])
-            obsolete["version"] = 1
+            obsolete["version"] = 2
             #expect(throws: DecodingError.self) {
                 try JSONDecoder().decode(NativePEXTopologyEvidence.self, from: JSONSerialization.data(withJSONObject: obsolete))
             }

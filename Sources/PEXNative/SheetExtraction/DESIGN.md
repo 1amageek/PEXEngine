@@ -56,7 +56,7 @@ artificial mesh-cell width. This preserves applicability under harmless subdivis
 Ground area is counted once and ground perimeter includes only exposed faces.
 
 A connected cut region must be rectangular, covered completely by its declared
-bottom and top metal, and match one applicable calibrated via model. Cut regions
+bottom and top metal, and match one applicable calibrated via model after testing the complete actual contacted material set. Cut regions
 remain independent even when one layout via contains several of them. One cut-center
 node connects each contacted metal cell with `Rcut / 2 * cutArea / contactArea`,
 preserving total per-cut conductance. Partial contact, conflicting/unknown definitions,
@@ -65,15 +65,13 @@ nonrectangular cut regions and ambiguous raw-cut model selection fail explicitly
 The capture contract permits one cut/top landing with alternative bottom materials.
 Those alternatives conduct only at actual positive-area incidence. PEX retains the
 selected model's exact conductor set, and its current cut law has exactly one modeled
-bottom/top pair. Before emitting a cut operator, every actual captured contact for
-that cut must belong to that modeled pair. An additional selected material with
+bottom/top pair. For every dimension/name-admitted law, the complete actual contacted material set must equal that modeled bottom/top pair, and both materials must completely cover every cut cell. Only then is uniqueness decided. Raw GDS cuts without a via definition can therefore resolve same-size ACTIVE/M1 and POLY/M1 alternatives from actual contact facts. Before emitting a cut operator, every actual captured contact for that cut must belong to that modeled pair. An additional selected material with
 actual electrical contact fails with `ambiguousCutModel`; it cannot disappear from
 the numeric network. This admission uses public footprint/contact facts and
 `LayoutConductorSnapshot.hasElectricalContact`, never capture adjacency internals.
 The snapshot must already be admitted by the lower selected-topology contract.
 Unselected geometry lies outside this admitted numerical input; edge-only or
-nonincident selected material does not constitute an additional cut contact. Contact probes are charged to the
-existing aggregate work budget. No electrical equation or second topology is added.
+nonincident selected material does not constitute an additional cut contact. Contact probes and per-candidate coverage visits are charged to the existing aggregate work budget. No partial network is published when no complete pair or multiple complete laws remain. No electrical equation or second topology is added.
 
 Coplanar coupling pairs nearest exposed opposing edges along each grid row/column;
 metal in the gap screens more distant edges. Interlayer plate coupling uses adjacent
@@ -150,7 +148,7 @@ calculation path. Analytical layered tests continue to prove only the explicit
 facing-patch approximation. Source algebra correlation is not foundry qualification.
 `NativePEXContactAdmissionTests` prepares the real selected configuration, captures
 same-cut/same-top alternative contacts, checks public actual-contact queries and runs
-the calculator. Metal-only selection preserves the analytical cut R and ground C;
+the calculator. Same-size alternative bottom laws resolve only after both complete actual contact pairs are tested. Metal-only selection preserves the analytical cut R and ground C;
 selected third-material positive incidence rejects without publishing a network,
 while edge-only incidence leaves that material as a separate captured component.
 

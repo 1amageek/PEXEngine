@@ -43,12 +43,20 @@ public struct LayoutPEXInputPreparer: NativePEXInputPreparing {
         try cancelled()
         let snapshot: LayoutConductorSnapshot
         do {
-            snapshot = try LayoutConnectivityExtractor().captureConductors(document: prepared,
-                tech: configuration.layoutTechnology, conductiveLayers: configuration.conductiveLayers,
-                cellID: document.cells[root].id, limits: configuration.captureLimits.geometryLimits, isCancelled: isCancelled)
+            switch configuration.electricalContext {
+            case .geometric:
+                snapshot = try LayoutConnectivityExtractor().captureConductors(document: prepared,
+                    tech: configuration.layoutTechnology, conductiveLayers: configuration.conductiveLayers,
+                    cellID: document.cells[root].id, limits: configuration.captureLimits.geometryLimits, isCancelled: isCancelled)
+            case .deviceAwareMOS, .deviceAwareMOSAndPolyResistors:
+                snapshot = try DeviceExtractor().captureConductors(document: prepared, tech: configuration.layoutTechnology,
+                    cellID: document.cells[root].id, limits: configuration.captureLimits.geometryLimits,
+                    electricalContext: configuration.electricalContext)
+            }
         } catch let error as LayoutConductorCaptureError { throw NativePEXInputError.capture(error) }
         catch let error as LayoutHierarchyCaptureError { throw NativePEXInputError.hierarchy(error) }
         try cancelled()
+        guard snapshot.conductiveLayers == configuration.conductiveLayers else { throw NativePEXInputError.conductiveLayersMismatch }
         guard snapshot.coordinateUnits == configuration.expectedCoordinateUnits else { throw NativePEXInputError.coordinateUnitsMismatch }
         return NativePEXPreparedInput(snapshot: snapshot, configuration: configuration)
     }

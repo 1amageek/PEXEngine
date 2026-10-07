@@ -104,7 +104,7 @@ struct NativePEXConfigurationTests {
 
     @Test func decoderRepeatsStructuralAndEveryLowerLimitAdmission() throws {
         let valid = try json(configuration())
-        for (field, value) in [("version", 2), ("maximumCellSpanDatabaseUnits", 0), ("maximumMetadataEntries", 1)] {
+        for (field, value) in [("version", 3), ("maximumCellSpanDatabaseUnits", 0), ("maximumMetadataEntries", 1)] {
             var changed = valid; changed[field] = value
             #expect(throws: NativePEXInputError.self) { try decode(changed) }
         }
@@ -133,6 +133,17 @@ struct NativePEXConfigurationTests {
         var pin = try #require(pins[0]["pin"] as? [String: Any]); pin["size"] = ["width": 0, "height": 1]
         pins[0]["pin"] = pin; changed["supplementalPins"] = pins
         #expect(throws: NativePEXInputError.self) { try decode(changed) }
+    }
+
+    @Test func requiredContextAndVersionRejectLegacyOrUnknownInterpretation() throws {
+        let valid = try json(configuration())
+        #expect(valid["version"] as? Int == 2 && valid["electricalContext"] as? String == "geometric")
+        var legacy = valid; legacy["version"] = 1
+        #expect(throws: NativePEXInputError.invalidField("version")) { try decode(legacy) }
+        var missing = valid; missing.removeValue(forKey: "electricalContext")
+        #expect(throws: DecodingError.self) { try decode(missing) }
+        var unknown = valid; unknown["electricalContext"] = "unknown"
+        #expect(throws: DecodingError.self) { try decode(unknown) }
     }
 
     @Test func exactTopAndSupplementalPinAdmissionRejectAmbiguousOrMissingSource() throws {
