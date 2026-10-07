@@ -20,7 +20,7 @@ Owns conforming discretization, numeric graph construction and explicit electrod
 | [ElectrodeConstruction](ElectrodeConstruction/DESIGN.md) | child | Explicit exposed electrode faces and contact operators | Terminal boundary construction | Pin annotation alone cannot impose a potential |
 | [CanonicalProjection](CanonicalProjection/DESIGN.md) | child | Exact net binding and complete canonical operators | ParasiticIR composition | Canonical graph admission is not standard exporter qualification |
 | [SheetExtraction](SheetExtraction/DESIGN.md) | child | Bounded graph calculation | Numeric implementation | Resolution is an explicit input |
-| [InputPreparation](InputPreparation/DESIGN.md) | child | Admitted configuration and exact standard-document preparation | Native run inputs | Stored schema is not backend/image/process qualification |
+| [InputPreparation](InputPreparation/DESIGN.md) | child | Admitted durable selectors, standard-document preparation and actual resolved UUID bindings | Native run inputs | Projection consumes bindings resolved after capture; stored schema is not backend/image/process qualification |
 | [CodeImage](CodeImage/DESIGN.md) | child | Loaded native backing-image observation | Actual implementation identity | Not relocated-memory attestation |
 
 ## Architecture

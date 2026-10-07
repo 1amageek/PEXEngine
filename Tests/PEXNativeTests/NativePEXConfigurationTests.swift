@@ -49,9 +49,9 @@ struct NativePEXConfigurationTests {
         var pins = try #require(schema["supplementalPins"] as? [[String: Any]])
         for index in pins.indices { pins[index]["cellName"] = "CHILD" }
         schema["supplementalPins"] = pins
-        let netID = try #require(base.netBindings.first).netID
-        let bindings = [NativePEXNetBinding(occurrenceIndex: 1, netID: netID, netName: NetName("U0/SIGNAL")),
-                        NativePEXNetBinding(occurrenceIndex: 2, netID: netID, netName: NetName("U1/SIGNAL"))]
+        let netID = try #require(base.supplementalPins.first?.pin.netID)
+        let bindings = [NativePEXInputNetBinding(selector: .supplemental(occurrenceIndex: 1, expectedCellName: "CHILD", netID: netID), netName: NetName("U0/SIGNAL")),
+                        NativePEXInputNetBinding(selector: .supplemental(occurrenceIndex: 2, expectedCellName: "CHILD", netID: netID), netName: NetName("U1/SIGNAL"))]
         let electrodes = (0..<4).map { index in
             NativePEXElectrodeBinding(pinIndex: index,
                 terminal: .init(netName: NetName("U\(index / 2)/SIGNAL"), nodeName: NodeName(index % 2 == 0 ? "A" : "B")),
@@ -104,7 +104,7 @@ struct NativePEXConfigurationTests {
 
     @Test func decoderRepeatsStructuralAndEveryLowerLimitAdmission() throws {
         let valid = try json(configuration())
-        for (field, value) in [("version", 3), ("maximumCellSpanDatabaseUnits", 0), ("maximumMetadataEntries", 1)] {
+        for (field, value) in [("version", 4), ("maximumCellSpanDatabaseUnits", 0), ("maximumMetadataEntries", 1)] {
             var changed = valid; changed[field] = value
             #expect(throws: NativePEXInputError.self) { try decode(changed) }
         }
@@ -137,9 +137,11 @@ struct NativePEXConfigurationTests {
 
     @Test func requiredContextAndVersionRejectLegacyOrUnknownInterpretation() throws {
         let valid = try json(configuration())
-        #expect(valid["version"] as? Int == 2 && valid["electricalContext"] as? String == "geometric")
-        var legacy = valid; legacy["version"] = 1
-        #expect(throws: NativePEXInputError.invalidField("version")) { try decode(legacy) }
+        #expect(valid["version"] as? Int == 3 && valid["electricalContext"] as? String == "geometric")
+        for version in [1, 2] {
+            var legacy = valid; legacy["version"] = version
+            #expect(throws: NativePEXInputError.invalidField("version")) { try decode(legacy) }
+        }
         var missing = valid; missing.removeValue(forKey: "electricalContext")
         #expect(throws: DecodingError.self) { try decode(missing) }
         var unknown = valid; unknown["electricalContext"] = "unknown"
@@ -213,7 +215,7 @@ struct NativePEXConfigurationTests {
             .init(layerID: fixture.cut, electricalName: "C1", isConductive: false)],
             supplementalPins: pins ?? ["A", "B"].map { .init(cellName: "TOP", pin: .init(name: $0,
                 position: .init(x: 0.5, y: 0.5), size: .init(width: 1, height: 1), layer: fixture.m1, netID: net)) },
-            netBindings: [.init(occurrenceIndex: 0, netID: net, netName: NetName("SIGNAL"))],
+            netBindings: [.init(selector: .supplemental(occurrenceIndex: 0, expectedCellName: "TOP", netID: net), netName: NetName("SIGNAL"))],
             electrodeBindings: [
                 .init(pinIndex: 0, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("A")), faces: [.init(side: .minX, coordinate: 0, begin: 0, end: 2000)]),
                 .init(pinIndex: 1, terminal: .init(netName: NetName("SIGNAL"), nodeName: NodeName("B")), faces: [.init(side: .maxX, coordinate: 2000, begin: 0, end: 2000)])],
@@ -225,7 +227,7 @@ struct NativePEXConfigurationTests {
         let network = try RectilinearPEXCalculator().calculate(snapshot: prepared.snapshot, technology: fixture.technology(),
             corner: .init(id: "tt"), layerNames: c.layerNames, maximumCellSpanDatabaseUnits: c.maximumCellSpanDatabaseUnits, limits: c.calculationLimits)
         let electrodes = try RectilinearPEXElectrodeBuilder().build(network: network, bindings: c.electrodeBindings, limits: c.electrodeLimits)
-        return try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: c.netBindings, limits: c.projectionLimits)
+        return try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: prepared.netBindings, limits: c.projectionLimits)
     }
     private func json(_ configuration: NativePEXConfiguration) throws -> [String: Any] {
         try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(configuration)) as? [String: Any])

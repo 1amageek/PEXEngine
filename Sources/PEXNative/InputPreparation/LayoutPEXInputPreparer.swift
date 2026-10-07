@@ -58,6 +58,8 @@ public struct LayoutPEXInputPreparer: NativePEXInputPreparing {
         try cancelled()
         guard snapshot.conductiveLayers == configuration.conductiveLayers else { throw NativePEXInputError.conductiveLayersMismatch }
         guard snapshot.coordinateUnits == configuration.expectedCoordinateUnits else { throw NativePEXInputError.coordinateUnitsMismatch }
-        return NativePEXPreparedInput(snapshot: snapshot, configuration: configuration)
+        let bindings = try NativePEXInputNetResolver.resolve(document: prepared, snapshot: snapshot,
+            configuration: configuration, budget: &budget, isCancelled: isCancelled)
+        return NativePEXPreparedInput(snapshot: snapshot, configuration: configuration, netBindings: bindings)
     }
 }

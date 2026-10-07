@@ -195,7 +195,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         let electrodes = try RectilinearPEXElectrodeBuilder().build(network: network, bindings: configuration.electrodeBindings,
             limits: configuration.electrodeLimits, isCancelled: cancelled)
         state.enter("projection")
-        return try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: configuration.netBindings,
+        return try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: prepared.netBindings,
             limits: configuration.projectionLimits, isCancelled: cancelled)
     }
     private func write<Value: Encodable>(_ value: Value, name: String, context: PEXExecutionContext,

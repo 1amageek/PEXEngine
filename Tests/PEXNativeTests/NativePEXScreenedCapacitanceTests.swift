@@ -49,11 +49,12 @@ struct NativePEXScreenedCapacitanceTests {
             .init(id: $0.element, displayName: $0.element.name, gdsLayer: $0.offset + 1, gdsDatatype: 0,
                 color: .init(red: 0.3, green: 0.5, blue: 0.7))
         }, vias: [], layerRules: [])
-        let cell = LayoutCell(name: "SCREENED", shapes: shapes)
+        let cell = LayoutCell(name: "SCREENED", shapes: shapes, nets: net.map { [.init(id: $0, name: "SIGNAL")] } ?? [])
         let document = LayoutDocument(name: "screened", units: units, cells: [cell], topCellID: cell.id)
         let configuration = try NativePEXConfiguration(layoutTechnology: layoutTech,
             layers: [.init(layerID: layer, electricalName: "M1", isConductive: true)],
-            supplementalPins: [], netBindings: net.map { [.init(occurrenceIndex: 0, netID: $0, netName: NetName("SIGNAL"))] } ?? [],
+            supplementalPins: [], netBindings: net.map { _ in [.init(selector: .sourceDeclared(occurrenceIndex: 0,
+                expectedCellName: "SCREENED", sourceNetName: "SIGNAL"), netName: NetName("SIGNAL"))] } ?? [],
             electrodeBindings: [], expectedCoordinateUnits: units,
             maximumCellSpanDatabaseUnits: try #require(Int32(exactly: spanMicrometers * scale.databaseUnitsPerMicrometer)))
         let preparer: any NativePEXInputPreparing = LayoutPEXInputPreparer()
@@ -147,7 +148,7 @@ struct NativePEXScreenedCapacitanceTests {
         let result = try calculate(input)
         let electrodes = try RectilinearPEXElectrodeBuilder().build(network: result, bindings: [])
         let projection = try CanonicalPEXProjector().project(electrodes: electrodes,
-            netBindings: input.configuration.netBindings, limits: .default, isCancelled: { false })
+            netBindings: input.netBindings, limits: .default, isCancelled: { false })
         #expect(projection.ir.nets.count == 1 && result.snapshot.components.count == 2)
         #expect(projection.numericNodeReferences.count == result.nodes.count)
         let pairs = projection.ir.elements.filter { $0.kind == .coupling }

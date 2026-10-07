@@ -10,7 +10,7 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     public let layoutTechnology: LayoutTechDatabase
     public let layers: [NativePEXLayerBinding]
     public let supplementalPins: [NativePEXPinDefinition]
-    public let netBindings: [NativePEXNetBinding]
+    public let netBindings: [NativePEXInputNetBinding]
     public let electrodeBindings: [NativePEXElectrodeBinding]
     public let expectedCoordinateUnits: LayoutUnits
     public let maximumCellSpanDatabaseUnits: Int32
@@ -21,14 +21,14 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     public let projectionLimits: NativePEXProjectionLimits
     let metadataEntriesUsed: Int
 
-    public init(version: Int = 2, layoutTechnology: LayoutTechDatabase, layers: [NativePEXLayerBinding],
-                supplementalPins: [NativePEXPinDefinition], netBindings: [NativePEXNetBinding],
+    public init(version: Int = 3, layoutTechnology: LayoutTechDatabase, layers: [NativePEXLayerBinding],
+                supplementalPins: [NativePEXPinDefinition], netBindings: [NativePEXInputNetBinding],
                 electrodeBindings: [NativePEXElectrodeBinding], expectedCoordinateUnits: LayoutUnits,
                 maximumCellSpanDatabaseUnits: Int32, maximumMetadataEntries: Int = 1_000_000,
                 captureLimits: NativePEXCaptureLimits = .init(), calculationLimits: NativePEXCalculationLimits = .default,
                 electrodeLimits: NativePEXElectrodeLimits = .default, projectionLimits: NativePEXProjectionLimits = .default, electricalContext: LayoutElectricalContext = .geometric)
         throws(NativePEXInputError) {
-        guard version == 2 else { throw .invalidField("version") }
+        guard version == 3 else { throw .invalidField("version") }
         guard maximumCellSpanDatabaseUnits > 0 else { throw .invalidField("maximumCellSpanDatabaseUnits") }
         guard expectedCoordinateUnits.scale.databaseUnitsPerMicrometer.isFinite,
               expectedCoordinateUnits.scale.databaseUnitsPerMicrometer > 0,
@@ -73,6 +73,7 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
         }
         guard !conductive.isEmpty else { throw .invalidField("conductiveLayers") }
         var pinIDs: [String: Set<UUID>] = [:], pinNames: [String: Set<String>] = [:]
+        var supplementalNets: [String: Set<UUID>] = [:]
         for definition in supplementalPins {
             try budget.identifier(definition.cellName, field: "pin.cellName")
             try budget.identifier(definition.pin.name, field: "pin.name")
@@ -85,12 +86,22 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
                   pin.position.y - pin.size.height / 2 < pin.position.y + pin.size.height / 2,
                   pinIDs[definition.cellName, default: []].insert(pin.id).inserted,
                   pinNames[definition.cellName, default: []].insert(pin.name).inserted else { throw .invalidField("supplementalPins") }
+            if let netID = pin.netID { supplementalNets[definition.cellName, default: []].insert(netID) }
         }
-        var scopedNets = Set<String>(), sourceNetNames = Set<String>()
+        var selectors = Set<NativePEXInputNetSelector>(), sourceNetNames = Set<String>()
         for binding in netBindings {
             try budget.identifier(binding.netName.value, field: "net.name")
-            guard binding.occurrenceIndex >= 0,
-                  scopedNets.insert("\(binding.occurrenceIndex):\(binding.netID)").inserted,
+            try budget.identifier(binding.selector.expectedCellName, field: "net.expectedCellName")
+            switch binding.selector {
+            case .sourceDeclared(_, _, let name):
+                try budget.identifier(name, field: "net.sourceNetName")
+            case .supplemental(_, let cell, let id):
+                guard supplementalNets[cell]?.contains(id) == true else {
+                    throw .undeclaredSupplementalNet(cell: cell, netID: id)
+                }
+            }
+            guard binding.selector.occurrenceIndex >= 0,
+                  selectors.insert(binding.selector).inserted,
                   sourceNetNames.insert(binding.netName.value).inserted else { throw .invalidField("netBindings") }
         }
         var pinIndices = Set<Int>(), terminals = Set<NodeRef>()
@@ -120,9 +131,11 @@ public struct NativePEXConfiguration: Sendable, Equatable, Codable {
     }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        try self.init(version: c.decode(Int.self, forKey: .version), layoutTechnology: c.decode(LayoutTechDatabase.self, forKey: .layoutTechnology),
+        let version = try c.decode(Int.self, forKey: .version)
+        guard version == 3 else { throw NativePEXInputError.invalidField("version") }
+        try self.init(version: version, layoutTechnology: c.decode(LayoutTechDatabase.self, forKey: .layoutTechnology),
             layers: c.decode([NativePEXLayerBinding].self, forKey: .layers), supplementalPins: c.decode([NativePEXPinDefinition].self, forKey: .supplementalPins),
-            netBindings: c.decode([NativePEXNetBinding].self, forKey: .netBindings), electrodeBindings: c.decode([NativePEXElectrodeBinding].self, forKey: .electrodeBindings),
+            netBindings: c.decode([NativePEXInputNetBinding].self, forKey: .netBindings), electrodeBindings: c.decode([NativePEXElectrodeBinding].self, forKey: .electrodeBindings),
             expectedCoordinateUnits: c.decode(LayoutUnits.self, forKey: .expectedCoordinateUnits), maximumCellSpanDatabaseUnits: c.decode(Int32.self, forKey: .maximumCellSpanDatabaseUnits),
             maximumMetadataEntries: c.decode(Int.self, forKey: .maximumMetadataEntries), captureLimits: c.decode(NativePEXCaptureLimits.self, forKey: .captureLimits),
             calculationLimits: c.decode(NativePEXCalculationLimits.self, forKey: .calculationLimits), electrodeLimits: c.decode(NativePEXElectrodeLimits.self, forKey: .electrodeLimits),

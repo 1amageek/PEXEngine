@@ -36,7 +36,9 @@ struct NativePEXDevicePreparationTests {
             .init(cellName: "INV", pin: .init(name: names[index], position: .init(x: box.0 + box.2 / 2, y: box.1 + box.3 / 2),
                 size: .init(width: box.2, height: box.3), layer: layer("M1"), netID: nets[index]))
         }
-        let netBindings: [NativePEXNetBinding] = names.enumerated().map { .init(occurrenceIndex: 0, netID: nets[$0.offset], netName: .init($0.element)) }
+        let netBindings: [NativePEXInputNetBinding] = names.enumerated().map {
+            .init(selector: .supplemental(occurrenceIndex: 0, expectedCellName: "INV", netID: nets[$0.offset]), netName: .init($0.element))
+        }
         let electrodes: [NativePEXElectrodeBinding] = boxes.enumerated().map { index, box in
                 .init(pinIndex: index, terminal: .init(netName: .init(names[index]), nodeName: .init(names[index])),
                     faces: [.init(side: .minX, coordinate: Int32(box.0 * 2000), begin: Int32(box.1 * 2000), end: Int32((box.1 + box.3) * 2000))])
@@ -91,7 +93,7 @@ struct NativePEXDevicePreparationTests {
         #expect(network.nodes.filter { $0.kind == .cut(viaName: "CONT_ACTIVE") }.count == 4)
         #expect(network.nodes.filter { $0.kind == .cut(viaName: "CONT_POLY") }.count == 1)
         let electrodes = try RectilinearPEXElectrodeBuilder().build(network: network, bindings: config.electrodeBindings, limits: config.electrodeLimits)
-        let projection = try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: config.netBindings, limits: config.projectionLimits)
+        let projection = try CanonicalPEXProjector().project(electrodes: electrodes, netBindings: prepared.netBindings, limits: config.projectionLimits)
         #expect(Set(projection.ir.nets.map(\.name)) == Set(config.netBindings.map(\.netName)))
         #expect(projection.ir.nets.flatMap(\.nodes).filter { $0.kind == .pin }.count == 4)
         #expect(projection.ir.elements.allSatisfy { $0.value.isFinite && $0.value > 0 })
