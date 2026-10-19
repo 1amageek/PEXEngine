@@ -30,7 +30,7 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
 
     public init(
         toolchain: MagicToolchain? = MagicToolchain.locate(),
-        processRunner: any TimedProcessRunning = TimedProcessRunner()
+        processRunner: any TimedProcessRunning = TimedProcessRunner(maximumOutputByteCount: 64 * 1024 * 1024, cleanupTimeoutSeconds: 5)
     ) {
         self.toolchain = toolchain
         self.processRunner = processRunner
@@ -379,38 +379,32 @@ public struct MagicPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         process.environment = plan.environment
         process.currentDirectoryURL = context.rawOutputDirectory
         do {
-            return try await processRunner.run(
-                process: process,
+            return try await PEXProcessExecution.run(
+                runner: processRunner, process: process,
                 cancellationCheck: context.cancellationCheck
             )
+        } catch let error as PEXProcessCleanupFailure {
+            throw PEXAdapterExecutionFailure(message: "Magic cleanup remains pending: \(error.retryFailure)",
+                stage: .backendExecution, cornerID: context.corner.id, failureKind: .backendExecutionFailed,
+                underlying: error)
         } catch let error as TimedProcessError {
-            if case .cancelled = error {
-                throw PEXError(
-                    kind: .cancelled,
-                    stage: .backendExecution,
-                    cornerID: context.corner.id,
-                    backendID: backendID,
-                    message: "Magic process was cancelled",
-                    underlyingDescription: error.localizedDescription
-                )
+            let kind: PEXErrorKind
+            let bytes: String
+            if case .executionFailed(let failure) = error {
+                if failure.cause == .cancelled { kind = .cancelled }
+                else if case .timedOut = failure.cause { kind = .timedOut }
+                else { kind = .backendExecutionFailed }
+                bytes = failure.standardOutput + "\n" + failure.standardError
+            } else { kind = .backendExecutionFailed; bytes = "" }
+            let log = try writeProcessLog(bytes + "\n" + error.localizedDescription, context: context)
+            if kind == .cancelled {
+                throw PEXError(kind: .cancelled, stage: .backendExecution, cornerID: context.corner.id,
+                    backendID: backendID, message: "Magic process was cancelled",
+                    underlyingDescription: error.localizedDescription, diagnosticFileURL: log)
             }
-            throw PEXError(
-                kind: .backendExecutionFailed,
-                stage: .backendExecution,
-                cornerID: context.corner.id,
-                backendID: backendID,
-                message: "Magic process failed to run",
-                underlyingDescription: error.localizedDescription
-            )
-        } catch {
-            throw PEXError(
-                kind: .backendExecutionFailed,
-                stage: .backendExecution,
-                cornerID: context.corner.id,
-                backendID: backendID,
-                message: "Magic process failed to run",
-                underlyingDescription: String(describing: error)
-            )
+            throw PEXAdapterExecutionFailure(message: "Magic process failed: \(error.localizedDescription)",
+                stage: .backendExecution, cornerID: context.corner.id, failureKind: kind,
+                generatedArtifacts: [logArtifact(log, context: context)], underlying: error)
         }
     }
 

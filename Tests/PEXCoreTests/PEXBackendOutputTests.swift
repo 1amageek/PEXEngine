@@ -32,6 +32,19 @@ struct PEXBackendOutputTests {
         }
     }
 
+    @Test func topologyEvidenceCannotDecodeNegativeCountsAndIsRetainedInDiagnosticResult() throws {
+        let identity = try PEXTestExecutionIdentity.make(backendID: "contract")
+        let topology = try PEXPhysicalTopology(openNetCount: 1, shortComponentCount: 0, uncontactedTerminalCount: 1)
+        #expect(!topology.isSatisfied)
+        let value = try PEXAdapterExecutionResult(output: .canonical(ir()), generatedArtifacts: [],
+            executionIdentity: identity, physicalTopology: topology)
+        #expect(try JSONDecoder().decode(PEXAdapterExecutionResult.self, from: JSONEncoder().encode(value)).physicalTopology == topology)
+        #expect(throws: PEXBackendResultError.invalidPhysicalTopology) {
+            try JSONDecoder().decode(PEXPhysicalTopology.self,
+                from: Data("{\"openNetCount\":-1,\"shortComponentCount\":0,\"uncontactedTerminalCount\":0}".utf8))
+        }
+    }
+
     @Test func missingRawFilesAndExternalCanonicalClaimsFail() throws {
         let identity = try PEXTestExecutionIdentity.make(backendID: "contract")
         #expect(throws: PEXBackendResultError.missingRawFiles) {

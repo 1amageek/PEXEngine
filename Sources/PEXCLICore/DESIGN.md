@@ -27,6 +27,20 @@ flowchart LR
 ```
 
 ## Contracts and Invariants
+
+The routed-native additive kind uses the existing `--native-input` /
+`inputs.nativeInput` path and
+[NativeInputLoading](../PEXRuntime/NativeInputLoading/DESIGN.md) admission. Its
+[source-law contract](../PEXCore/NativeInput/DESIGN.md) requires an explicit kind,
+DEF format and total RC-corner/source bindings; CLI spelling or corner names never
+select a numerical law implicitly. Routed execution requires explicit structural
+Verilog format and the owned source semantic join. `--source-netlist-format` accepts
+`spice`, `cdl`, or `verilog` and overrides `inputs.sourceNetlistFormat` in config
+mode. Both absent retain the historical SPICE default; filename extensions never
+select a source language. Typed `PEXProjectConfig.InputPaths.sourceNetlistFormat`
+uses the same default and is forwarded by PEXConfigMapper. Unknown format spellings
+fail before execution. Real CLI routed tests must execute the actual decoder,
+Native calculation, source and standard export gates.
 Native requests require explicit nonempty unique corner IDs and a native input reference. `--native-input` overrides `inputs.nativeInput`; the config value resolves against the config directory, while the CLI value resolves against the process working directory. Shared Runtime loading rejects native selection without a reference and non-native backends with a supplied native reference. Explicit wrong types, empty corners, duplicate corners, invalid finite numbers and overflowing integers fail with typed PEXError. Omitted external corners retain their existing default. Numeric JSON values never coerce to booleans.
 
 ## Runtime Flows
@@ -46,3 +60,5 @@ WriteSPEFCommandTests owns the CLI export boundary: a net with a real pin exerci
 Run `pexengine extract --backend native` with the usual direct layout/netlist/top-cell/technology flags, explicit repeated `--corner`, and `--native-input <path>`. In config mode set `backendID` to native, supply `corners`, and put the reference JSON path in `inputs.nativeInput`. Serialize the actual Core `PEXNativeInputReference`; every budget field and local file URL is required. Referenced configuration/calibration URLs are used exactly as decoded; the CLI does not rewrite them relative to the reference file. Numerical configuration and calibration physics are validated by native execution.
 
 For `write-spef`, use `--round-trip` when full metadata equivalence is required. The portable electrical profile cannot retain coordinates of a net without pins; the strict round-trip check reports that loss as typed failure. Successful output without that flag is an electrical export result, not a full metadata equivalence proof.
+
+Failure exits flush any already-emitted structured result before process termination. Actual failed-extract JSON remains readable through pipes and supports artifact-only retry from the same executable image.

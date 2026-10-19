@@ -83,7 +83,30 @@ struct PEXPipeline: Sendable {
     func validateNativeCalibrationInputs(_ request: PEXRunRequest, technology: TechnologyIR,
                                          technologiesByCorner: [String: TechnologyIR],
                                          inputArtifacts: [PEXArtifactRecord]) throws {
-        guard request.nativeInput != nil else { return }
+        guard let input = request.nativeInput else { return }
+        if input.configurationKind == .routedOpenRCXV1 {
+            guard request.layoutFormat == .def, request.sourceNetlistFormat == .verilog else {
+                throw PEXError.invalidInput("Routed extraction requires DEF and structural Verilog")
+            }
+            let configuration = try JSONDecoder().decode(NativeRoutedPEXConfiguration.self,
+                from: PEXBoundedInputReader().read(input.configurationURL, maximumBytes: input.maximumConfigurationBytes))
+            try configuration.validate(requiredCornerIDs: request.corners.map(\.id),
+                processName: technology.processName, authorityReferences: request.executionInputArtifacts)
+            let available = Set(inputArtifacts.filter { $0.matches(kind: .calibrationInput) }.compactMap { $0.reference?.id })
+            var required = Set(configuration.sources.standardCellLEFs.map(\.id))
+            required.insert(configuration.sources.routedTechnologyLEF.id)
+            for corner in request.corners {
+                guard let selected = configuration.sources.corners.first(where: { $0.cornerID == corner.id }),
+                      selected.selection.processName == (technologiesByCorner[corner.id.value] ?? technology).processName else {
+                    throw PEXError.invalidInput("Routed corner process/source selection differs from the request")
+                }
+                required.insert(selected.rules.id); required.insert(selected.technologyLEF.id)
+            }
+            guard required.isSubset(of: available) else {
+                throw PEXError.invalidInput("Requested routed source matrix is not completely captured")
+            }
+            return
+        }
         let available = Set(inputArtifacts.filter { $0.matches(kind: .calibrationInput) }.compactMap { $0.reference?.id })
         for corner in request.corners {
             let selected = technologiesByCorner[corner.id.value] ?? technology

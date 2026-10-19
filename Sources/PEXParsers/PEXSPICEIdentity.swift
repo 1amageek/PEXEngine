@@ -6,6 +6,11 @@ struct PEXSPICEIdentity: Sendable, Codable {
     struct Node: Sendable, Codable {
         let ref: NodeRef
         let kind: NodeKind
+        let instancePath: InstancePath?
+
+        init(ref: NodeRef, kind: NodeKind, instancePath: InstancePath? = nil) {
+            self.ref = ref; self.kind = kind; self.instancePath = instancePath
+        }
     }
 
     static let marker = "* PEX_IDENTITY_V1 "
@@ -13,6 +18,8 @@ struct PEXSPICEIdentity: Sendable, Codable {
     let elementKinds: [String: ElementKind]
     let referenceName: String
     let referenceToken: String
+    /// Nil preserves the original generated annotation encoding for existing writers.
+    var canonicalTerminals: Bool? = nil
 
     func comment() throws -> String {
         let encoder = JSONEncoder()

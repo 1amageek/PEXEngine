@@ -7,6 +7,29 @@ import PEXRuntime
 
 @Suite("Native extract command admission", .timeLimit(.minutes(1)))
 struct PEXNativeExtractCommandTests {
+    @Test func explicitSourceLanguagePreservesLegacyDefaultAndRejectsUnknownSpelling() throws {
+        let legacy = try ExtractCommand(arguments: directArguments(backend: "magic"))
+        #expect(try legacy.buildRequestFromDirectParams(#require(legacy.directParams)).sourceNetlistFormat == .spice)
+        let verilog = try ExtractCommand(arguments: directArguments(backend: "magic") + ["--source-netlist-format", "verilog"])
+        #expect(try verilog.buildRequestFromDirectParams(#require(verilog.directParams)).sourceNetlistFormat == .verilog)
+        expectInvalidInput {
+            _ = try ExtractCommand(arguments: directArguments(backend: "magic") + ["--source-netlist-format", "unknown"])
+        }
+    }
+
+    @Test func configSourceLanguageIsExplicitAndCLIOverrideIsPreserved() async throws {
+        let directory = try temporaryDirectory()
+        defer { remove(directory) }
+        let configURL = directory.appending(path: "project.json")
+        try writeConfig(["backendID": "magic", "inputs": ["netlist": "candidate.v", "sourceNetlistFormat": "verilog"]], to: configURL)
+        let command = try ExtractCommand(arguments: ["--config", configURL.path])
+        #expect(try await command.buildRequestFromConfigFile(configURL).sourceNetlistFormat == .verilog)
+        let override = try ExtractCommand(arguments: ["--config", configURL.path, "--source-netlist-format", "cdl"])
+        #expect(try await override.buildRequestFromConfigFile(configURL).sourceNetlistFormat == .cdl)
+        try writeConfig(["backendID": "magic", "inputs": ["sourceNetlistFormat": "unknown"]], to: configURL)
+        await expectInvalidInputAsync { _ = try await command.buildRequestFromConfigFile(configURL) }
+    }
+
     @Test(arguments: ["bin/extractor", "/opt/extractor"])
     func configExecutablePathResolvesAtDocumentBase(path: String) async throws {
         let directory = try temporaryDirectory()

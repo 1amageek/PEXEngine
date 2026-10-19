@@ -145,10 +145,12 @@ public struct ExtractCommand: Sendable {
     public let sourceConnectivityPolicyOverride: PEXSourceConnectivityPolicy?
     public let processProfileOverride: PEXProcessProfileReference?
     public let nativeInputURLOverride: URL?
+    public let sourceNetlistFormatOverride: NetlistFormat?
 
     public struct DirectParams: Sendable {
         public let layoutPath: String
         public let netlistPath: String
+        public let sourceNetlistFormat: NetlistFormat
         public let topCell: String
         public let technologyPath: String
         public let technologyByCorner: [String: String]
@@ -185,6 +187,7 @@ public struct ExtractCommand: Sendable {
         self.sourceConnectivityPolicyOverride = parsed.sourceConnectivityPolicyOverride
         self.processProfileOverride = parsed.makeProcessProfile()
         self.nativeInputURLOverride = parsed.nativeInputPath.map { URL(filePath: $0) }
+        self.sourceNetlistFormatOverride = parsed.sourceNetlistFormat
     }
 
     public func run() async throws {
@@ -290,7 +293,7 @@ public struct ExtractCommand: Sendable {
             layoutURL: Self.resolveURL(layoutPath, relativeTo: baseDir),
             layoutFormat: Self.detectLayoutFormat(layoutPath),
             sourceNetlistURL: Self.resolveURL(netlistPath, relativeTo: baseDir),
-            sourceNetlistFormat: .spice,
+            sourceNetlistFormat: try sourceNetlistFormatOverride ?? Self.admittedNetlistFormat(config.string(forKey: "inputs.sourceNetlistFormat") ?? "spice"),
             topCell: topCell,
             corners: try Self.configuredCorners(from: config, backendID: backendID),
             technology: .jsonFile(Self.resolveURL(technologyPath, relativeTo: baseDir)),
@@ -409,6 +412,13 @@ public struct ExtractCommand: Sendable {
         return trimmed.map { PEXCorner(id: $0) }
     }
 
+    fileprivate static func admittedNetlistFormat(_ value: String) throws -> NetlistFormat {
+        guard let format = NetlistFormat(rawValue: value) else {
+            throw PEXError.invalidInput("Source netlist format must be spice, cdl, or verilog")
+        }
+        return format
+    }
+
     fileprivate static func requiredBackendID(_ value: String?, source: String) throws -> String {
         guard let value else {
             throw PEXError.invalidInput("\(source) is required; pass --backend <id> or set backendID explicitly")
@@ -482,7 +492,7 @@ public struct ExtractCommand: Sendable {
             layoutURL: layoutURL,
             layoutFormat: layoutFormat,
             sourceNetlistURL: netlistURL,
-            sourceNetlistFormat: .spice,
+            sourceNetlistFormat: params.sourceNetlistFormat,
             topCell: params.topCell,
             corners: corners,
             technology: .jsonFile(technologyURL),
@@ -552,6 +562,7 @@ private struct ExtractCommandArguments {
     var summaryTopNets = 10
     var layoutPath: String?
     var netlistPath: String?
+    var sourceNetlistFormat: NetlistFormat?
     var topCell: String?
     var technologyPath: String?
     var technologyByCorner: [String: String] = [:]
@@ -588,6 +599,7 @@ private struct ExtractCommandArguments {
             return ExtractCommand.DirectParams(
                 layoutPath: layoutPath,
                 netlistPath: netlistPath,
+                sourceNetlistFormat: sourceNetlistFormat ?? .spice,
                 topCell: topCell,
                 technologyPath: technologyPath,
                 technologyByCorner: technologyByCorner,
@@ -624,6 +636,8 @@ private struct ExtractCommandArguments {
             layoutPath = try cursor.requireValue(for: argument, description: "a path argument")
         case "--netlist":
             netlistPath = try cursor.requireValue(for: argument, description: "a path argument")
+        case "--source-netlist-format":
+            sourceNetlistFormat = try ExtractCommand.admittedNetlistFormat(cursor.requireValue(for: argument, description: "spice, cdl, or verilog"))
         case "--top-cell":
             topCell = try cursor.requireValue(for: argument, description: "a name argument")
         case "--technology":

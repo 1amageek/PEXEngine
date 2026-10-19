@@ -383,11 +383,11 @@ private func removeOpenRCXFixture(_ url: URL) {
 private struct ExtractionTimeoutRunner: TimedProcessRunning {
     func run(
         process: Process,
-        cancellationCheck: (@Sendable () async throws -> Bool)?
+        control: TimedProcessControl?
     ) async throws -> TimedProcessResult {
         let runner = process.arguments == ["-version"]
-            ? TimedProcessRunner()
-            : TimedProcessRunner(timeoutSeconds: 0.5)
-        return try await runner.run(process: process, cancellationCheck: cancellationCheck)
+            ? TimedProcessRunner(maximumOutputByteCount: 64 * 1024 * 1024, cleanupTimeoutSeconds: 5)
+            : TimedProcessRunner(timeoutSeconds: 0.5, maximumOutputByteCount: 64 * 1024 * 1024, cleanupTimeoutSeconds: 5)
+        return try await runner.run(process: process, control: control)
     }
 }

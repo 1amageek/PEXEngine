@@ -489,7 +489,8 @@ struct MagicPEXAdapterTests {
         ), processRunner: TimedProcessRunner(
             timeoutSeconds: 5,
             terminationGraceSeconds: 0.05,
-            pipeDrainGraceSeconds: 0.05
+            pipeDrainGraceSeconds: 0.05,
+            maximumOutputByteCount: 64 * 1024 * 1024, cleanupTimeoutSeconds: 5
         ))
     }
 

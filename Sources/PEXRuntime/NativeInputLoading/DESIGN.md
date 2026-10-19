@@ -25,6 +25,11 @@ Backend + selected local document URL -> shared admission
 ```
 
 ## Contracts and Invariants
+
+The additive configuration kind is retained unchanged according to
+[NativeInput](../../PEXCore/NativeInput/DESIGN.md). The same loader and reference
+document entry point serve mask and explicitly routed native inputs; loading does
+not reinterpret a routed schema, infer a corner or convert a native law.
 Native selection requires a reference URL. Other backends reject a supplied
 reference. The document has a finite four-MiB ceiling and must be local; decoded
 configuration/calibration locations and budgets are validated by Core and

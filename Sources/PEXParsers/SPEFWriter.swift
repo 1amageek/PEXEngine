@@ -19,7 +19,8 @@ public struct SPEFWriter: Sendable {
         lines.append("*DESIGN \"\(escapedString(designName(from: ir)))\"")
         lines.append("*DATE \"\(escapedString(options.date))\"")
         lines.append("*VENDOR \"\(escapedString(options.vendor))\"")
-        lines.append("*PROGRAM \"\(escapedString(options.program + " PEX_IDENTITY_V1"))\"")
+        let profile = options.terminalTokenProfile == .canonical ? " PEX_CANONICAL_TERMINALS_V1" : ""
+        lines.append("*PROGRAM \"\(escapedString(options.program + profile + " PEX_IDENTITY_V1"))\"")
         lines.append("*VERSION \"\(escapedString(ir.version))\"")
         lines.append("*DESIGN_FLOW \"EXTERNAL\"")
         lines.append("*DIVIDER \(options.divider)")
@@ -34,7 +35,7 @@ public struct SPEFWriter: Sendable {
         if !nameMap.entries.isEmpty {
             lines.append("*NAME_MAP")
             for entry in nameMap.entries {
-                lines.append("*\(entry.id) \(entry.name)")
+                lines.append("*\(entry.id) \(entry.name.replacingOccurrences(of: "-", with: "\\-"))")
             }
             lines.append("")
         }
@@ -58,7 +59,7 @@ public struct SPEFWriter: Sendable {
     public func write(_ ir: ParasiticIR, to url: URL) throws {
         let spef = try write(ir)
         do {
-            try Data(spef.utf8).write(to: url)
+            try Data(spef.utf8).write(to: url, options: .atomic)
         } catch {
             throw PEXError.persistenceFailed("Failed to write SPEF to \(url.path(percentEncoded: false))", underlying: error)
         }
@@ -98,7 +99,7 @@ public struct SPEFWriter: Sendable {
         if !connections.isEmpty {
             lines.append("*CONN")
             for node in connections {
-                let marker = "P"
+                let marker = node.instancePath == nil ? "P" : "I"
                 lines.append("*\(marker) \(try localNodeToken(NodeRef(netName: net.name, nodeName: node.name), nameMap: nameMap)) B\(coordinateSuffix(node.coordinate))")
             }
             for node in nodeCoordinates {
@@ -227,7 +228,7 @@ public struct SPEFWriter: Sendable {
 
     private func portNodes(in ir: ParasiticIR) throws -> [(ref: NodeRef, node: ParasiticNode)] {
         ir.nets.flatMap { net in
-            net.nodes.filter { $0.kind == .pin }.map { (NodeRef(netName: net.name, nodeName: $0.name), $0) }
+            net.nodes.filter { $0.kind == .pin && $0.instancePath == nil }.map { (NodeRef(netName: net.name, nodeName: $0.name), $0) }
         }.sorted { $0.ref.netName.value + ":" + $0.ref.nodeName.value < $1.ref.netName.value + ":" + $1.ref.nodeName.value }
     }
 
@@ -298,19 +299,43 @@ public struct SPEFWriter: Sendable {
         var names: Set<String> = []
         var tokens: [NodeRef: String] = [:]
         var identityNodes: [String: PEXSPICEIdentity.Node] = [:]
+        let netRoots = Set(ir.nets.map { $0.name.value })
         for net in ir.nets {
             try validateWritableName(net.name.value)
+            if options.terminalTokenProfile == .canonical { try validateCanonicalToken(net.name.value) }
             collectWritableName(net.name.value, into: &names)
             for (index, node) in net.nodes.sorted(by: { $0.name.value < $1.name.value }).enumerated() {
                 let ref = NodeRef(netName: net.name, nodeName: node.name)
-                let value = node.kind == .pin ? "PEX_PIN_" + PEXSPICEIdentity.hex(net.name.value) + "_" + PEXSPICEIdentity.hex(node.name.value)
+                var pin = options.terminalTokenProfile == .canonical ? node.name.value
+                    : "PEX_PIN_" + PEXSPICEIdentity.hex(net.name.value) + "_" + PEXSPICEIdentity.hex(node.name.value)
+                if node.kind == .pin, let path = node.instancePath {
+                    let prefix = path.value + options.delimiter
+                    guard !path.value.isEmpty, !options.delimiter.isEmpty,
+                          node.name.value.hasPrefix(prefix) else {
+                        throw SPEFWriterError.invalidIdentifier("Instance pin name disagrees with its declared instance path")
+                    }
+                    let leaf = node.name.value.dropFirst(prefix.count)
+                    guard !leaf.isEmpty, !leaf.contains(options.delimiter) else {
+                        throw SPEFWriterError.invalidIdentifier("Instance pin requires one exact pin leaf after the delimiter")
+                    }
+                    if options.terminalTokenProfile != .canonical {
+                        pin = "PEX_INSTANCE_" + PEXSPICEIdentity.hex(path.value) + options.delimiter + pin
+                    }
+                }
+                let value = node.kind == .pin ? pin
                     : net.name.value + options.delimiter + String(index + 1)
                 try validateWritableName(value)
                 guard !net.name.value.isEmpty, !node.name.value.isEmpty, identityNodes[value] == nil else {
                     throw SPEFWriterError.invalidIdentifier("Noninjective scoped node token")
                 }
+                if options.terminalTokenProfile == .canonical {
+                    try validateCanonicalToken(value)
+                    guard value != "0", !netRoots.contains(value) || (node.kind == .pin && value == net.name.value) else {
+                        throw SPEFWriterError.invalidIdentifier("Ambiguous canonical terminal or internal token")
+                    }
+                }
                 tokens[ref] = value
-                identityNodes[value] = .init(ref: ref, kind: node.kind)
+                identityNodes[value] = .init(ref: ref, kind: node.kind, instancePath: node.kind == .pin ? node.instancePath : nil)
                 collectWritableName(value, into: &names)
             }
         }
@@ -328,7 +353,8 @@ public struct SPEFWriter: Sendable {
             }
         }
         let identity = PEXSPICEIdentity(nodes: identityNodes, elementKinds: kinds,
-                                       referenceName: ir.metadata["referenceNodeName"] ?? "0", referenceToken: "0")
+                                       referenceName: ir.metadata["referenceNodeName"] ?? "0", referenceToken: "0",
+                                       canonicalTerminals: options.terminalTokenProfile == .canonical ? true : nil)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let annotation = "PEX_IDENTITY_V1_" + (try encoder.encode(identity)).map { String(format: "%02x", $0) }.joined()
@@ -342,6 +368,13 @@ public struct SPEFWriter: Sendable {
     private func collectWritableName(_ value: String, into names: inout Set<String>) {
         if !isValidIdentifier(value) {
             names.insert(value)
+        }
+    }
+
+    private func validateCanonicalToken(_ value: String) throws {
+        guard let first = value.first, first.isLetter || first == "_" || first == "$" || first == "#",
+              !value.contains("\\"), !value.hasPrefix("PEX_IDENTITY_V1_") else {
+            throw SPEFWriterError.invalidIdentifier("Canonical SPEF token is outside the lossless parser subset: " + value)
         }
     }
 
@@ -389,7 +422,9 @@ public struct SPEFWriter: Sendable {
         if value.rangeOfCharacter(from: .whitespacesAndNewlines) != nil || value.contains("\"") {
             return false
         }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_./:\\[]$#"))
+        // A literal backslash cannot also introduce the emitted hyphen escape.
+        if value.contains("-") && value.contains("\\") { return false }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_./:\\[]$#-"))
         return value.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 

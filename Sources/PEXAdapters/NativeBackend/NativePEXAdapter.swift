@@ -6,7 +6,7 @@ import PEXNative
 import PEXPersistence
 import LayoutIO
 
-/// Actual in-process RC extraction over captured GDSII/OASIS geometry.
+/// Actual in-process RC extraction over explicitly selected captured standard geometry.
 public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     public let backendID = "native"
     public let capabilities = PEXBackendCapabilities(supportsCouplingCaps: true, supportsCornerSweep: true,
@@ -14,6 +14,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
     public let maximumLayoutBytes: Int
     public let maximumCodeImageBytes: Int
     public let maximumEvidenceBytes: Int
+    public let routedCalculator: any NativeRoutedPEXCalculating
     public let cancellationPollInterval: Duration
 
     public static let defaultMaximumLayoutBytes = 256 * 1024 * 1024
@@ -26,16 +27,19 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         maximumCodeImageBytes = Self.defaultMaximumCodeImageBytes
         maximumEvidenceBytes = Self.defaultMaximumEvidenceBytes
         cancellationPollInterval = Self.defaultCancellationPollInterval
+        routedCalculator = UnionSheetRoutedPEXCalculator()
     }
 
     public init(maximumLayoutBytes: Int = Self.defaultMaximumLayoutBytes,
                 maximumCodeImageBytes: Int = Self.defaultMaximumCodeImageBytes,
                 maximumEvidenceBytes: Int = Self.defaultMaximumEvidenceBytes,
-                cancellationPollInterval: Duration = Self.defaultCancellationPollInterval) throws {
+                cancellationPollInterval: Duration = Self.defaultCancellationPollInterval,
+                routedCalculator: any NativeRoutedPEXCalculating = UnionSheetRoutedPEXCalculator()) throws {
         guard maximumLayoutBytes > 0, maximumCodeImageBytes > 0, maximumEvidenceBytes > 0,
               cancellationPollInterval > .zero else { throw NativePEXBackendError.invalidLimits }
         self.maximumLayoutBytes = maximumLayoutBytes; self.maximumCodeImageBytes = maximumCodeImageBytes
         self.maximumEvidenceBytes = maximumEvidenceBytes; self.cancellationPollInterval = cancellationPollInterval
+        self.routedCalculator = routedCalculator
     }
     public func toolReadiness(processProfile: PEXProcessProfileReference?) -> PEXExtractorToolReadiness {
         .init(backendID: backendID, status: .ready,
@@ -55,23 +59,47 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         do {
             let observed = try NativePEXCodeImage.measure(maximumBytes: maximumCodeImageBytes)
             image = observed
-            let measuredIdentity = try executionIdentity(image: observed)
+            var measuredIdentity = try executionIdentity(image: observed, kind: context.nativeInput?.configurationKind ?? .maskGeometry)
             identity = measuredIdentity
             try admit(context)
             guard context.backendSelection.expectedProducer == nil || context.backendSelection.expectedProducer == measuredIdentity.producer else {
                 throw NativePEXBackendError.unsupportedRequest("Requested producer differs from the measured implementation")
             }
-            let projection = try await calculate(context, state: state)
-            state.enter("topologyEvidence")
-            let topology = NativePEXTopologyEvidence(projection: projection, image: observed, identity: measuredIdentity, policy: NativePEXBackendPolicy(adapter: self))
-            artifacts.append(try write(topology, name: NativePEXTopologyEvidence.artifactFileName, context: context, identity: measuredIdentity))
+            let ir: ParasiticIR
+            let physicalTopology: PEXPhysicalTopology
+            if context.nativeInput?.configurationKind == .routedOpenRCXV1 {
+                let routed = try await calculateRouted(context, state: state)
+                measuredIdentity = try executionIdentity(image: observed, kind: .routedOpenRCXV1, prepared: routed.prepared)
+                identity = measuredIdentity
+                state.enter("routedEvidence")
+                artifacts.append(try write(routed.prepared.input, name: NativeRoutedPEXExecutionEvidence.inputFileName, context: context, identity: measuredIdentity))
+                artifacts.append(try write(routed.result, name: NativeRoutedPEXExecutionEvidence.resultFileName, context: context, identity: measuredIdentity))
+                let source = try NativeRoutedPEXExecutionEvidence(prepared: routed.prepared, context: context,
+                    policy: NativePEXBackendPolicy(adapter: self), image: observed, identity: measuredIdentity)
+                try source.requireBinding(to: routed.prepared, context: context, policy: NativePEXBackendPolicy(adapter: self),
+                    image: observed, identity: measuredIdentity)
+                artifacts.append(try write(source, name: NativeRoutedPEXExecutionEvidence.sourceFileName,
+                    context: context, identity: measuredIdentity))
+                ir = routed.result.ir
+                // Successful routed admission guarantees incidence, no shorts and connected signal nets.
+                physicalTopology = try .init(openNetCount: 0, shortComponentCount: 0, uncontactedTerminalCount: 0)
+            } else {
+                let projection = try await calculate(context, state: state)
+                state.enter("topologyEvidence")
+                let topology = NativePEXTopologyEvidence(projection: projection, image: observed, identity: measuredIdentity, policy: NativePEXBackendPolicy(adapter: self))
+                artifacts.append(try write(topology, name: NativePEXTopologyEvidence.artifactFileName, context: context, identity: measuredIdentity))
+                ir = projection.ir
+                physicalTopology = try .init(openNetCount: topology.opens.count,
+                    shortComponentCount: topology.shortComponentIndices.count,
+                    uncontactedTerminalCount: topology.ports.filter { $0.componentIndex == nil }.count)
+            }
             state.enter("imageStability")
             try observed.verifyUnchanged(maximumBytes: maximumCodeImageBytes)
             try Task.checkCancellation()
             state.enter("canonicalAdmission")
             let terminal = artifact(name: "native-execution.json", context: context, identity: measuredIdentity)
-            let result = try PEXAdapterExecutionResult(output: .canonical(projection.ir), generatedArtifacts: artifacts + [terminal],
-                executionIdentity: measuredIdentity)
+            let result = try PEXAdapterExecutionResult(output: .canonical(ir), generatedArtifacts: artifacts + [terminal],
+                executionIdentity: measuredIdentity, physicalTopology: physicalTopology)
             try await checkCancellation(context)
             state.enter("completed")
             artifacts.append(try write(NativePEXTerminalEvidence(policy: NativePEXBackendPolicy(adapter: self), status: "success", phase: state.stage, cornerID: context.corner.id,
@@ -82,6 +110,7 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             let cancelled = actual == .cancelled || error is CancellationError || Task.isCancelled
                 || (error as? NativePEXInputError) == .cancelled || (error as? NativePEXCalculationError) == .cancelled
                 || (error as? NativePEXElectrodeError) == .cancelled || (error as? NativePEXProjectionError) == .cancelled
+                || (error as? NativeRoutedPEXPreparationError) == .cancelled || (error as? NativeRoutedPEXError) == .cancelled
             let failure = actual.map { String(describing: $0) } ?? String(describing: error)
             do {
                 artifacts.append(try write(NativePEXTerminalEvidence(policy: NativePEXBackendPolicy(adapter: self), status: cancelled ? "cancelled" : "failed", phase: state.stage,
@@ -98,9 +127,16 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         }
     }
     private func admit(_ context: PEXExecutionContext) throws {
-        guard context.nativeInput != nil else { throw NativePEXBackendError.missingConfiguration }
-        guard context.layoutFormat == .gds || context.layoutFormat == .oas else {
-            throw NativePEXBackendError.unsupportedRequest("Native backend admits GDSII/OASIS geometry")
+        guard let input = context.nativeInput else { throw NativePEXBackendError.missingConfiguration }
+        switch input.configurationKind {
+        case .maskGeometry:
+            guard context.layoutFormat == .gds || context.layoutFormat == .oas else {
+                throw NativePEXBackendError.unsupportedRequest("Mask Native extraction requires GDSII/OASIS geometry")
+            }
+        case .routedOpenRCXV1:
+            guard context.layoutFormat == .def, context.sourceNetlistFormat == .verilog else {
+                throw NativePEXBackendError.unsupportedRequest("Routed Native extraction requires DEF and structural Verilog")
+            }
         }
         guard context.options.extractMode == .rc, context.options.includeCouplingCaps,
               context.options.minCapacitanceF == nil, context.options.minResistanceOhm == nil else {
@@ -119,12 +155,37 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             if value { throw NativePEXBackendError.cancelled }
         }
     }
-    private enum WorkResult: Sendable { case calculation(NativePEXProjection), monitorStopped }
+    private enum WorkResult<Value: Sendable>: Sendable { case calculation(Value), monitorStopped }
     func calculate(_ context: PEXExecutionContext, state: NativePEXCancellationState) async throws -> NativePEXProjection {
+        try await calculateJoined(context, state: state) { try self.calculateSynchronously(context, state: state) }
+    }
+    private struct RoutedCalculation: Sendable {
+        let prepared: PreparedNativeRoutedPEXInput
+        let result: NativeRoutedPEXResult
+    }
+    private func calculateRouted(_ context: PEXExecutionContext, state: NativePEXCancellationState) async throws -> RoutedCalculation {
+        try await calculateJoined(context, state: state) {
+            let cancelled: @Sendable () -> Bool = { state.isCancelled || Task.isCancelled }
+            state.enter("routedPreparation")
+            let prepared = try DefaultNativeRoutedPEXInputPreparer().prepare(context: context,
+                requiredCornerIDs: context.requestedCornerIDs, isCancelled: cancelled)
+            state.enter("routedCalculation")
+            let result = try self.routedCalculator.calculate(input: prepared.input, model: prepared.model,
+                groundCapacitanceModel: prepared.groundCapacitanceModel,
+                maximumCellSpanDatabaseUnits: prepared.maximumCellSpanDatabaseUnits,
+                cornerID: context.corner.id, limits: prepared.limits, isCancelled: cancelled)
+            guard result.ir.cornerID == context.corner.id, result.selection == prepared.model.selection else {
+                throw NativePEXBackendError.unsupportedRequest("Routed calculator returned a different corner or source selection")
+            }
+            return RoutedCalculation(prepared: prepared, result: result)
+        }
+    }
+    private func calculateJoined<Value: Sendable>(_ context: PEXExecutionContext, state: NativePEXCancellationState,
+        operation: @escaping @Sendable () throws -> Value) async throws -> Value {
         try await checkCancellation(context)
         do {
-            let projection = try await withThrowingTaskGroup(of: WorkResult.self) { group in
-                group.addTask { .calculation(try self.calculateSynchronously(context, state: state)) }
+            let projection = try await withThrowingTaskGroup(of: WorkResult<Value>.self) { group in
+                group.addTask { .calculation(try operation()) }
                 if context.cancellationCheck != nil {
                     group.addTask {
                         while !Task.isCancelled {
@@ -212,8 +273,22 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
             url: context.rawOutputDirectory.appending(path: name),
             provenance: .init(note: "native CPU extraction observation"), producer: identity?.producer)
     }
-    private func executionIdentity(image: NativePEXCodeImage) throws -> PEXBackendExecutionIdentity {
-        let producer = try ProducerIdentity(kind: .tool, identifier: "pex-native", version: "3.0.0", build: image.digest.hexadecimalValue)
+    static func routedEnvironmentDigest(_ prepared: PreparedNativeRoutedPEXInput) throws -> ContentDigest {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        var bytes = Data("routedOpenRCXV1:native-union-sheet-area-boundary-v1:\(prepared.maximumCellSpanDatabaseUnits):".utf8)
+        bytes.append(try encoder.encode(prepared.model))
+        bytes.append(0)
+        bytes.append(try encoder.encode(prepared.groundCapacitanceModel))
+        bytes.append(0)
+        bytes.append(try encoder.encode(prepared.sourceReferences))
+        bytes.append(0)
+        bytes.append(try encoder.encode(prepared.input))
+        return try .init(algorithm: .sha256,
+            hexadecimalValue: SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined())
+    }
+    func executionIdentity(image: NativePEXCodeImage, kind: PEXNativeConfigurationKind,
+                                   prepared: PreparedNativeRoutedPEXInput? = nil) throws -> PEXBackendExecutionIdentity {
+        let producer = try ProducerIdentity(kind: .tool, identifier: "pex-native", version: kind == .maskGeometry ? "3.1.0" : "4.0.0", build: image.digest.hexadecimalValue)
         #if arch(arm64)
         let architecture = "arm64"
         #elseif arch(x86_64)
@@ -221,8 +296,14 @@ public struct NativePEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         #else
         let architecture = "unsupported"
         #endif
-        let digest = try ContentDigest(algorithm: .sha256,
-            hexadecimalValue: SHA256.hash(data: Data("native-device-aware-contact-admission-v3".utf8)).map { String(format: "%02x", $0) }.joined())
+        let digest: ContentDigest
+        if kind == .routedOpenRCXV1, let prepared {
+            digest = try Self.routedEnvironmentDigest(prepared)
+        } else {
+            let law = kind == .maskGeometry ? "native-device-aware-contact-admission-v3" : "native-union-sheet-area-boundary-v1:preparation-incomplete"
+            digest = try ContentDigest(algorithm: .sha256,
+                hexadecimalValue: SHA256.hash(data: Data("\(kind.rawValue):\(law)".utf8)).map { String(format: "%02x", $0) }.joined())
+        }
         return try .init(producer: producer, binaryDigest: image.digest,
             invocation: .inProcess(entryPoint: "PEXAdapters.NativePEXAdapter.execute"),
             environment: .init(platform: ProcessInfo.processInfo.operatingSystemVersionString, architecture: architecture,

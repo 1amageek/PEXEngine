@@ -8,6 +8,9 @@ import PEXParsers
 import PEXPersistence
 
 public actor PEXOrchestrator {
+    public struct PendingCleanupFailure: Error, Sendable {
+        public let failures: [PEXProcessCleanupFailure]
+    }
     private let pipeline: PEXPipeline
     private let technologyResolver: TechnologyResolver
 
@@ -157,6 +160,9 @@ public actor PEXOrchestrator {
             warnings: &allWarnings,
             cancellationCheck: cancellationCheck
         )
+        // All corner tasks are joined before transferring unresolved cleanup authority.
+        let pending = cornerOutcomes.compactMap(\.pendingCleanup)
+        if !pending.isEmpty { throw PendingCleanupFailure(failures: pending) }
         let cornerResults = cornerOutcomes.map(\.result)
 
         let backendExecutions = try validatedBackendExecutions(from: cornerOutcomes)
@@ -643,6 +649,7 @@ public actor PEXOrchestrator {
                 let context = PEXExecutionContext(
                     runID: runID,
                     corner: corner,
+                    requestedCornerIDs: request.corners.map(\.id),
                     layoutURL: request.layoutURL,
                     layoutFormat: request.layoutFormat,
                     sourceNetlistURL: request.sourceNetlistURL,
@@ -651,6 +658,7 @@ public actor PEXOrchestrator {
                     technology: cornerTechnology,
                     nativeInput: request.nativeInput,
                     processProfile: request.processProfile,
+                    executionInputArtifacts: request.executionInputArtifacts,
                     backendSelection: request.backendSelection,
                     options: request.options,
                     workingDirectory: workspace.runDirectory,
@@ -788,12 +796,15 @@ public actor PEXOrchestrator {
         )
         let (validatedIR, validationWarnings) = try pipeline.canonicalIR(from: execution, context: parseContext)
 
+        artifacts.append(try recordIRArtifact(validatedIR, context: context, store: store, recorder: recorder,
+            options: options, producer: execution.executionIdentity.producer))
+        retainedArtifacts = artifacts
         var connectivityWarnings: [PEXWarning] = []
-        if options.sourceConnectivityPolicy != .disabled {
+        if options.sourceConnectivityPolicy != .disabled || adapter.backendID == "native" {
             let connectivityReport = try PEXSourceConnectivityChecker().check(
                 sourceNetlistURL: context.sourceNetlistURL,
                 sourceNetlistFormat: context.sourceNetlistFormat,
-                ir: validatedIR
+                ir: validatedIR, topCell: context.topCell
             )
             artifacts.append(try recorder.recordSourceConnectivityReport(
                 connectivityReport,
@@ -801,7 +812,7 @@ public actor PEXOrchestrator {
                 producer: execution.executionIdentity.producer
             ))
             retainedArtifacts = artifacts
-            if options.sourceConnectivityPolicy == .strict && !connectivityReport.isSatisfied {
+            if (options.sourceConnectivityPolicy == .strict || adapter.backendID == "native") && !connectivityReport.isSatisfied {
                 throw PEXError(
                     kind: .irValidationFailed,
                     stage: .irValidation,
@@ -819,15 +830,6 @@ public actor PEXOrchestrator {
             }
         }
 
-        artifacts.append(try recordIRArtifact(
-            validatedIR,
-            context: context,
-            store: store,
-            recorder: recorder,
-            options: options,
-            producer: execution.executionIdentity.producer
-        ))
-        retainedArtifacts = artifacts
         try recordRequiredStandardArtifact(
             kind: .spiceBackannotation, relativePath: "spice/\(cornerID.value).cir",
             id: "spice-backannotation-\(cornerID.value)", context: context, recorder: recorder,
@@ -843,6 +845,13 @@ public actor PEXOrchestrator {
             try SPEFWriter().write(validatedIR, to: url)
         }
         artifacts = retainedArtifacts
+        if adapter.backendID == "native" {
+            guard let topology = execution.physicalTopology, topology.isSatisfied else {
+                throw PEXError(kind: .irValidationFailed, stage: .irValidation, cornerID: cornerID,
+                    backendID: adapter.backendID,
+                    message: "Native same-design topology admission failed: \(String(describing: execution.physicalTopology))")
+            }
+        }
 
         let rawURLs: [URL]
         let logURL: URL?
@@ -1023,7 +1032,8 @@ public actor PEXOrchestrator {
                 message: message,
                 suggestedActions: suggestedActions(for: stage)
             ),
-            executionIdentity: executionIdentity
+            executionIdentity: executionIdentity,
+            pendingCleanup: (error as? PEXAdapterExecutionFailure)?.underlyingError as? PEXProcessCleanupFailure
         )
     }
 
@@ -1137,16 +1147,19 @@ private struct PEXCornerExecutionOutcome: Sendable {
     let artifacts: [PEXArtifactRecord]
     let failure: PEXArtifactFailure?
     let executionIdentity: PEXBackendExecutionIdentity?
+    let pendingCleanup: PEXProcessCleanupFailure?
 
     init(
         result: PEXCornerResult,
         artifacts: [PEXArtifactRecord],
         failure: PEXArtifactFailure? = nil,
-        executionIdentity: PEXBackendExecutionIdentity? = nil
+        executionIdentity: PEXBackendExecutionIdentity? = nil,
+        pendingCleanup: PEXProcessCleanupFailure? = nil
     ) {
         self.result = result
         self.artifacts = artifacts
         self.failure = failure
         self.executionIdentity = executionIdentity
+        self.pendingCleanup = pendingCleanup
     }
 }

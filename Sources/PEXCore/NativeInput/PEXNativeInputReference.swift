@@ -3,6 +3,7 @@ import CircuiteFoundation
 
 public struct PEXNativeInputReference: Sendable, Codable, Hashable {
     public let configurationURL: URL
+    public let configurationKind: PEXNativeConfigurationKind
     public let calibrations: [PEXCalibrationInput]
     public let maximumConfigurationBytes: Int
     public let maximumCalibrationBytes: Int
@@ -10,6 +11,7 @@ public struct PEXNativeInputReference: Sendable, Codable, Hashable {
     public let maximumCalibrationArtifacts: Int
 
     public init(configurationURL: URL, calibrations: [PEXCalibrationInput],
+                configurationKind: PEXNativeConfigurationKind = .maskGeometry,
                 maximumConfigurationBytes: Int = 16 * 1024 * 1024,
                 maximumCalibrationBytes: Int = 64 * 1024 * 1024,
                 maximumTotalCalibrationBytes: UInt64 = 256 * 1024 * 1024,
@@ -32,6 +34,7 @@ public struct PEXNativeInputReference: Sendable, Codable, Hashable {
             remaining -= input.artifactID.byteCount
         }
         self.configurationURL = configurationURL
+        self.configurationKind = configurationKind
         self.calibrations = calibrations
         self.maximumConfigurationBytes = maximumConfigurationBytes
         self.maximumCalibrationBytes = maximumCalibrationBytes
@@ -40,7 +43,7 @@ public struct PEXNativeInputReference: Sendable, Codable, Hashable {
     }
 
     public func replacingLocations(configurationURL: URL, calibrations: [PEXCalibrationInput]) throws -> Self {
-        try Self(configurationURL: configurationURL, calibrations: calibrations,
+        try Self(configurationURL: configurationURL, calibrations: calibrations, configurationKind: configurationKind,
                  maximumConfigurationBytes: maximumConfigurationBytes,
                  maximumCalibrationBytes: maximumCalibrationBytes,
                  maximumTotalCalibrationBytes: maximumTotalCalibrationBytes,
@@ -48,7 +51,7 @@ public struct PEXNativeInputReference: Sendable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case configurationURL, calibrations, maximumConfigurationBytes, maximumCalibrationBytes
+        case configurationURL, configurationKind, calibrations, maximumConfigurationBytes, maximumCalibrationBytes
         case maximumTotalCalibrationBytes, maximumCalibrationArtifacts
     }
 
@@ -56,6 +59,7 @@ public struct PEXNativeInputReference: Sendable, Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(configurationURL: container.decode(URL.self, forKey: .configurationURL),
                       calibrations: container.decode([PEXCalibrationInput].self, forKey: .calibrations),
+                      configurationKind: container.decodeIfPresent(PEXNativeConfigurationKind.self, forKey: .configurationKind) ?? .maskGeometry,
                       maximumConfigurationBytes: container.decode(Int.self, forKey: .maximumConfigurationBytes),
                       maximumCalibrationBytes: container.decode(Int.self, forKey: .maximumCalibrationBytes),
                       maximumTotalCalibrationBytes: container.decode(UInt64.self, forKey: .maximumTotalCalibrationBytes),

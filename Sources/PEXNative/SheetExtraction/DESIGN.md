@@ -18,6 +18,7 @@ a default corner or merge physical islands through terminal names.
 |---|---|---|---|---|
 | [PEXNative](../DESIGN.md) | parent | Calculation product | API and dependency boundary | Final electrode observables are separate |
 | [ElectricalModel](../../PEXCore/ElectricalModel/DESIGN.md) | depends on | SI coefficients and ranges | One admitted exact corner | No extrapolation outside declared domains |
+| [RectilinearSheetNetwork](../RectilinearSheetNetwork/DESIGN.md) | depends on | Internal finite half-cell resistance primitive | Reuses the same dimensionless ratio and multiplication order | Legacy model, geometry and failure behavior remain unchanged |
 | [ConductorCapture](../../../../semiconductor-layout/Sources/LayoutVerify/ConductorCapture/DESIGN.md) | depends on | Integer bands and physical components | Geometry truth | Pins label contacts and are not conductors |
 
 | [InputPreparation](../InputPreparation/DESIGN.md) | used by | Codable calculation admission ceilings | Exact serialized configuration | Decoded limits preserve all fields and defaults remain owner policy |

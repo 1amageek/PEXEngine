@@ -28,7 +28,7 @@ public struct PEXArtifactResolver: Sendable {
     public init(manifestURL: URL) throws {
         let data: Data
         do {
-            data = try Data(contentsOf: manifestURL)
+            data = try PEXBoundedInputReader().read(manifestURL)
         } catch {
             throw PEXError.persistenceFailed("Failed to read artifact manifest from \(manifestURL.path(percentEncoded: false))", underlying: error)
         }
@@ -109,7 +109,7 @@ public struct PEXArtifactResolver: Sendable {
         let url = try validatedURL(for: record)
         let data: Data
         do {
-            data = try Data(contentsOf: url)
+            data = try PEXBoundedInputReader().read(url)
         } catch {
             throw PEXError.persistenceFailed("Failed to read IR artifact \(record.id.rawValue)", underlying: error)
         }
@@ -236,7 +236,7 @@ public struct PEXArtifactResolver: Sendable {
                 throw PEXError.persistenceFailed("Invalid native artifact byte count")
             }
             data = try PEXBoundedInputReader().read(artifactURL, maximumBytes: ceiling)
-        } else { data = try Data(contentsOf: artifactURL) }
+        } else { data = try PEXBoundedInputReader().read(artifactURL) }
         let actualHash = Self.sha256(data: data)
         if actualHash == expectedDigest.hexadecimalValue && expectedByteCount == UInt64(data.count) {
             return []

@@ -9,7 +9,12 @@ public struct SPEFLowering: Sendable {
         cornerID: PEXCornerID,
         options: PEXRunOptions = .default
     ) throws -> ParasiticIR {
-        if tree.header.program?.hasSuffix(" PEX_IDENTITY_V1") == true {
+        let generated = tree.header.program?.hasSuffix(" PEX_IDENTITY_V1") == true
+        let annotated = tree.nameMap.values.contains { $0.hasPrefix("PEX_IDENTITY_V1_") }
+        if (tree.header.program?.contains(" PEX_CANONICAL_TERMINALS_V1") == true || annotated), !generated {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF identity annotation requires its generated profile marker")
+        }
+        if generated {
             return try lowerGenerated(tree, cornerID: cornerID, options: options)
         }
         let (capScale, resScale, inductScale) = unitScaleFactors(from: tree.header)
@@ -284,14 +289,50 @@ public struct SPEFLowering: Sendable {
         guard let identity = try PEXSPICEIdentity.read(PEXSPICEIdentity.marker + Data(bytes).base64EncodedString(), cornerID: cornerID, caseInsensitive: false) else {
             throw PEXError.parseFailed(cornerID: cornerID, message: "Missing SPEF identity annotation")
         }
+        let canonical = tree.header.program?.contains(" PEX_CANONICAL_TERMINALS_V1") == true
+        guard identity.canonicalTerminals == nil || identity.canonicalTerminals == true,
+              canonical == (identity.canonicalTerminals == true) else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF terminal profile marker disagrees with its identity annotation")
+        }
+        if canonical {
+            let roots = Set(tree.nets.map { resolveNameMap($0.netName, nameMap: tree.nameMap) })
+            guard identity.referenceToken == "0", identity.referenceName == "0",
+                  identity.nodes.allSatisfy({ token, node in
+                      !token.contains("\\") && token != "0"
+                          && (!roots.contains(token) || (node.kind == .pin && token == node.ref.netName.value))
+                          && (node.kind != .pin || token == node.ref.nodeName.value)
+                  }) else {
+                throw PEXError.parseFailed(cornerID: cornerID, message: "Canonical SPEF token disagrees with scoped identity")
+            }
+        }
+        for (token, node) in identity.nodes {
+            if let path = node.instancePath {
+                let sourcePrefix = path.value + tree.header.delimiter
+                let tokenPrefix = canonical ? sourcePrefix : "PEX_INSTANCE_" + PEXSPICEIdentity.hex(path.value) + tree.header.delimiter
+                guard node.kind == .pin, !path.value.isEmpty, !tree.header.delimiter.isEmpty,
+                      node.ref.nodeName.value.hasPrefix(sourcePrefix), token.hasPrefix(tokenPrefix),
+                      !node.ref.nodeName.value.dropFirst(sourcePrefix.count).isEmpty,
+                      !node.ref.nodeName.value.dropFirst(sourcePrefix.count).contains(tree.header.delimiter) else {
+                    throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF instance pin disagrees with its declared path")
+                }
+            }
+        }
+        let topPorts = tree.ports.map { resolveNameMap($0.name, nameMap: tree.nameMap) }
+        let expectedTopPorts = Set(identity.nodes.compactMap { token, node in node.kind == .pin && node.instancePath == nil ? token : nil })
+        guard Set(topPorts).count == topPorts.count, Set(topPorts) == expectedTopPorts else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF top-port inventory disagrees with scoped identity")
+        }
         let scales = unitScaleFactors(from: tree.header)
+        var connections = Set<String>()
         var records: [PEXStandardIdentityLowering.Record] = []
         var coordinates: [String: Point2D] = [:]
         for block in tree.nets {
             let net = resolveNameMap(block.netName, nameMap: tree.nameMap)
             for connection in block.connections {
                 let token = resolveNameMap(connection.name, nameMap: tree.nameMap)
-                guard let node = identity.nodes[token], node.ref.netName.value == net, node.kind == .pin else {
+                guard let node = identity.nodes[token], node.ref.netName.value == net, node.kind == .pin,
+                      connections.insert(token).inserted,
+                      connection.type == (node.instancePath == nil ? .port : .instancePin) else {
                     throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF connection disagrees with scoped identity")
                 }
             }
@@ -326,8 +367,12 @@ public struct SPEFLowering: Sendable {
             for res in block.resistors { try append(net + "_R" + String(res.id), .resistor, res.nodeA, res.nodeB, res.value * scales.res) }
             for ind in block.inductors { try append(net + "_L" + String(ind.id), .inductor, ind.nodeA, ind.nodeB, ind.value * scales.induct) }
         }
+        guard connections == Set(identity.nodes.compactMap({ token, node in node.kind == .pin ? token : nil })) else {
+            throw PEXError.parseFailed(cornerID: cornerID, message: "SPEF pin connection inventory is incomplete")
+        }
         let context = PEXParseContext(cornerID: cornerID, runID: PEXRunID(), technology: nil, options: options)
-        return try PEXStandardIdentityLowering.lower(records, identity: identity, context: context, sourceFormat: "SPEF", coordinates: coordinates)
+        return try PEXStandardIdentityLowering.lower(records, identity: identity, context: context, sourceFormat: "SPEF", coordinates: coordinates,
+            verifiedInstancePaths: identity.nodes.compactMapValues { $0.instancePath })
     }
 
     /// Returns scale factors to convert header units to canonical (Farad, Ohm, Henry).

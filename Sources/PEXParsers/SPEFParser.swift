@@ -416,6 +416,9 @@ public struct SPEFParser: Sendable {
         while !cursor.isAtEnd {
             if cursor.currentKeyword != nil { break }
             if case .mappedName(let id) = cursor.currentToken {
+                guard map[id] == nil else {
+                    throw diagnostic("Duplicate SPEF name map identifier", location: cursor.currentLocation)
+                }
                 cursor.advance()
                 map[id] = try requireIdentifier(&cursor, field: "*NAME_MAP")
             } else {

@@ -32,19 +32,19 @@ public enum CLIRouter {
                 let cmd = try CompareIRCommand(arguments: Array(arguments.dropFirst()))
                 let passed = try await cmd.run()
                 if !passed {
-                    _exit(exitCode(for: .irValidationFailed))
+                    terminate(exitCode(for: .irValidationFailed))
                 }
             case "parse-corpus":
                 let cmd = try ParseCorpusCommand(arguments: Array(arguments.dropFirst()))
                 let evaluated = try await cmd.run()
                 if !evaluated {
-                    _exit(exitCode(for: .irValidationFailed))
+                    terminate(exitCode(for: .irValidationFailed))
                 }
             case "observation-from-corpus-report":
                 let cmd = try ObservationFromCorpusReportCommand(arguments: Array(arguments.dropFirst()))
                 let evaluated = try await cmd.run()
                 if !evaluated {
-                    _exit(exitCode(for: .irValidationFailed))
+                    terminate(exitCode(for: .irValidationFailed))
                 }
             case "evidence-packet-from-corpus-report":
                 let cmd = try EvidencePacketFromCorpusReportCommand(arguments: Array(arguments.dropFirst()))
@@ -56,13 +56,13 @@ public enum CLIRouter {
                 let cmd = try AuditExtractorPhysicalBoundsCommand(arguments: Array(arguments.dropFirst()))
                 let satisfied = try await cmd.run()
                 if !satisfied {
-                    _exit(exitCode(for: .irValidationFailed))
+                    terminate(exitCode(for: .irValidationFailed))
                 }
             case "correlate-extractor-reports":
                 let cmd = try CorrelateExtractorReportsCommand(arguments: Array(arguments.dropFirst()))
                 let correlation = try await cmd.run()
                 if !correlation.passed {
-                    _exit(exitCode(for: .irValidationFailed))
+                    terminate(exitCode(for: .irValidationFailed))
                 }
             case "metric-recovery-objective":
                 let cmd = try MetricRecoveryObjectiveCommand(arguments: Array(arguments.dropFirst()))
@@ -92,15 +92,22 @@ public enum CLIRouter {
             default:
                 fputs("error: unknown command '\(command)'\n", stderr)
                 fputs("Run 'pexengine --help' for usage.\n", stderr)
-                _exit(1)
+                terminate(1)
             }
         } catch let error as PEXError {
             fputs("error: \(error.description)\n", stderr)
-            _exit(exitCode(for: error.kind))
+            terminate(exitCode(for: error.kind))
         } catch {
             fputs("error: \(error)\n", stderr)
-            _exit(1)
+            terminate(1)
         }
+    }
+
+    private static func terminate(_ code: Int32) -> Never {
+        // Failure results may already have been emitted to a buffered JSON pipe.
+        fflush(stdout)
+        fflush(stderr)
+        _exit(code)
     }
 
     public static func printUsage() {
@@ -115,6 +122,7 @@ public enum CLIRouter {
             --config <path>       Path to PEX project config JSON
             --layout <path>       Layout file path (direct mode)
             --netlist <path>      Netlist file path (direct mode)
+            --source-netlist-format <format>  spice (default), cdl, or verilog; config override
             --top-cell <name>     Top cell name (direct mode)
             --technology <path>   Technology file path (direct mode)
             --corner-technology <id>=<path>

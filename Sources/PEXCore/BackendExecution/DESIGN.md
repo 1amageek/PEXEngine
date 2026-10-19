@@ -26,7 +26,7 @@ flowchart LR
 
 ## Contracts and Invariants
 The code-image digest uses SHA-256 and equals the producer build identity; decoding repeats constructor validation. The adapter owns actual image/version/environment measurement and checks stable image identity over execution. No fabricated external executable identifies an in-process call.
-Raw payloads require a nonempty list of local file URLs; actual availability/content is checked by runtime/persistence. Canonical payloads require an in-process invocation, canonical SI units, a finite/nonnegative structurally valid graph and no validation errors. Empty physical designs may have an empty graph; missing source design data is separately rejected by input owners. Constructor and decoding enforce the same rules. Generated artifacts belong to the producing adapter and are retained on later failure.
+Raw payloads require a nonempty list of local file URLs; actual availability/content is checked by runtime/persistence. Canonical payloads require an in-process invocation, canonical SI units, a finite/nonnegative structurally valid graph and no validation errors. Empty physical designs may have an empty graph; missing source design data is separately rejected by input owners. Constructor and decoding enforce the same rules. Live adapter failures retain their resource-bearing underlying error separately from its persisted description; conversion into diagnostic text must not discard unresolved cleanup ownership. Generated artifacts belong to the producing adapter and are retained on later failure.
 Runtime checks exact returned corner and actual producer identifier/kind against the executing backend. An expected producer must match the returned identity for every backend. Multi-corner execution cannot mix invocation modes or in-process entry points even when producer/image digests match.
 `hasSameImplementation` applies this same identity to retry and stored lineage:
 producer, binary digest, invocation mode and in-process entry point must agree.
@@ -34,6 +34,8 @@ External arguments/working paths and environment observations remain retained
 provenance rather than implementation identity; request environment overrides
 are independently included in the canonical input comparison.
 Canonical validation warnings are derived at construction and recomputed on decode. Runtime reuses this admission evidence over the immutable graph instead of repeating the same full validation. The derived cache is omitted from encoding, equality and hashing.
+
+`PEXPhysicalTopology` is optional typed raw-extraction evidence: open-net, short-component and uncontacted-terminal counts are nonnegative and constructor/decoder validated. Native canonical results require this summary in public run composition. Its satisfied value means no captured topology violations; it never establishes source identity or physical qualification. A direct adapter may return an admitted diagnostic graph with violations. Public native run success requires both complete outputs and satisfied physical topology. Failed-run reload does not expose diagnostic IR as successful output.
 
 ## Runtime Flows
 Adapter measures identity, performs its work, constructs an admitted payload, and publishes result. Runtime captures generated evidence, parses only raw output, consumes canonical output directly, verifies exact corner and graph, then persists through the same run lifecycle. Failure carries available artifacts and observed identity independently of success payload.

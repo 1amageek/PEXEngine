@@ -49,9 +49,14 @@ extension NativePEXCalculation {
                 guard let other = nodeIDs[neighbor] else { continue }
                 guard mesh.cells[neighbor]?.componentIndex == mesh.cells[key]?.componentIndex else { throw .inconsistentSnapshot }
                 // The dimensionless ratio is computed before SI scaling, avoiding needless underflow.
-                let ratio = neighbor.x != key.x ? Double(width(key) + width(neighbor)) / (2 * Double(height(key)))
-                                               : Double(height(key) + height(neighbor)) / (2 * Double(width(key)))
-                try addResistance(id, other, sheetValues[key.layer]! * ratio, kind: .sheet)
+                let resistance: Double
+                do {
+                    resistance = try NativeSheetResistanceOperators.sharedFace(sheetOhms: sheetValues[key.layer]!,
+                        normalSpanA: neighbor.x != key.x ? width(key) : height(key),
+                        normalSpanB: neighbor.x != key.x ? width(neighbor) : height(neighbor),
+                        faceLength: neighbor.x != key.x ? height(key) : width(key))
+                } catch { throw .numericFailure }
+                try addResistance(id, other, resistance, kind: .sheet)
             }
         }
     }

@@ -1,0 +1,37 @@
+{
+  "openPDKsRevision": "c6d73a35f524070e85faff4a6a9eef49553ebc2b",
+  "producerHistory": "https://github.com/fossi-foundation/open-pdks/commit/5becac138d0ab0c69c7e8b7a00a96f20474512ba",
+  "scope": "Original calibre-family rules only. These fixtures do not qualify Native extraction or verify LEF resistance intake.",
+  "sources": [
+    {
+      "corner": "nom",
+      "rulesByteCount": 45409,
+      "rulesFile": "rules.openrcx.sky130A.nom.calibre",
+      "rulesOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.tech/openlane/rules.openrcx.sky130A.nom.calibre",
+      "rulesSHA256": "0b0678968a3d8665ee1ac882df2b0eb31e3896ac05130b9de6bd67ef2027c757",
+      "technologyLEFByteCount": 18167,
+      "technologyLEFOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__nom.tlef",
+      "technologyLEFSHA256": "5de46c6f7c2cf82599b93d30a6459465f770f63c85b36182c672782219938519"
+    },
+    {
+      "corner": "min",
+      "rulesByteCount": 45435,
+      "rulesFile": "rules.openrcx.sky130A.min.calibre",
+      "rulesOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.tech/openlane/rules.openrcx.sky130A.min.calibre",
+      "rulesSHA256": "b11177d33b33878c080a0c1db6c6dd022e89c64ebf21cc87e0ac4d9c68378a63",
+      "technologyLEFByteCount": 18163,
+      "technologyLEFOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__min.tlef",
+      "technologyLEFSHA256": "19aaf83af18d588cca915eff29cc656e75cc0614b67fd3730d097a47362f5363"
+    },
+    {
+      "corner": "max",
+      "rulesByteCount": 45404,
+      "rulesFile": "rules.openrcx.sky130A.max.calibre",
+      "rulesOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.tech/openlane/rules.openrcx.sky130A.max.calibre",
+      "rulesSHA256": "008ce6e4867fa9a68b16dbc50df596967d503f6c29b317354689f61f4c249220",
+      "technologyLEFByteCount": 18166,
+      "technologyLEFOriginalPath": "/Users/1amageek/.volare/volare/sky130/versions/c6d73a35f524070e85faff4a6a9eef49553ebc2b/sky130A/libs.ref/sky130_fd_sc_hd/techlef/sky130_fd_sc_hd__max.tlef",
+      "technologyLEFSHA256": "14f7e9f499076bd9b4c0f307bff8c9361ef0bfbb95a432464787b2d66a3e5c94"
+    }
+  ]
+}

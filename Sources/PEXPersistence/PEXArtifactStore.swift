@@ -26,7 +26,7 @@ public struct PEXArtifactStore: Sendable {
     public func saveManifest(_ manifest: PEXArtifactManifest) throws {
         let data = try Self.encodeManifest(manifest)
         do {
-            try data.write(to: workspace.manifestURL)
+            try data.write(to: workspace.manifestURL, options: .atomic)
         } catch {
             throw PEXError.persistenceFailed("Failed to write artifact manifest to \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
         }
@@ -35,7 +35,7 @@ public struct PEXArtifactStore: Sendable {
     public func loadManifest() throws -> PEXArtifactManifest {
         let data: Data
         do {
-            data = try Data(contentsOf: workspace.manifestURL)
+            data = try PEXBoundedInputReader().read(workspace.manifestURL)
         } catch {
             throw PEXError.persistenceFailed("Failed to read artifact manifest from \(workspace.manifestURL.path(percentEncoded: false))", underlying: error)
         }
@@ -64,7 +64,7 @@ public struct PEXArtifactStore: Sendable {
             throw PEXError.persistenceFailed("Failed to encode request", underlying: error)
         }
         do {
-            try data.write(to: workspace.requestURL)
+            try data.write(to: workspace.requestURL, options: .atomic)
         } catch {
             throw PEXError.persistenceFailed("Failed to write request", underlying: error)
         }
@@ -74,7 +74,7 @@ public struct PEXArtifactStore: Sendable {
         let data = try serializer.encode(ir)
         let url = workspace.cornerIRURL(cornerID)
         do {
-            try data.write(to: url)
+            try data.write(to: url, options: .atomic)
         } catch {
             throw PEXError.persistenceFailed("Failed to write IR for corner \(cornerID)", underlying: error)
         }
@@ -88,7 +88,7 @@ public struct PEXArtifactStore: Sendable {
     public func saveReport(_ report: String) throws {
         let data = Data(report.utf8)
         do {
-            try data.write(to: workspace.reportURL)
+            try data.write(to: workspace.reportURL, options: .atomic)
         } catch {
             throw PEXError.persistenceFailed("Failed to write report", underlying: error)
         }
@@ -113,7 +113,7 @@ public struct PEXArtifactStore: Sendable {
         let requestURL = try resolver.validatedURL(for: requestRecord)
         let requestData: Data
         do {
-            requestData = try Data(contentsOf: requestURL)
+            requestData = try PEXBoundedInputReader().read(requestURL)
         } catch {
             throw PEXError.persistenceFailed("Failed to read captured request artifact", underlying: error)
         }

@@ -29,6 +29,7 @@ and independent physical process qualification remain separate gaps.
 | [PEXRuntime](Sources/PEXRuntime/DESIGN.md) | child | Shared bounded native reference loading, typed config mapping, captured execution and output dispatch | Config intake and run lifecycle | Referenced URLs retain Core meaning; physical process qualification remains independent |
 | [PEXPersistence](Sources/PEXPersistence/DESIGN.md) | child | Immutable input/output capture and reload | Run artifact owner | Integrity does not qualify process physics |
 | [CircuiteFoundation](../CircuiteFoundation/DESIGN.md) | depends on | ArtifactID, evidence, provenance | Shared content identity | Identity is separate from availability |
+| [LogicDesign codec](../LogicDesign/Sources/LogicDesignSerialization/Codec/DESIGN.md) | depends on | StructuralVerilogSourceDecoding | Exact flat structural source facts for routed DEF joining | No canonical functional sidecar or pin-role inference |
 | [ToolQualification](../ToolQualification/DESIGN.md) | used by | Raw measured observations | Independent trust decision | PEX does not self-qualify a process |
 
 ## Purpose and Scope
@@ -58,7 +59,9 @@ flowchart TD
     Report["Extractor corpus report"] --> Observations["Raw implementation and correlation observations"]
     Observations --> ToolQualification["ToolQualification trust decision"]
 
-    DEF["Routed DEF + exact LEF/rule bytes"] --> OpenRCX["OpenROAD / OpenRCX process"]
+    DEF["Routed DEF + exact LEF/rule bytes"] --> RoutedNative["Native source-bound routed calculation"]
+    RoutedNative --> Canonical
+    DEF --> OpenRCX["OpenROAD / OpenRCX process"]
     OpenRCX --> RawEvidence["Tcl + version logs + execution logs + SPEF"]
     RawEvidence --> Parse
 ```
@@ -92,7 +95,7 @@ and exact source-binding requirements.
 | Geometry to numerical state | ConductorCapture preserves admitted orthogonal paths; PEXNative exposes numerical operators, explicit electrode contacts and exact scoped canonical projection | [ConductorCapture](../semiconductor-layout/Sources/LayoutVerify/ConductorCapture/DESIGN.md) owns exact footprint coordinates and their units; [PEXNative](Sources/PEXNative/DESIGN.md) composes its lower contracts into a retained canonical graph, separately from backend execution | Analytical path coverage and terminal resistance; pin regions and net labels do not short islands; bounded failure/cancellation |
 | Backend to canonical result | [BackendExecution](Sources/PEXCore/BackendExecution/DESIGN.md) admits raw files or a validated immutable canonical graph; [PEXRuntime](Sources/PEXRuntime/DESIGN.md) dispatches both through persistence and retains verified evidence on failure; defaults register native/Magic/OpenRCX | [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) implements explicit native execution with measured backing-image identity and retained physical topology; default API/CLI registration, required-output failure and captured retry are verified on macOS CPU | Actual GDS/OASIS public API tests prove analytical RC, measured identity/reload and failure/cancellation; actual executable CLI/captured retry and standard-profile failure retention are verified |
 | Input identity to resume | [NativeInput](Sources/PEXCore/NativeInput/DESIGN.md) supplies explicit configuration/calibration locations and budgets; [NativeInputCapture](Sources/PEXPersistence/NativeInputCapture/DESIGN.md) retains bounded bytes and exact content IDs; Runtime checks selected model coverage | [InputPreparation](Sources/PEXNative/InputPreparation/DESIGN.md) admits configuration; NativeBackend consumes captured standard/configuration/calibration bytes and checks direct-call calibration content too; capture does not qualify calibration physics | Public run/retry/reload fixtures verify source mutation/removal, required captured-input missing/tamper rejection and location-independent content identity |
-| Source to physical terminals | `PEXSourceConnectivityChecker` permits leaf-name aliases and reports source-only nodes without failing | Source binding must preserve exact occurrence and terminal identities; name coverage alone cannot establish physical connectivity | Repeated leaf names, missing bindings, opens and shorts cannot yield a proven same-design result |
+| Source to physical terminals | `PEXSourceConnectivityChecker` selects exact parsed root/occurrence terminals; native public admission also consumes typed physical topology | Source binding preserves exact occurrence and required root terminal identities; direct diagnostic extraction is separate from public topology-valid run success | Repeated leaf names, missing bindings, opens and shorts cannot yield a proven same-design result |
 
 Each lower contract is designed and behaviorally verified before its composing
 contract is finalized. The existing source-connectivity report is not proof of
@@ -189,6 +192,40 @@ explicit backend discovery context; capturing declared files does not qualify
 undeclared transitive includes or arbitrary files read by an external tool.
 
 ## Verification and Change Impact
+
+### Public source prerequisite adoption
+
+The source prerequisite retains the complete implementation, tests, resources and
+file modes of `e523c45599c03b971a2643e186ed62994211ffeb`. Its sole Git parent is
+the public `6fdd2e1a6a8183e5e1196455bc8741063111206e`. The later SPICE serialization
+changes in `82c3520eb7ed88fc964f62b5b167543416a21f03` are outside this adoption.
+MIT and retained OpenROAD BSD notices remain unchanged.
+
+| Dependency | Public immutable revision | Contract used |
+|---|---|---|
+| CircuiteFoundation | `5f132c58209123433e0e479e1ea61096e46061ba` | Engine, artifacts, evidence and content identity |
+| SignoffToolSupport | `e15ea6cd60ca1957297aafbba839e51a478d735e` | Bounded process execution and cancellation |
+| LogicDesign | `5e1d3eec838a0add91c617413682d186a5182335` | Owned structural Verilog decoding and source identity |
+| swift-mask-data | `67410f834bdfa8a098c2ec0bfe3675210f658277` | Standard DEF/LEF and exact geometry/units |
+| semiconductor-layout | `8c66b7bd6b44cab884b75ded9788a4ec548a1919` | Original conductor capture, occurrence, pin and electrical-context facts |
+
+The imported LogicDesign and mask-data sources, Signoff sources, and Layout
+sources/tests are identical to their selected original dependency revisions.
+CircuiteFoundation changes are confined to its unused FileSystem product; the
+Engine/artifact/evidence contracts consumed here are unchanged. Fresh public-only
+resolution and affected native API tests establish the compiled composition.
+Existing source-binding, electrode, selected-contact and routed
+preparation/runtime fixtures own that evidence, including original opens/shorts,
+typed admission refusal, cumulative quotas, cancellation and captured retry.
+The adoption changes no extraction law, source format, schema, default limit or
+physical qualification. The fixed Swift 6.4 release public graph passed the
+selected `PEXNativeTests` and `PEXAdaptersTests` builds and 39 focused test
+declarations (45 parameter cases), with no skips. The first all-product discovery
+hit its 360-second build ceiling; the preserved cache then supported bounded
+product-specific continuation. This is not cold-build performance evidence.
+No CLI execution or new process calibration is inferred from those tests.
+
+Exact dependency-floor alignment changes Foundation and Layout selectors, including Layout's transitive Mask revision, while retaining PEX source/tests, native geometry and RC profiles, configuration and artifact schemas. The causal compatibility boundary reuses the existing [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) public GDSII/OASIS analytical RC/reload, lower-budget no-IR refusal and actual same-executable captured retry proofs. Prior source-grid, unsupported-geometry and unchanged behavior evidence remains valid; this alignment adds no physical qualification.
 
 Electrical model admission changes affect inline/JSON resolution, direct native model
 selection and request identity. The local suites in the Core child establish those

@@ -7,6 +7,7 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
     public struct InputPaths: Sendable, Codable, Hashable {
         public var layout: String
         public var netlist: String
+        public var sourceNetlistFormat: NetlistFormat
         public var technology: String
         public var technologyByCorner: [String: String]
         public var nativeInput: String?
@@ -14,12 +15,14 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         public init(
             layout: String = "top.oas",
             netlist: String = "top.cir",
+            sourceNetlistFormat: NetlistFormat = .spice,
             technology: String = "tech.json",
             technologyByCorner: [String: String] = [:],
             nativeInput: String? = nil
         ) {
             self.layout = layout
             self.netlist = netlist
+            self.sourceNetlistFormat = sourceNetlistFormat
             self.technology = technology
             self.technologyByCorner = technologyByCorner
             self.nativeInput = nativeInput
@@ -28,6 +31,7 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
         private enum CodingKeys: String, CodingKey {
             case layout
             case netlist
+            case sourceNetlistFormat
             case technology
             case technologyByCorner
             case nativeInput
@@ -38,6 +42,7 @@ public struct PEXProjectConfig: Sendable, Codable, Hashable {
             self.init(
                 layout: try container.decode(String.self, forKey: .layout),
                 netlist: try container.decode(String.self, forKey: .netlist),
+                sourceNetlistFormat: try container.decodeIfPresent(NetlistFormat.self, forKey: .sourceNetlistFormat) ?? .spice,
                 technology: try container.decode(String.self, forKey: .technology),
                 technologyByCorner: try container.decode(
                     [String: String].self,

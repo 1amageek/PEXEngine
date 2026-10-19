@@ -175,6 +175,7 @@ private struct PEXCanonicalBackendSelection: Sendable, Codable, Hashable {
 }
 
 private struct PEXCanonicalNativeInput: Sendable, Codable, Hashable {
+    let configurationKind: PEXNativeConfigurationKind?
     let calibrationArtifacts: [ArtifactID]
     let maximumConfigurationBytes: Int
     let maximumCalibrationBytes: Int
@@ -182,6 +183,8 @@ private struct PEXCanonicalNativeInput: Sendable, Codable, Hashable {
     let maximumCalibrationArtifacts: Int
 
     init(_ input: PEXNativeInputReference) {
+        // Preserve the historical mask projection; only the additive routed law contributes a new field.
+        configurationKind = input.configurationKind == .maskGeometry ? nil : input.configurationKind
         calibrationArtifacts = input.calibrations.sorted { $0.recordID < $1.recordID }.map(\.artifactID)
         maximumConfigurationBytes = input.maximumConfigurationBytes
         maximumCalibrationBytes = input.maximumCalibrationBytes

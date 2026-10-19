@@ -24,7 +24,7 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
 
     public init(
         toolchain: OpenRCXToolchain? = OpenRCXToolchain.locate(),
-        processRunner: any TimedProcessRunning = TimedProcessRunner()
+        processRunner: any TimedProcessRunning = TimedProcessRunner(maximumOutputByteCount: 64 * 1024 * 1024, cleanupTimeoutSeconds: 5)
     ) {
         self.configuredToolchain = toolchain
         self.processRunner = processRunner
@@ -352,10 +352,14 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
                 overrides: context.backendSelection.environmentOverrides
             )
             process.currentDirectoryURL = context.rawOutputDirectory
-            result = try await processRunner.run(
-                process: process,
+            result = try await PEXProcessExecution.run(
+                runner: processRunner, process: process,
                 cancellationCheck: context.cancellationCheck
             )
+        } catch let error as PEXProcessCleanupFailure {
+            throw PEXAdapterExecutionFailure(message: "OpenRCX cleanup remains pending: \(error.retryFailure)",
+                stage: .backendExecution, cornerID: context.corner.id, failureKind: .backendExecutionFailed,
+                generatedArtifacts: retainedArtifacts, underlying: error)
         } catch let error as TimedProcessError {
             let output = processOutput(from: error)
             let artifacts = try retainedProcessOutput(
@@ -647,10 +651,14 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         process.environment = environment
         process.currentDirectoryURL = context.rawOutputDirectory
         do {
-            return try await processRunner.run(
-                process: process,
+            return try await PEXProcessExecution.run(
+                runner: processRunner, process: process,
                 cancellationCheck: context.cancellationCheck
             )
+        } catch let error as PEXProcessCleanupFailure {
+            throw PEXAdapterExecutionFailure(message: "OpenRCX cleanup remains pending: \(error.retryFailure)",
+                stage: .backendExecution, cornerID: context.corner.id, failureKind: .backendExecutionFailed,
+                generatedArtifacts: retainedArtifacts, underlying: error)
         } catch let error as TimedProcessError {
             let output = processOutput(from: error)
             let processArtifacts = try retainedProcessOutput(
@@ -733,20 +741,18 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
         from error: TimedProcessError
     ) -> (standardOutput: String, standardError: String) {
         switch error {
-        case .cancellationCheckFailed(_, _, let standardOutput, let standardError),
-             .cancelled(_, let standardOutput, let standardError),
-             .timedOut(_, _, let standardOutput, let standardError):
-            (standardOutput, standardError)
+        case .executionFailed(let failure):
+            (failure.standardOutput, failure.standardError)
         case .invalidConfiguration, .launchFailed:
             ("", "")
         }
     }
 
     private func timedProcessFailureKind(_ error: TimedProcessError) -> PEXErrorKind {
-        if case .cancelled = error {
+        if case .executionFailed(let failure) = error, failure.cause == .cancelled {
             return .cancelled
         }
-        if case .timedOut = error {
+        if case .executionFailed(let failure) = error, case .timedOut = failure.cause {
             return .timedOut
         }
         return .backendExecutionFailed
@@ -754,10 +760,11 @@ public struct OpenRCXPEXAdapter: PEXExtracting, PEXAdapterReadinessProviding {
 
     private func timedProcessMessage(_ error: TimedProcessError, operation: String) -> String {
         switch error {
-        case .cancelled:
+        case .executionFailed(let failure) where failure.cause == .cancelled:
             "\(operation) was cancelled."
-        case .timedOut:
-            "\(operation) timed out."
+        case .executionFailed(let failure):
+            if case .timedOut = failure.cause { "\(operation) timed out." }
+            else { "\(operation) failed: \(failure.cause)." }
         default:
             "\(operation) failed."
         }

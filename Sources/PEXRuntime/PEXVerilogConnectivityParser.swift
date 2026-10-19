@@ -6,7 +6,7 @@ public struct PEXVerilogConnectivityParser: Sendable {
     public init() {}
 
     public func parse(_ source: String) -> PEXVerilogConnectivityParserResult {
-        let tokens = tokenize(stripComments(source))
+        let tokens = tokenize(stripComments(source)).tokens
         var sourceNodes: Set<String> = []
         var moduleNames: Set<String> = []
         var parsedPortCount = 0
@@ -127,7 +127,8 @@ public struct PEXVerilogConnectivityParser: Sendable {
         return nil
     }
 
-    private func isConnectivityIdentifier(_ token: String) -> Bool {
+    func isConnectivityIdentifier(_ token: String) -> Bool {
+        if token.hasPrefix("\\"), token.count > 1 { return true }
         guard !token.isEmpty,
               token.first?.isLetter == true || token.first == "_" || token.first == "$" else {
             return false
@@ -148,7 +149,7 @@ public struct PEXVerilogConnectivityParser: Sendable {
         return !keywords.contains(token.lowercased())
     }
 
-    private func stripComments(_ source: String) -> String {
+    func stripComments(_ source: String) -> String {
         var result = String()
         var index = source.startIndex
         var inLineComment = false
@@ -157,6 +158,12 @@ public struct PEXVerilogConnectivityParser: Sendable {
             let next = source.index(after: index)
             let character = source[index]
             let nextCharacter = next < source.endIndex ? source[next] : "\0"
+            if !inLineComment, !inBlockComment, character == "\\" {
+                while index < source.endIndex, !source[index].isWhitespace {
+                    result.append(source[index]); index = source.index(after: index)
+                }
+                continue
+            }
             if inLineComment {
                 if character.isNewline {
                     inLineComment = false
@@ -183,26 +190,34 @@ public struct PEXVerilogConnectivityParser: Sendable {
         return result
     }
 
-    private func tokenize(_ source: String) -> [String] {
+    func tokenize(_ source: String, maximumTokens: Int = .max) -> (tokens: [String], complete: Bool) {
         var tokens: [String] = []
         var current = String()
+        var escaped = false
         func flush() {
-            guard !current.isEmpty else { return }
+            guard !current.isEmpty, tokens.count < maximumTokens else { return }
             tokens.append(current)
             current.removeAll(keepingCapacity: true)
         }
         for character in source {
+            guard tokens.count < maximumTokens || character.isWhitespace else { return (tokens, false) }
+            if escaped {
+                if character.isWhitespace { flush(); escaped = false }
+                else { current.append(character) }
+                continue
+            }
+            if character == "\\" { flush(); current.append(character); escaped = true; continue }
             if character.isLetter || character.isNumber || character == "_" || character == "$" || character == "\\" {
                 current.append(character)
             } else {
                 flush()
                 if "()[]{};,:.#@".contains(character) {
+                    guard tokens.count < maximumTokens else { return (tokens, false) }
                     tokens.append(String(character))
                 }
             }
         }
         flush()
-        return tokens.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\\")) }
-            .filter { !$0.isEmpty }
+        return (tokens.filter { !$0.isEmpty }, true)
     }
 }

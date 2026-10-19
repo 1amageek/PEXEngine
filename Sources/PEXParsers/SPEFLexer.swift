@@ -103,9 +103,7 @@ public struct SPEFLexer: Sendable {
 
             // Identifier (everything else that's not whitespace)
             if ch.isLetter || ch == "_" || ch == "\\" || ch == "$" || ch == "#" {
-                let name = consumeWhile { c in
-                    c.isLetter || c.isNumber || c == "_" || c == "." || c == "\\" || c == "[" || c == "]" || c == "/" || c == ":" || c == "$" || c == "#"
-                }
+                let name = consumeIdentifier()
                 tokens.append(SPEFToken.Located(token: .identifier(name), location: loc))
                 continue
             }
@@ -119,6 +117,31 @@ public struct SPEFLexer: Sendable {
     }
 
     // MARK: - Helper methods
+
+    private mutating func consumeIdentifier() -> String {
+        var name = ""
+        while position < characters.count {
+            let character = characters[position]
+            if character == "\\" && peek(1) == "-" {
+                name.append("-")
+                advance()
+                advance()
+            } else if character == "-", let next = peek(1), next.isNumber {
+                // SPEF identifiers may contain signed integer suffixes.
+                name.append(character)
+                advance()
+            } else if character.isLetter || character.isNumber || character == "_"
+                || character == "." || character == "\\" || character == "["
+                || character == "]" || character == "/" || character == ":"
+                || character == "$" || character == "#" {
+                name.append(character)
+                advance()
+            } else {
+                break
+            }
+        }
+        return name
+    }
 
     private func currentLocation() -> SPEFSourceLocation {
         SPEFSourceLocation(file: fileName, line: line, column: column)

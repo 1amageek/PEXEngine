@@ -567,3 +567,15 @@ files never masquerade as integrity-verifiable artifacts.
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
+
+### Routed DEF extraction inputs
+
+For explicitly routed Native input, select `configurationKind: routedOpenRCXV1` in
+the native reference and supply `--source-netlist-format verilog` to `pexengine
+extract`. Configuration mode uses `inputs.sourceNetlistFormat: verilog`; the CLI
+flag overrides that declaration. Omitting both retains SPICE compatibility. The
+language is never inferred from a filename. Saved DEF and structural Verilog must
+refer to the same actual candidate, including added physical instances. Routed
+source selections explicitly cover each requested RC corner and bind original
+rules plus full technology and cell LEF bytes. Reference loading alone does not
+qualify extraction or bypass source, numerical, standard-output or STA gates.

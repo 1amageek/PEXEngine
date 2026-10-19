@@ -1,6 +1,8 @@
 import Foundation
 
 public struct SPEFWriterOptions: Sendable, Hashable {
+    public enum TerminalTokenProfile: Sendable, Hashable { case generatedScopedIdentity, canonical }
+    public let terminalTokenProfile: TerminalTokenProfile
     public let designName: String
     public let date: String
     public let vendor: String
@@ -24,7 +26,8 @@ public struct SPEFWriterOptions: Sendable, Hashable {
         busDelimiterOpen: String = "[",
         busDelimiterClose: String = "]",
         capacitanceUnit: SPEFCapacitanceUnit = .picoFarad,
-        resistanceUnit: SPEFResistanceUnit = .ohm
+        resistanceUnit: SPEFResistanceUnit = .ohm,
+        terminalTokenProfile: TerminalTokenProfile = .generatedScopedIdentity
     ) {
         self.designName = designName
         self.date = date
@@ -37,5 +40,6 @@ public struct SPEFWriterOptions: Sendable, Hashable {
         self.busDelimiterClose = busDelimiterClose
         self.capacitanceUnit = capacitanceUnit
         self.resistanceUnit = resistanceUnit
+        self.terminalTokenProfile = terminalTokenProfile
     }
 }

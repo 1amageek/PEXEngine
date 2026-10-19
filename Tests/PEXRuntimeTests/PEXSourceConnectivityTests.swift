@@ -10,7 +10,7 @@ import PEXTestSupport
 
 @Suite("PEX source connectivity")
 struct PEXSourceConnectivityTests {
-    @Test func checkerMatchesExtractedPinAliasesAgainstSpiceNodes() throws {
+    @Test func checkerMatchesExactSpiceRootTerminals() throws {
         let directory = temporaryDirectory("connectivity-pass")
         defer { remove(directory) }
         let sourceURL = directory.appending(path: "source.cir")
@@ -21,6 +21,8 @@ struct PEXSourceConnectivityTests {
         C1 out 0 1p
         XU1 in out vdd cell
         .ends TOP
+        .subckt cell in out vdd
+        .ends cell
         """.utf8).write(to: sourceURL)
 
         let ir = ParasiticIR(
@@ -44,7 +46,7 @@ struct PEXSourceConnectivityTests {
                 ),
                 ParasiticNet(
                     name: NetName("vdd"),
-                    nodes: [ParasiticNode(name: NodeName("XU1:vdd"), kind: .pin, instancePath: InstancePath("XU1"), coordinate: nil)],
+                    nodes: [ParasiticNode(name: NodeName("vdd"), kind: .pin, instancePath: nil, coordinate: nil)],
                     totalGroundCapF: 0,
                     totalCouplingCapF: 0,
                     totalResistanceOhm: 0
@@ -113,6 +115,8 @@ struct PEXSourceConnectivityTests {
         XU1 in out
         + vdd cell
         .ends TOP
+        .subckt cell in out vdd
+        .ends cell
         """.utf8).write(to: sourceURL)
         let ir = ParasiticIR(
             version: ParasiticIR.currentVersion,
@@ -155,7 +159,7 @@ struct PEXSourceConnectivityTests {
             nets: [
                 ParasiticNet(name: NetName("in"), nodes: [ParasiticNode(name: NodeName("in"), kind: .pin, instancePath: nil, coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
                 ParasiticNet(name: NetName("out"), nodes: [ParasiticNode(name: NodeName("out"), kind: .pin, instancePath: nil, coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
-                ParasiticNet(name: NetName("vdd"), nodes: [ParasiticNode(name: NodeName("u1:vdd"), kind: .pin, instancePath: InstancePath("u1"), coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
+                ParasiticNet(name: NetName("vdd"), nodes: [ParasiticNode(name: NodeName("vdd"), kind: .pin, instancePath: nil, coordinate: nil)], totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0),
             ],
             elements: [],
             metadata: [:]
@@ -241,6 +245,83 @@ struct PEXSourceConnectivityTests {
         let report = try JSONDecoder().decode(PEXSourceConnectivityReport.self, from: Data(contentsOf: reportURL))
         #expect(report.status == .failed)
         #expect(result.extractorRun?.cornerResults.first?.sourceConnectivityArtifactID == record.id.rawValue)
+    }
+
+    @Test func repeatedLeafCannotProveTheWrongSourceOccurrence() throws {
+        let root = temporaryDirectory("wrong-occurrence")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.cir")
+        try Data(".subckt TOP A\nXgood A CHILD\n.ends TOP\n.subckt CHILD A\n.ends CHILD\n".utf8).write(to: source)
+        let ir = pinGraph(["A", "Xwrong:A"])
+        let report = try PEXSourceConnectivityChecker().check(sourceNetlistURL: source, sourceNetlistFormat: .spice, ir: ir)
+        #expect(!report.isSatisfied)
+    }
+
+    @Test func missingRequiredRootTerminalCannotBePassed() throws {
+        let root = temporaryDirectory("missing-root")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.cir")
+        try Data(".subckt TOP A B\nR1 A internal 1k\n.ends TOP\n".utf8).write(to: source)
+        let report = try PEXSourceConnectivityChecker().check(sourceNetlistURL: source, sourceNetlistFormat: .spice, ir: pinGraph(["A"]))
+        #expect(!report.isSatisfied)
+    }
+
+    @Test func selectedTopDoesNotBorrowUnrelatedCellTerminals() throws {
+        let root = temporaryDirectory("selected-top")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.cir")
+        try Data(".subckt TOP A\n.ends TOP\n.subckt UNRELATED B\n.ends UNRELATED\n".utf8).write(to: source)
+        let report = try PEXSourceConnectivityChecker().check(sourceNetlistURL: source, sourceNetlistFormat: .spice,
+            ir: pinGraph(["A", "B"]), topCell: "TOP")
+        #expect(report.status == .failed && report.unmatchedExtractedPinNodes == ["B"])
+    }
+
+    @Test func exactNestedTerminalAndInternalSourceNodesRemainSupported() throws {
+        let root = temporaryDirectory("exact-nested")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.cir")
+        try Data(".subckt TOP A\nR1 A internal 1k\nXgood A CHILD\n.ends TOP\n.subckt CHILD P\n.ends CHILD\n".utf8).write(to: source)
+        let report = try PEXSourceConnectivityChecker().check(sourceNetlistURL: source, sourceNetlistFormat: .spice,
+            ir: pinGraph(["A", "Xgood:P"]), topCell: "top")
+        #expect(report.isSatisfied && report.sourceOnlyNodes.isEmpty)
+    }
+
+    @Test func verilogIdentifiersKeepCaseAndNamedOccurrenceIdentity() throws {
+        let root = temporaryDirectory("verilog-case")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.v")
+        try Data("module TOP(input A); cell #(.WIDTH(1)) good (.P(A)); endmodule".utf8).write(to: source)
+        let checker = PEXSourceConnectivityChecker()
+        #expect(try checker.check(sourceNetlistURL: source, sourceNetlistFormat: .verilog,
+            ir: pinGraph(["A", "good:P"]), topCell: "TOP").isSatisfied)
+        for wrong in ["good:p", "bad:P", "a", "P", "cell", "good"] {
+            #expect(try !checker.check(sourceNetlistURL: source, sourceNetlistFormat: .verilog,
+                ir: pinGraph(["A", wrong]), topCell: "TOP").isSatisfied)
+        }
+    }
+
+    @Test func escapedVerilogSourceIdentitiesDoNotBecomeLeafAliases() throws {
+        let root = temporaryDirectory("escaped-verilog")
+        defer { remove(root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appending(path: "source.v")
+        try Data("module TOP(input \\wire , output \\A:B ); endmodule".utf8).write(to: source)
+        let checker = PEXSourceConnectivityChecker()
+        #expect(try checker.check(sourceNetlistURL: source, sourceNetlistFormat: .verilog,
+            ir: pinGraph(["wire", "A:B"]), topCell: "TOP").isSatisfied)
+        #expect(try !checker.check(sourceNetlistURL: source, sourceNetlistFormat: .verilog,
+            ir: pinGraph(["wire", "B"]), topCell: "TOP").isSatisfied)
+    }
+
+    private func pinGraph(_ names: [String]) -> ParasiticIR {
+        .init(version: ParasiticIR.currentVersion, cornerID: "tt", units: .canonical,
+            nets: names.map { .init(name: NetName($0), nodes: [.init(name: NodeName($0), kind: .pin, instancePath: nil, coordinate: nil)],
+                totalGroundCapF: 0, totalCouplingCapF: 0, totalResistanceOhm: 0) }, elements: [], metadata: [:])
     }
 
     private func temporaryDirectory(_ name: String) -> URL {

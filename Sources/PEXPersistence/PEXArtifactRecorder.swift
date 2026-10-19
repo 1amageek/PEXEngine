@@ -14,19 +14,20 @@ public struct PEXArtifactRecorder: Sendable {
         url sourceURL: URL,
         kind: PEXArtifactKind,
         id: String? = nil,
-        destinationFilename: String? = nil
+        destinationFilename: String? = nil,
+        maximumBytes: Int = PEXBoundedInputReader.defaultMaximumBytes
     ) throws -> PEXArtifactRecord {
         let destination = workspace.inputsDirectory.appending(
             path: sanitizedFileName(destinationFilename ?? sourceURL.lastPathComponent)
         )
-        let capturedURL = try copy(sourceURL, to: destination)
+        let capturedURL = try copy(sourceURL, to: destination, maximumBytes: maximumBytes)
         return try availableRecord(
             id: id ?? "input-\(kind.rawValue)",
             kind: kind,
             stage: .inputValidation,
             cornerID: nil,
             url: capturedURL,
-            provenance: PEXArtifactProvenance(sourcePath: sourceURL.path(percentEncoded: false))
+            provenance: PEXArtifactProvenance(sourcePath: sourceURL.path(percentEncoded: false)), maximumBytes: maximumBytes
         )
     }
 
@@ -309,7 +310,7 @@ public struct PEXArtifactRecorder: Sendable {
         let data: Data
         do {
             if let maximumBytes { data = try PEXBoundedInputReader().read(url, maximumBytes: maximumBytes) }
-            else { data = try Data(contentsOf: url) }
+            else { data = try PEXBoundedInputReader().read(url) }
         }
         catch { throw PEXError.persistenceFailed("Captured input is unreadable: \(record.id)", underlying: error) }
         guard reference.digest.algorithm == .sha256,
@@ -425,7 +426,7 @@ public struct PEXArtifactRecorder: Sendable {
         let data: Data
         do {
             if let maximumBytes { data = try PEXBoundedInputReader().read(url, maximumBytes: maximumBytes) }
-            else { data = try Data(contentsOf: url) }
+            else { data = try PEXBoundedInputReader().read(url) }
         } catch {
             throw PEXError.persistenceFailed("Failed to read artifact \(url.path(percentEncoded: false))", underlying: error)
         }
@@ -535,7 +536,7 @@ public struct PEXArtifactRecorder: Sendable {
         return "\(kind.rawValue)-\(corner)\(sanitizedIdentifier(stem))"
     }
 
-    private func copy(_ sourceURL: URL, to destinationURL: URL) throws -> URL {
+    private func copy(_ sourceURL: URL, to destinationURL: URL, maximumBytes: Int = PEXBoundedInputReader.defaultMaximumBytes) throws -> URL {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: sourceURL.path(percentEncoded: false)) else {
             throw PEXError.persistenceFailed("Artifact source file does not exist: \(sourceURL.path(percentEncoded: false))")
@@ -543,7 +544,7 @@ public struct PEXArtifactRecorder: Sendable {
         do {
             try fileManager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             if sourceURL.standardizedFileURL != destinationURL.standardizedFileURL {
-                let sourceData = try Data(contentsOf: sourceURL)
+                let sourceData = try PEXBoundedInputReader().read(sourceURL, maximumBytes: maximumBytes)
                 let destination = try immutableDestinationURL(
                     requestedURL: destinationURL,
                     sourceData: sourceData
@@ -568,7 +569,7 @@ public struct PEXArtifactRecorder: Sendable {
             return requestedURL
         }
         try ensureExistingFileTargetIsInsideRunDirectory(requestedURL)
-        let requestedData = try Data(contentsOf: requestedURL)
+        let requestedData = try PEXBoundedInputReader().read(requestedURL)
         if Self.sha256(data: requestedData) == Self.sha256(data: sourceData) {
             return requestedURL
         }
@@ -584,7 +585,7 @@ public struct PEXArtifactRecorder: Sendable {
         var suffix = 2
         while fileManager.fileExists(atPath: candidate.path(percentEncoded: false)) {
             try ensureExistingFileTargetIsInsideRunDirectory(candidate)
-            let candidateData = try Data(contentsOf: candidate)
+            let candidateData = try PEXBoundedInputReader().read(candidate)
             if Self.sha256(data: candidateData) == Self.sha256(data: sourceData) {
                 return candidate
             }

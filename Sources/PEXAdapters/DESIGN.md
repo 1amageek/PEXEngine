@@ -1,7 +1,7 @@
 # PEXAdapters
 
 ## Purpose and Scope
-Host backend implementations of PEXExtracting. Parent: [PEXEngine](../../DESIGN.md). Child: [NativeBackend](NativeBackend/DESIGN.md). Existing Magic/OpenRCX are platform process adapters.
+Host backend implementations of PEXExtracting. Parent: [PEXEngine](../../DESIGN.md). Children: [NativeBackend](NativeBackend/DESIGN.md) and [ProcessExecution](ProcessExecution/DESIGN.md). Existing Magic/OpenRCX are platform process adapters.
 
 ## Responsibilities and Boundaries
 Owns concrete backend execution and observed identity. Core owns contracts; Runtime owns orchestration; Persistence owns retained artifact identity. Backends provide observations, not process trust.

@@ -66,7 +66,7 @@ public struct PEXConfigMapper: Sendable {
             layoutURL: layoutURL,
             layoutFormat: Self.detectLayoutFormat(config.inputs.layout),
             sourceNetlistURL: netlistURL,
-            sourceNetlistFormat: .spice,
+            sourceNetlistFormat: config.inputs.sourceNetlistFormat,
             topCell: config.topCell,
             corners: corners,
             technology: .jsonFile(technologyURL),

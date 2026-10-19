@@ -49,6 +49,10 @@ conflicting roles reject explicitly, without original-path or sanitized-ID fallb
 Old records remain inspectable with `loadResult`; missing role associations do not
 authorize new execution or qualified-view consumption.
 
+Generic input capture and integrity reads use the shared bounded reader with a finite 256 MiB default ceiling. This is an operational admission policy, not qualified design capacity. Explicit native configuration/calibration limits remain authoritative for those roles. Descriptor-based regular-file admission precedes reads, including FIFO refusal without blocking. Reads inspect Task cancellation per chunk and close the owned descriptor on every outcome. Input capture and resulting digest describe one retained buffer.
+
+Store manifest/request/IR/report writes and standard writer publication use atomic complete-file replacement. A failed publication leaves the previously complete target unchanged; no partial file is published as available. Runtime publishes the manifest after all corner evidence is recorded. This is atomic single-file publication, not a filesystem-wide transaction or power-loss durability claim.
+
 ## Verification and Change Impact
 Stored lineage loads verify each parent/child edge against the exact retained
 requests and captured input references using Core's retry projection. Child

@@ -76,3 +76,10 @@ must preserve this field through its project-view/document-view projection.
 Electrical model behavior is owned by `PEXCoreTests/PEXElectricalModelTests`;
 captured decoding is owned by `PEXRuntimeTests/PEXElectricalModelResolutionTests`.
 Changes affect request hashing, runtime resolution and future native calculation.
+
+### Explicit source language
+
+`PEXProjectConfig.InputPaths.sourceNetlistFormat` is an additive typed language
+declaration, defaulting to SPICE for historical configuration documents. Unknown
+encoded enum values fail decoding. Runtime forwards the declaration unchanged;
+file extensions do not select the grammar or turn Verilog bytes into SPICE.

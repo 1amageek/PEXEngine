@@ -34,6 +34,19 @@ flowchart TD
 
 ## Contracts and Invariants
 
+Routed-native intake follows the discriminated source-law contract at
+[NativeInput](../PEXCore/NativeInput/DESIGN.md) and host composition at
+[RoutedInputPreparation](../PEXAdapters/NativeBackend/RoutedInputPreparation/DESIGN.md).
+Its calibration admission requires complete explicit requested-corner source
+coverage and never invokes the mask analytical-model selector. Existing mask
+admission remains separate. The verified Native routed calculator supplies numerical execution. Public routed
+success additionally requires the owned structural-source decoder and host exact
+DEF/netlist semantic join; terminal-name coverage alone does not establish that join.
+The complete requested corner IDs are forwarded into every execution context.
+Each selected corner validates its explicit process/source selection without
+analytical model construction. Required canonical and standard output publication,
+source checking, captured-only reload and retry preserve their existing semantics.
+
 PEXConfigMapper uses the actual configuration document URL as the base for every
 persisted input path, including `inputs.nativeInput`. It delegates native backend
 and document admission to the shared PEXNativeInputLoading service. Native
@@ -51,6 +64,10 @@ Path aliasing must preserve every primary/corner/view association while capturin
 the shared bytes once. Runtime consumes the returned captured paths and records;
 it does not infer view roles from file names or private record identifiers.
 Existing backend cancellation propagation and native byte budgets remain unchanged.
+
+Native public run admission uses typed physical topology, independently of the legacy warn/disabled source policy. Opens, shorts and uncontacted terminals refuse same-design success after retaining complete canonical/topology and representable standard evidence. Direct adapter extraction remains a diagnostic graph operation. Source checking selects the requested parsed top boundary, requires all non-ground root terminals, and matches qualified instance/terminal identities only against parsed source occurrences; repeated leaf names do not establish identity. SPICE identifiers retain case-insensitive semantics; Verilog identifiers remain case-sensitive. Internal source nodes do not become required root terminals. Parsed named-port labels are occurrence terminals, never root nets. Source traversal has an operational ceiling of one million occurrences, one million identity visits, 256 MiB aggregate encoded identifier bytes and 1024 depth; ambiguity, recursion and exhaustion remain unproven. External warn/disabled diagnostic behavior remains supported. Unsupported or ambiguous source elaboration is explicitly unproven, never passed.
+
+All input capture is bounded before whole-file materialization by Persistence-owned finite defaults (256 MiB per generic file), with caller-selected tighter native configuration/calibration ceilings preserved. The same retained file admission applies at reload. Task cancellation is checked between chunks; injected adapter polling does not claim a bound across capture or codec segments.
 
 ## Runtime Flows
 Selective retry loads the exact retained parent manifest/request and verifies its
@@ -74,10 +91,15 @@ also remains valid.
 Validate/capture request, resolve captured technology, execute corners under existing concurrency policy, retain output evidence, select raw parsing or canonical graph by payload, validate, persist, aggregate exact execution identities and save manifest. Existing public load reconstructs canonical IR and an empty raw-output list for fileless results without depending on raw files.
 
 ## State, Ownership, and Lifecycle
-Call-local run/corner state retains immutable input and output values. Artifact recording appends each verified record directly to the corner-owned retention buffer, so a later failure cannot discard an earlier record. Adapter cleanup follows success/failure. No new shared state, stream or resource lifetime is introduced by payload selection.
+Call-local run/corner state retains immutable input and output values. Artifact recording appends each verified record directly to the corner-owned retention buffer, so a later failure cannot discard an earlier record. Adapter cleanup follows success/failure. All corners join before unresolved process cleanup ownership is transferred as a live typed failure to the caller; it is not converted into a successful or ownerless persisted result. No new shared state, stream or resource lifetime is introduced by payload selection.
 
 ## Failure, Concurrency, and Constraints
 Failed canonical admission retains generated evidence and observed identity and publishes a failed corner with no IR. Mixed identities fail whole-run aggregation. Existing bounded process/corner ownership remains unchanged. Cancellation and measured native-image retention are verified by the actual backend owner in subsequent composition work.
 
 ## Verification and Change Impact
 NativePEXAdapterTests verifies default native execution, captured retry after source removal, and required SPEF failure retaining canonical/SPICE/topology evidence. PEXCanonicalExecutionTests proves real public orchestration/persistence/reload dispatch with a fileless in-process contract fixture and failure cases. Existing raw adapter/runtime tests prove raw parsing/evidence paths still execute. Changes to backend result types affect all adapters; native inputs, registration, standard exports, CLI and resume require cumulative integration after their own implementations converge.
+
+The original request executionInputArtifacts are forwarded unchanged to each
+PEXExecutionContext. Routed preparation consumes their full reference equality when
+provided, and independently verifies each actual source digest/count. These caller
+references do not by themselves confer external qualification.

@@ -4,12 +4,12 @@ import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/CircuiteFoundation.git",
-    revision: "ae88104c556f5802819713ed741f5b2fffffc2d9"
+    revision: "5f132c58209123433e0e479e1ea61096e46061ba"
 )
 
 let signoffToolSupportDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/SignoffToolSupport.git",
-    exact: "26.812.0"
+    revision: "e15ea6cd60ca1957297aafbba839e51a478d735e"
 )
 
 let package = Package(
@@ -29,8 +29,12 @@ let package = Package(
     dependencies: [
         circuiteFoundationDependency,
         signoffToolSupportDependency,
+        .package(url: "https://github.com/1amageek/LogicDesign.git",
+                 revision: "5e1d3eec838a0add91c617413682d186a5182335"),
+        .package(url: "https://github.com/1amageek/swift-mask-data.git",
+                 revision: "67410f834bdfa8a098c2ec0bfe3675210f658277"),
         .package(url: "https://github.com/1amageek/semiconductor-layout.git",
-                 revision: "17278fb7340e98a7af5a960766083c0e0c39f69b"),
+                 revision: "8c66b7bd6b44cab884b75ded9788a4ec548a1919"),
     ],
     targets: [
         .target(
@@ -44,19 +48,25 @@ let package = Package(
         .target(
             name: "PEXAdapters",
             dependencies: [
-                "PEXCore", "PEXNative", "PEXPersistence",
+                "PEXCore", "PEXNative", "PEXPersistence", "PEXParsers",
+                .product(name: "LogicDesignSerialization", package: "LogicDesign"),
+                .product(name: "LogicKernelCore", package: "LogicDesign"),
+                .product(name: "DEF", package: "swift-mask-data"),
+                .product(name: "LEF", package: "swift-mask-data"),
                 .product(name: "LayoutIO", package: "semiconductor-layout"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
-            ], exclude: ["DESIGN.md", "NativeBackend/DESIGN.md"]
+            ], exclude: ["DESIGN.md", "NativeBackend/DESIGN.md", "NativeBackend/RoutedInputPreparation/DESIGN.md", "ProcessExecution/DESIGN.md"]
         ),
-        .target(name: "PEXParsers", dependencies: ["PEXCore"], exclude: ["DESIGN.md"]),
+        .target(name: "PEXParsers", dependencies: ["PEXCore"], exclude: ["DESIGN.md", "OpenRCXRules/DESIGN.md"]),
         .target(name: "PEXNative", dependencies: [
             "PEXCore",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "CircuiteFoundationFoundation", package: "CircuiteFoundation"),
             .product(name: "LayoutCore", package: "semiconductor-layout"),
             .product(name: "LayoutVerify", package: "semiconductor-layout"),
-        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md", "InputPreparation/DESIGN.md", "CodeImage/DESIGN.md"]),
+            .product(name: "MaskGeometry", package: "swift-mask-data"),
+            .product(name: "LayoutIR", package: "swift-mask-data"),
+        ], exclude: ["DESIGN.md", "SheetExtraction/DESIGN.md", "ElectrodeConstruction/DESIGN.md", "CanonicalProjection/DESIGN.md", "InputPreparation/DESIGN.md", "CodeImage/DESIGN.md", "RoutedRuleExtraction/DESIGN.md", "ConductorUnion/DESIGN.md", "RectilinearSheetNetwork/DESIGN.md", "GroundCapacitance/DESIGN.md"]),
         .target(name: "PEXPersistence", dependencies: ["PEXCore"], exclude: ["DESIGN.md", "NativeInputCapture/DESIGN.md"]),
         .target(name: "PEXRuntime", dependencies: [
             "PEXCore", "PEXAdapters", "PEXParsers", "PEXPersistence",
@@ -84,7 +94,7 @@ let package = Package(
             resources: [.copy("Fixtures/pex-evidence-packet-v3.json")]
         ),
         .testTarget(name: "PEXNativeTests", dependencies: [
-            "PEXNative", "PEXCore",
+            "PEXNative", "PEXCore", "PEXParsers",
             .product(name: "CircuiteFoundation", package: "CircuiteFoundation"),
             .product(name: "LayoutIO", package: "semiconductor-layout"),
             .product(name: "LayoutCore", package: "semiconductor-layout"),
@@ -111,11 +121,13 @@ let package = Package(
                 .product(name: "LayoutIO", package: "semiconductor-layout"),
                 .product(name: "LayoutCore", package: "semiconductor-layout"),
                 .product(name: "LayoutTech", package: "semiconductor-layout"),
+                .product(name: "LayoutVerify", package: "semiconductor-layout"),
                 .product(name: "SignoffToolSupport", package: "SignoffToolSupport"),
             ],
             resources: [
                 .copy("Fixtures/pex_plate.gds"),
                 .copy("Fixtures/inv1.gds"),
+                .copy("../PEXParsersTests/Fixtures/OpenRCXRules"),
             ]
         ),
         .testTarget(

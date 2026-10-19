@@ -12,7 +12,8 @@ struct PEXStandardIdentityLowering {
     }
 
     static func lower(_ records: [Record], identity: PEXSPICEIdentity,
-                      context: PEXParseContext, sourceFormat: String, coordinates: [String: Point2D] = [:]) throws -> ParasiticIR {
+                      context: PEXParseContext, sourceFormat: String, coordinates: [String: Point2D] = [:],
+                      verifiedInstancePaths: [String: InstancePath] = [:]) throws -> ParasiticIR {
         func failure(_ message: String) -> PEXError {
             .parseFailed(cornerID: context.cornerID, message: message)
         }
@@ -67,7 +68,7 @@ struct PEXStandardIdentityLowering {
                 nodes: identity.nodes.keys.sorted().compactMap { token in
                     guard let node = identity.nodes[token], node.ref.netName == name else { return nil }
                     return ParasiticNode(name: node.ref.nodeName, kind: node.kind,
-                                         instancePath: nil, coordinate: coordinates[token])
+                                         instancePath: verifiedInstancePaths[token], coordinate: coordinates[token])
                 }.sorted { $0.name.value < $1.name.value },
                 totalGroundCapF: ground, totalCouplingCapF: coupling, totalResistanceOhm: resistance)
         }

@@ -26,6 +26,6 @@ public struct PEXVerilogConnectivityParserResult: Sendable, Codable, Hashable {
     }
 
     private static func normalize(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        value.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\\")).lowercased()
     }
 }
