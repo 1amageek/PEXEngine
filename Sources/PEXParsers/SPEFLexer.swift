@@ -15,24 +15,96 @@ public struct SPEFLexer: Sendable {
         self.column = 1
     }
 
+    /// The retention anchor must outlive all shared copies of the returned tokens.
+    public static func tokenize(
+        source: String, fileName: String? = nil,
+        control: any PEXParserResourceControlling
+    ) throws -> (value: [SPEFToken.Located], retention: PEXParserRetention) {
+        var characterCount = 0
+        var byteCount = 0
+        for _ in source {
+            try control.checkpoint(workUnits: 1)
+            characterCount = try PEXParserStorageSize.add(characterCount, 1)
+        }
+        for _ in source.utf8 {
+            try control.checkpoint(workUnits: 1)
+            byteCount = try PEXParserStorageSize.add(byteCount, 1)
+        }
+        let diagnosticPrefix = "Invalid character ''".utf8.count
+        // Character backing plus old/new scanner or invalid-character text.
+        let temporary = try PEXParserStorageSize.add(
+            PEXParserStorageSize.array(Character.self, count: characterCount),
+            PEXParserStorageSize.add(PEXParserStorageSize.multiply(byteCount, 3),
+                PEXParserStorageSize.multiply(diagnosticPrefix, 2)))
+        let scope = try PEXParserResourceScope(control: control, temporary: UInt64(temporary))
+        try scope.check(0)
+        let characters = Array(source)
+        try scope.check(0)
+        var lexer = Self(source: source, fileName: fileName, characters: characters,
+            position: 0, line: 1, column: 1)
+        var tokenCount = 0
+        var tokenText = 0
+        try lexer.scan(checkpoint: { try scope.check() }) { token in
+            try scope.check()
+            tokenCount = try PEXParserStorageSize.add(tokenCount, 1)
+            switch token.token {
+            case .keyword(let text), .identifier(let text), .string(let text), .invalid(let text):
+                tokenText = try PEXParserStorageSize.add(tokenText, text.utf8.count)
+            default: break
+            }
+        }
+        let retained = try PEXParserStorageSize.add(
+            PEXParserStorageSize.array(SPEFToken.Located.self, count: tokenCount),
+            PEXParserStorageSize.multiply(tokenText, 2))
+        try scope.reserve(kind: .retained, byteCount: UInt64(retained))
+        try scope.check(0)
+        var tokens: [SPEFToken.Located] = []
+        tokens.reserveCapacity(tokenCount)
+        lexer.position = 0; lexer.line = 1; lexer.column = 1
+        try lexer.scan(checkpoint: { try scope.check() }) { token in
+            try scope.check()
+            tokens.append(token)
+        }
+        try scope.check(0)
+        guard tokens.count == tokenCount else { throw PEXParserResourceError.capacityOverflow }
+        return (tokens, scope.retention)
+    }
+
+    private init(source: String, fileName: String?, characters: [Character],
+                 position: Int, line: Int, column: Int) {
+        self.source = source
+        self.fileName = fileName
+        self.characters = characters
+        self.position = position
+        self.line = line
+        self.column = column
+    }
+
     public mutating func tokenize() -> [SPEFToken.Located] {
         var tokens: [SPEFToken.Located] = []
+        scan(checkpoint: {}) { tokens.append($0) }
+        return tokens
+    }
+
+    private mutating func scan(checkpoint: () throws -> Void,
+        _ emit: (SPEFToken.Located) throws -> Void) rethrows {
         while position < characters.count {
-            skipWhitespaceExceptNewline()
+            try checkpoint()
+            try skipWhitespaceExceptNewline(checkpoint: checkpoint)
             guard position < characters.count else { break }
 
             let ch = characters[position]
             let loc = currentLocation()
 
             if ch == "\n" {
-                tokens.append(SPEFToken.Located(token: .newline, location: loc))
+                try emit(SPEFToken.Located(token: .newline, location: loc))
                 advance()
                 continue
             }
 
             // Comment: // to end of line
             if ch == "/" && peek(1) == "/" {
-                skipToEndOfLine()
+                try skipToEndOfLine(checkpoint: checkpoint)
                 continue
             }
 
@@ -41,14 +113,14 @@ public struct SPEFLexer: Sendable {
                 advance() // consume *
                 if position < characters.count && characters[position].isNumber {
                     // Mapped name: *123
-                    let numStr = consumeWhile { $0.isNumber }
+                    let numStr = try consumeWhile(checkpoint: checkpoint) { $0.isNumber }
                     if let num = Int(numStr) {
-                        tokens.append(SPEFToken.Located(token: .mappedName(num), location: loc))
+                        try emit(SPEFToken.Located(token: .mappedName(num), location: loc))
                     }
                 } else {
                     // Keyword: *SPEF, *DESIGN, etc.
-                    let name = consumeWhile { $0.isLetter || $0 == "_" }
-                    tokens.append(SPEFToken.Located(token: .keyword(name), location: loc))
+                    let name = try consumeWhile(checkpoint: checkpoint) { $0.isLetter || $0 == "_" }
+                    try emit(SPEFToken.Located(token: .keyword(name), location: loc))
                 }
                 continue
             }
@@ -56,71 +128,72 @@ public struct SPEFLexer: Sendable {
             // Quoted string
             if ch == "\"" {
                 advance() // consume opening "
-                let content = consumeWhile { $0 != "\"" && $0 != "\n" }
+                let content = try consumeWhile(checkpoint: checkpoint) { $0 != "\"" && $0 != "\n" }
                 if position < characters.count && characters[position] == "\"" {
                     advance() // consume closing "
                 } else {
-                    tokens.append(SPEFToken.Located(token: .invalid("Unterminated string literal"), location: loc))
+                    try emit(SPEFToken.Located(token: .invalid("Unterminated string literal"), location: loc))
                     continue
                 }
-                tokens.append(SPEFToken.Located(token: .string(content), location: loc))
+                try emit(SPEFToken.Located(token: .string(content), location: loc))
                 continue
             }
 
             // Number (including negative and decimal)
             if ch.isNumber || (ch == "-" && position + 1 < characters.count && characters[position + 1].isNumber) || (ch == "+" && position + 1 < characters.count && characters[position + 1].isNumber) {
-                let numStr = consumeNumber()
+                let numStr = try consumeNumber(checkpoint: checkpoint)
                 if let value = Double(numStr) {
-                    tokens.append(SPEFToken.Located(token: .number(value), location: loc))
+                    try emit(SPEFToken.Located(token: .number(value), location: loc))
                 } else {
                     // Fallback to identifier
-                    tokens.append(SPEFToken.Located(token: .identifier(numStr), location: loc))
+                    try emit(SPEFToken.Located(token: .identifier(numStr), location: loc))
                 }
                 continue
             }
 
             // Punctuation
             if ch == ":" {
-                tokens.append(SPEFToken.Located(token: .colon, location: loc))
+                try emit(SPEFToken.Located(token: .colon, location: loc))
                 advance()
                 continue
             }
             if ch == "/" {
-                tokens.append(SPEFToken.Located(token: .slash, location: loc))
+                try emit(SPEFToken.Located(token: .slash, location: loc))
                 advance()
                 continue
             }
             if ch == "[" {
-                tokens.append(SPEFToken.Located(token: .leftBracket, location: loc))
+                try emit(SPEFToken.Located(token: .leftBracket, location: loc))
                 advance()
                 continue
             }
             if ch == "]" {
-                tokens.append(SPEFToken.Located(token: .rightBracket, location: loc))
+                try emit(SPEFToken.Located(token: .rightBracket, location: loc))
                 advance()
                 continue
             }
 
             // Identifier (everything else that's not whitespace)
             if ch.isLetter || ch == "_" || ch == "\\" || ch == "$" || ch == "#" {
-                let name = consumeIdentifier()
-                tokens.append(SPEFToken.Located(token: .identifier(name), location: loc))
+                let name = try consumeIdentifier(checkpoint: checkpoint)
+                try emit(SPEFToken.Located(token: .identifier(name), location: loc))
                 continue
             }
 
-            tokens.append(SPEFToken.Located(token: .invalid("Invalid character '\(ch)'"), location: loc))
+            try emit(SPEFToken.Located(token: .invalid("Invalid character '\(ch)'"), location: loc))
             advance()
         }
 
-        tokens.append(SPEFToken.Located(token: .endOfFile, location: currentLocation()))
-        return tokens
+        try checkpoint()
+        try emit(SPEFToken.Located(token: .endOfFile, location: currentLocation()))
     }
 
     // MARK: - Helper methods
 
-    private mutating func consumeIdentifier() -> String {
+    private mutating func consumeIdentifier(checkpoint: () throws -> Void) rethrows -> String {
         var name = ""
         while position < characters.count {
+            try checkpoint()
             let character = characters[position]
             if character == "\\" && peek(1) == "-" {
                 name.append("-")
@@ -165,8 +238,9 @@ public struct SPEFLexer: Sendable {
         }
     }
 
-    private mutating func skipWhitespaceExceptNewline() {
+    private mutating func skipWhitespaceExceptNewline(checkpoint: () throws -> Void) rethrows {
         while position < characters.count {
+            try checkpoint()
             let ch = characters[position]
             if ch == " " || ch == "\t" || ch == "\r" {
                 advance()
@@ -176,22 +250,24 @@ public struct SPEFLexer: Sendable {
         }
     }
 
-    private mutating func skipToEndOfLine() {
+    private mutating func skipToEndOfLine(checkpoint: () throws -> Void) rethrows {
         while position < characters.count && characters[position] != "\n" {
+            try checkpoint()
             advance()
         }
     }
 
-    private mutating func consumeWhile(_ predicate: (Character) -> Bool) -> String {
+    private mutating func consumeWhile(checkpoint: () throws -> Void, _ predicate: (Character) -> Bool) rethrows -> String {
         var result = ""
         while position < characters.count && predicate(characters[position]) {
+            try checkpoint()
             result.append(characters[position])
             advance()
         }
         return result
     }
 
-    private mutating func consumeNumber() -> String {
+    private mutating func consumeNumber(checkpoint: () throws -> Void) rethrows -> String {
         var result = ""
         // Optional sign
         if position < characters.count && (characters[position] == "-" || characters[position] == "+") {
@@ -200,6 +276,7 @@ public struct SPEFLexer: Sendable {
         }
         // Integer part
         while position < characters.count && characters[position].isNumber {
+            try checkpoint()
             result.append(characters[position])
             advance()
         }
@@ -208,6 +285,7 @@ public struct SPEFLexer: Sendable {
             result.append(characters[position])
             advance()
             while position < characters.count && characters[position].isNumber {
+                try checkpoint()
                 result.append(characters[position])
                 advance()
             }
@@ -221,6 +299,7 @@ public struct SPEFLexer: Sendable {
                 advance()
             }
             while position < characters.count && characters[position].isNumber {
+                try checkpoint()
                 result.append(characters[position])
                 advance()
             }

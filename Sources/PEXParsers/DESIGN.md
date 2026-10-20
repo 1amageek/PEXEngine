@@ -190,3 +190,208 @@ records accumulate implicit ground charge. This is a portable-reader profile
 restriction, not a claim that the grammar universally forbids two cross-net names.
 External STA qualification and matching the encoded terminal namespace to a
 logical design are composition responsibilities, not established by round-trip.
+
+
+## Controlled Standard I/O
+
+The additive controlled entry points below compose with a caller-owned cumulative
+work and storage ledger. They do not create a budget or reset one between stages.
+The existing unlabelled entry points retain their original semantics and resource
+policy. The controlled implementation must not call an unaccounted legacy helper.
+
+```swift
+public enum PEXParserStorageKind: Sendable { case temporary, retained }
+
+public protocol PEXParserResourceControlling: Sendable {
+    func checkpoint(workUnits: UInt64) throws
+    func reserveStorage(kind: PEXParserStorageKind, byteCount: UInt64) throws -> any Sendable
+}
+
+public struct PEXParserRetention: Sendable { /* immutable, nonpublic construction */ }
+```
+
+The returned reservation is an immutable release owner supplied by the caller.
+The parser retains it for the admitted payload lifetime. The protocol has no
+CoreSpice dependency. A host can bridge its existing source storage reservation
+and cancellation/work checkpoints directly. Caller errors propagate unchanged;
+resource refusal or cancellation cannot be recategorized as a source syntax error.
+Checked size overflow throws `PEXParserResourceError.capacityOverflow`.
+New controlled source/codec failures throw `PEXParserSourceFailure`, whose public
+`cause: any Error` preserves the original typed source cause and whose public
+`retention: PEXParserRetention` retains its admitted payload. The original bare
+APIs keep their original thrown types. Each source failure is wrapped at its
+actual construction boundary, after a lazy diagnostic builder has admitted the
+proven UTF-8 payload and typed error fields before formatting. There is no
+catch-all wrapper: caller checkpoint/reservation failures propagate exactly,
+even if their dynamic type equals a parser error. Copies of the controlled
+failure share its retention owner; callers inspecting or separately copying the
+underlying cause must retain that anchor. The per-operation retained owner can
+also keep admitted construction payload referenced by the diagnostic; temporary
+scratch ends with the failing call. Opaque Foundation codec errors can be retained
+as their original typed cause with statically bounded source context; formatting
+an arbitrary error description before admission is not permitted.
+
+| Existing owner | Additive controlled entry point | Existing semantic value |
+|---|---|---|
+| `SPEFLexer` | `static tokenize(source:fileName:control:) throws` | `[SPEFToken.Located]` |
+| `SPEFParser` | `parse(tokens:control:) throws` | `SPEFParseTree` |
+| `SPEFLowering` | `lower(_:cornerID:options:control:) throws` | `ParasiticIR` |
+| `PEXSPICEWriter` | `write(_:control:) throws` | `String` |
+| `PEXSPICEBackannotationComposer` | `compose(sourceNetlist:ir:control:) throws` | `String` |
+| `MagicSPICEParasiticParser` | `parse(_:context:control:) throws` | `ParasiticIR` |
+
+Each controlled entry returns `(value: ExistingValue, retention: PEXParserRetention)`.
+The static lexer entry admits the character buffer before constructing a lexer;
+adding control only to `tokenize()` after the legacy initializer would be too late.
+The actual Physical path already owns the source deck String and captured SPEF
+bytes. These caller-owned input payloads are borrowed/shared, not charged again.
+The file-based Magic parser owns its read buffers and admits them before reading;
+file growth beyond an admitted read size must refuse before appending more bytes.
+Only the called in-memory writer/composer boundaries are added in this sprint;
+legacy save and URL-composer APIs are unchanged.
+
+```mermaid
+flowchart LR
+  Host[Caller cumulative ledger] --> Control[Checkpoint and pre-growth reservation]
+  Control --> Lexer[Lexer and tokens]
+  Lexer --> Tree[Parse tree]
+  Tree --> IR[Canonical IR]
+  IR --> Writer[SPICE writer]
+  Writer --> Composer[Source-deck composition]
+  Composer --> Reparse[Magic SPICE parser]
+  Lexer --> Anchor[Immutable retention anchors]
+  Tree --> Anchor
+  IR --> Anchor
+  Composer --> Anchor
+  Reparse --> Anchor
+  Anchor --> HostResult[Caller result or cleanup owner]
+```
+
+### Admission and Lifetime
+
+The budget measures logical managed payload, not allocator overhead or process RSS.
+Opaque Foundation implementation workspace, allocator buckets and runtime metadata
+are outside this ledger; explicit Data/String/Array values and codec intermediates
+created by this module remain inside it. Owned scans check cooperatively; opaque
+Foundation calls check immediately before and after, without claiming interruption
+inside Foundation. Schema/grammar scans may preadmit a checked payload envelope,
+then validate actual output counts against it. Such an envelope must follow the
+actual transformations, including Unicode and decoded escapes, rather than an
+arbitrary source-byte multiplier. Unused capacity offers are not copy work.
+Each array capacity, dictionary/set key-value payload, string UTF-8 payload,
+annotation encoding buffer and retained ownership metadata is admitted from
+checked counts and actual element strides before construction or growth.
+Collection growth admits simultaneous old and new logical buffers before copying;
+this is a declared logical-capacity contract, not a claim about Swift allocator
+bucket sizes. A source-byte multiplier is not a substitute for a derived payload
+count. Known-capacity input scans can reserve a checked capacity before filling,
+but virtual unused capacity offers do not incur fictitious copy work.
+
+Call-local scratch reservations are released at the end of their admitted lexical
+operation scope. A proven conservative coexistence envelope can retain fixed
+construction/split/codec allowances until that return; this does not claim those
+buffers physically coexist or report allocator/RSS measurements. A nested
+`withTemporaryStorage` region can release a narrower scratch allowance earlier. Output
+payload and ownership metadata reservations are transferred into the returned
+immutable retention anchor. All shared semantic copies require that anchor:
+copying `value` does not implicitly copy an unrepresented storage lease. A host
+result must retain the exact anchors for every shared value it publishes, and a
+cleanup/retry owner must retain anchors needed by its remaining state. Copies of
+an anchor share its original reservations; final release refunds once. The host
+must also retain upstream input owners while their shared strings/arrays remain
+part of a later value. No returned value promises standalone accounting after its
+anchor is discarded.
+
+Nested composer/writer/identity operations use the same control. Their scratch,
+fragment and final output coexistence is admitted before the next allocation.
+Input, annotation, line/token splits, name-map expansion, case folding, generated
+identity validation and canonical lowering are inside this boundary. The identity
+codec must expose bounded scans/growth to the controlled path; wrapping an opaque
+JSON encoder/decoder with an unproved byte multiplier does not satisfy admission.
+Legacy identity bytes and decoding acceptance remain authoritative.
+
+Every controlled loop checks the supplied control in bounded work batches.
+Fallible checkpoints and reservations are followed by another cancellation check
+before allocating or mutating; work is cumulative and never refunded. Failure
+releases call-owned scratch/output reservations and publishes no success value.
+Construction-only reservation lists share the original control through one private
+operation scope. Retained and temporary lease lists use the same `Mutex` contract
+on every target; the returned immutable anchor exposes no mutation entry point.
+A payload reservation includes two lease slots per admission, covering simultaneous
+old/new logical lease arrays during growth; list headers and owner fields are
+admitted before constructing those owners. External reservation/checkpoint calls
+and final release callbacks execute outside the lists' critical sections.
+No external control callback runs while a parser mutex is held. No target-specific
+raw state, new cache, controller replacement or unsafe shared state is introduced.
+
+### Concrete Capacity Owners
+
+| Path | Counts admitted before materialization | Lifetime |
+|---|---|---|
+| Lexer | Character/UTF-8 scan, one non-retaining token pass, then exact token count/text count before the filling pass | Character/scanner scratch is temporary; token payload is retained |
+| Parser | Distinct parse-row strides bounded by consumed token count, plus actual token text and bounded numeric identifier spellings | Parse-tree payload is retained; old/new section and concatenation capacity is temporary |
+| Ordinary lowering | Actual ports, connection/coordinate/endpoint occurrences, elements, resolved name-map spellings and distinct map/set/output shapes | Output IR is retained; old/new maps, node inventories and reciprocal-coupling scratch are temporary |
+| Generated identity | Annotation bytes, decoded codec buffers, explicit JSON container/string counts and actual identity inventories | Returned identity/IR payload is retained; codec and validation scratch is temporary |
+| Writer/composer | Actual inventory counts, text-fragment lengths and one final UTF-8 result builder | Construction arrays/fragments are temporary; final text is retained |
+| Magic reparse | File size before read, bounded read chunks/growth probe, decoded text, tokens, connection inventories and lowered rows | Read/split/validation scratch is temporary; resulting IR is retained |
+
+The lease lists are the only new shared mutable state. Native, WASM and Embedded
+use the same `Mutex<[any Sendable]>` storage and reserve-only mutation entry.
+Anchors read no mutable parser state. Final owner release drops its reservations
+outside a critical section. This source-level contract does not establish target
+availability for Foundation file/codec APIs or claim a WASM runtime qualification.
+
+### Qualification and Change Impact
+
+`Tests/PEXParsersTests/ControlledStandardIOTests.swift` owns the controlled pipeline.
+Its behavioral gates cover exact passive bits and identity/ordering parity with
+the original APIs, pre-allocation refusal on a valid two-net graph, cancellation
+at inner growth and bounded scans, one cumulative owner across all operators,
+old/new peak coexistence, malformed input propagation, failure cleanup and last
+anchor-copy refund. The original exact-passive round-trip and scoped standard
+output suites are affected compatibility owners. No extraction math, graph
+ownership, node equivalence, unit conversion or public package dependency changes.
+The controlled entry points have passed the focused Native arm64 macOS 27 / Swift
+6.4.0 qualification: 38 declarations, 62 cases, five suites and zero skips,
+including six new controlled declarations / 21 cases and 32 unchanged
+compatibility declarations / 41 cases. One scoped source review closed without
+findings. The tested implementation is unchanged except for removal of the six
+qualification-pending comment blocks and these recorded facts.
+
+A separate actual 21,437-passive captured SPEF gate checked the complete independent
+r9 multiset (kind, both endpoints, binary64 bits and multiplicity), exact legacy
+fragment/composed bytes, controlled reparsing, peak-minus-one refusal,
+mid-scan cancellation and final anchor-copy release. The graph contains 10,580
+resistors, 9,296 grounded capacitors and 1,561 coupling capacitors. The controlled
+operation ledger observed 215,688,286 managed bytes at peak, 129,912,563 cumulative
+work units and 1,281,682 reservations, all released after caller input release.
+These logical payload figures exclude independent comparison inventories and
+are not a hard RSS or allocator-overhead bound. The bounded actual driver linked
+in 18.44 seconds and ran in 7.48 seconds including the comparison harness.
+Receipts and external captured inputs remain qualification evidence outside the
+source distribution, not embedded model or PDK fixtures.
+
+Whole-circuit/source correspondence remains owned by the host and is not granted
+by successful parsing or composition. No extraction physics, Native Flow,
+all-history, process, WASM or Embedded runtime qualification is inferred.
+
+
+### Fixed Standard-Library Case-Transform Bound
+
+The controlled Unicode sizing pass uses the same scalar case mappings as Swift
+6.4 `String.lowercased`/`uppercased`. In the exact
+[6.4 String implementation](https://github.com/swiftlang/swift/blob/swift-6.4.0-RELEASE/stdlib/public/core/String.swift),
+non-ASCII conversion appends each scalar's corresponding mapping; the ASCII fast
+path has the same result. The
+[scalar mapping implementation](https://github.com/swiftlang/swift/blob/swift-6.4.0-RELEASE/stdlib/public/core/UnicodeScalarProperties.swift)
+returns a direct scalar or the UTF-8 special mapping. Its
+[table reader](https://github.com/swiftlang/swift/blob/swift-6.4.0-RELEASE/stdlib/public/stubs/Unicode/UnicodeScalarProps.cpp)
+reads that mapping's byte length from `UInt8`. Thus one mapping needs at most
+`UInt8.max` bytes plus its String value, admitted before accessing the mapping.
+The sizing pass charges/checks each scalar and sums the actual mapping lengths.
+The whole transformed string is admitted before conversion, including its
+initial input-sized capacity and possible final-capacity coexistence. The
+result's actual UTF-8 count must equal the sized count. This is a representation
+bound from the fixed standard library, not a three-scalar guess or an ASCII
+restriction. A change to that standard-library conversion contract requires
+requalification of the controlled path; legacy conversion remains unchanged.

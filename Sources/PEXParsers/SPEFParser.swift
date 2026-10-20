@@ -92,11 +92,48 @@ public struct SPEFInductor: Sendable {
 // MARK: - SPEF Parser
 
 public struct SPEFParser: Sendable {
-    public init() {}
+    private let resources: PEXParserResourceScope?
+
+    public init() { resources = nil }
+
+    private init(resources: PEXParserResourceScope) { self.resources = resources }
+
+    public func parse(tokens: [SPEFToken.Located], control: any PEXParserResourceControlling)
+        throws -> (value: SPEFParseTree, retention: PEXParserRetention) {
+        var textBytes = 0
+        for token in tokens {
+            try control.checkpoint(workUnits: 1)
+            switch token.token {
+            case .keyword(let text), .identifier(let text), .string(let text), .invalid(let text):
+                textBytes = try PEXParserStorageSize.add(textBytes, text.utf8.count)
+            default: break
+            }
+        }
+        // Each parsed row consumes at least one input token. Reserve each distinct
+        // row shape, including old/new section replacement, before entering parse.
+        var retained = MemoryLayout<SPEFParseTree>.stride
+        let rowStride = MemoryLayout<SPEFPort>.stride + MemoryLayout<SPEFNetBlock>.stride
+            + MemoryLayout<SPEFConnection>.stride + MemoryLayout<SPEFNodeCoordinate>.stride
+            + MemoryLayout<SPEFCapacitor>.stride + MemoryLayout<SPEFResistor>.stride
+            + MemoryLayout<SPEFInductor>.stride + MemoryLayout<(Int, String)>.stride
+        retained = try PEXParserStorageSize.add(retained,
+            PEXParserStorageSize.multiply(tokens.count, rowStride))
+        // Numeric identifier components add at most the decimal Int/binary64
+        // spelling capacity; colon concatenations consume existing text once.
+        let synthesizedText = try PEXParserStorageSize.add(textBytes,
+            PEXParserStorageSize.multiply(tokens.count, 24))
+        retained = try PEXParserStorageSize.add(retained,
+            PEXParserStorageSize.multiply(synthesizedText, 2))
+        let scope = try PEXParserResourceScope(control: control, retained: UInt64(retained),
+            temporary: UInt64(retained))
+        let value = try Self(resources: scope).parse(tokens: tokens)
+        try scope.check(0)
+        return (value, scope.retention)
+    }
 
     public func parse(tokens: [SPEFToken.Located]) throws -> SPEFParseTree {
         try rejectInvalidTokens(tokens)
-        var cursor = TokenCursor(tokens: tokens)
+        var cursor = TokenCursor(tokens: tokens, resources: resources)
 
         let header = try parseHeader(&cursor)
         let nameMap = try parseNameMap(&cursor)
@@ -104,17 +141,20 @@ public struct SPEFParser: Sendable {
         var nets: [SPEFNetBlock] = []
 
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword == "D_NET" {
                 let net = try parseNetBlock(&cursor)
                 nets.append(net)
             } else if let keyword = cursor.currentKeyword {
-                throw SPEFParserDiagnostic(
-                    severity: .error,
-                    message: "Unsupported top-level SPEF keyword *\(keyword)",
-                    location: cursor.currentLocation
-                )
+                throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Unsupported top-level SPEF keyword *".utf8.count, keyword.utf8.count)) {
+                    SPEFParserDiagnostic(
+                        severity: .error,
+                        message: "Unsupported top-level SPEF keyword *\(keyword)",
+                        location: cursor.currentLocation
+                    )
+                }
             } else {
-                cursor.advance()
+                try cursor.advance()
             }
         }
 
@@ -123,28 +163,32 @@ public struct SPEFParser: Sendable {
 
     private func rejectInvalidTokens(_ tokens: [SPEFToken.Located]) throws {
         for token in tokens {
+            try resources?.check()
             guard case .invalid(let message) = token.token else {
                 continue
             }
-            throw SPEFParserDiagnostic(
-                severity: .error,
-                message: message,
-                location: token.location
-            )
+            throw try sourceFailure(diagnosticBytes: message.utf8.count) {
+                SPEFParserDiagnostic(
+                    severity: .error,
+                    message: message,
+                    location: token.location
+                )
+            }
         }
     }
 
     // MARK: - Header parsing
 
     private func parseHeader(_ cursor: inout TokenCursor) throws -> SPEFHeader {
-        var fields = SPEFHeaderFields()
-        cursor.skipNewlines()
+        var fields = SPEFHeaderFields(resources: resources)
+        try cursor.skipNewlines()
         while !cursor.isAtEnd {
+            try resources?.check()
             guard let kw = cursor.currentKeyword else { break }
             if isHeaderTerminator(kw) { break }
 
             try parseHeaderKeyword(kw, cursor: &cursor, fields: &fields)
-            cursor.skipNewlines()
+            try cursor.skipNewlines()
         }
 
         return try fields.build(location: cursor.currentLocation)
@@ -162,38 +206,38 @@ public struct SPEFParser: Sendable {
         let location = cursor.currentLocation
         switch keyword {
         case "SPEF":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*SPEF")
             try assignUnique(value, to: &fields.spefVersion, keyword: "*SPEF", location: location)
         case "DESIGN":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*DESIGN")
             try assignUnique(value, to: &fields.designName, keyword: "*DESIGN", location: location)
         case "DATE":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*DATE")
             try assignUnique(value, to: &fields.date, keyword: "*DATE", location: location)
         case "VENDOR":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*VENDOR")
             try assignUnique(value, to: &fields.vendor, keyword: "*VENDOR", location: location)
         case "PROGRAM":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*PROGRAM")
             try assignUnique(value, to: &fields.program, keyword: "*PROGRAM", location: location)
         case "DESIGN_FLOW":
-            cursor.advance()
-            cursor.skipUntilLineEnd()
+            try cursor.advance()
+            try cursor.skipUntilLineEnd()
         case "DIVIDER":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireIdentifierOrPunctuation(&cursor, field: "*DIVIDER")
             try assignUnique(value, to: &fields.divider, keyword: "*DIVIDER", location: location)
         case "DELIMITER":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireIdentifierOrPunctuation(&cursor, field: "*DELIMITER")
             try assignUnique(value, to: &fields.delimiter, keyword: "*DELIMITER", location: location)
         case "BUS_DELIMITER":
-            cursor.advance()
+            try cursor.advance()
             let open = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
             let close = try requireIdentifierOrPunctuation(&cursor, field: "*BUS_DELIMITER")
             try assignUniquePair(
@@ -205,7 +249,7 @@ public struct SPEFParser: Sendable {
                 location: location
             )
         case "T_UNIT":
-            cursor.advance()
+            try cursor.advance()
             let scale = try requireNumber(&cursor, field: "*T_UNIT")
             let unit = try requireIdentifier(&cursor, field: "*T_UNIT")
             try assignUniquePair(
@@ -217,7 +261,7 @@ public struct SPEFParser: Sendable {
                 location: location
             )
         case "C_UNIT":
-            cursor.advance()
+            try cursor.advance()
             let scale = try requireNumber(&cursor, field: "*C_UNIT")
             let unit = try requireIdentifier(&cursor, field: "*C_UNIT")
             try assignUniquePair(
@@ -229,7 +273,7 @@ public struct SPEFParser: Sendable {
                 location: location
             )
         case "R_UNIT":
-            cursor.advance()
+            try cursor.advance()
             let scale = try requireNumber(&cursor, field: "*R_UNIT")
             let unit = try requireIdentifier(&cursor, field: "*R_UNIT")
             try assignUniquePair(
@@ -241,7 +285,7 @@ public struct SPEFParser: Sendable {
                 location: location
             )
         case "L_UNIT":
-            cursor.advance()
+            try cursor.advance()
             let scale = try requireNumber(&cursor, field: "*L_UNIT")
             let unit = try requireIdentifier(&cursor, field: "*L_UNIT")
             try assignUniquePair(
@@ -253,15 +297,17 @@ public struct SPEFParser: Sendable {
                 location: location
             )
         case "VERSION":
-            cursor.advance()
+            try cursor.advance()
             let value = try requireString(&cursor, field: "*VERSION")
             try assignUnique(value, to: &fields.version, keyword: "*VERSION", location: location)
         default:
-            throw SPEFParserDiagnostic(
-                severity: .error,
-                message: "Unsupported SPEF header keyword *\(keyword)",
-                location: cursor.currentLocation
-            )
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Unsupported SPEF header keyword *".utf8.count, keyword.utf8.count)) {
+                SPEFParserDiagnostic(
+                    severity: .error,
+                    message: "Unsupported SPEF header keyword *\(keyword)",
+                    location: cursor.currentLocation
+                )
+            }
         }
     }
 
@@ -272,7 +318,9 @@ public struct SPEFParser: Sendable {
         location: SPEFSourceLocation?
     ) throws {
         if case .some = storage {
-            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Duplicate SPEF header keyword ".utf8.count, keyword.utf8.count)) {
+                diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            }
         }
         storage = value
     }
@@ -286,16 +334,21 @@ public struct SPEFParser: Sendable {
         location: SPEFSourceLocation?
     ) throws {
         if case .some = firstStorage {
-            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Duplicate SPEF header keyword ".utf8.count, keyword.utf8.count)) {
+                diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            }
         }
         if case .some = secondStorage {
-            throw diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Duplicate SPEF header keyword ".utf8.count, keyword.utf8.count)) {
+                diagnostic("Duplicate SPEF header keyword \(keyword)", location: location)
+            }
         }
         firstStorage = first
         secondStorage = second
     }
 
     private struct SPEFHeaderFields {
+        let resources: PEXParserResourceScope?
         var spefVersion: String?
         var designName: String?
         var date: String?
@@ -341,28 +394,28 @@ public struct SPEFParser: Sendable {
 
         private func requiredFields(location: SPEFSourceLocation?) throws -> RequiredSPEFHeaderFields {
             guard let spefVersion else {
-                throw missing("*SPEF", location: location)
+                throw try missing("*SPEF", location: location)
             }
             guard let designName else {
-                throw missing("*DESIGN", location: location)
+                throw try missing("*DESIGN", location: location)
             }
             guard let divider else {
-                throw missing("*DIVIDER", location: location)
+                throw try missing("*DIVIDER", location: location)
             }
             guard let delimiter else {
-                throw missing("*DELIMITER", location: location)
+                throw try missing("*DELIMITER", location: location)
             }
             guard let busOpen, let busClose else {
-                throw missing("*BUS_DELIMITER", location: location)
+                throw try missing("*BUS_DELIMITER", location: location)
             }
             guard let timeUnit, let timeScale else {
-                throw missing("*T_UNIT", location: location)
+                throw try missing("*T_UNIT", location: location)
             }
             guard let capUnit, let capScale else {
-                throw missing("*C_UNIT", location: location)
+                throw try missing("*C_UNIT", location: location)
             }
             guard let resUnit, let resScale else {
-                throw missing("*R_UNIT", location: location)
+                throw try missing("*R_UNIT", location: location)
             }
 
             return RequiredSPEFHeaderFields(
@@ -381,12 +434,15 @@ public struct SPEFParser: Sendable {
             )
         }
 
-        private func missing(_ keyword: String, location: SPEFSourceLocation?) -> SPEFParserDiagnostic {
-            SPEFParserDiagnostic(
-                severity: .error,
-                message: "Missing required SPEF header keyword \(keyword)",
-                location: location
-            )
+        private func missing(_ keyword: String, location: SPEFSourceLocation?) throws -> any Error {
+            let make = {
+                SPEFParserDiagnostic(severity: .error,
+                    message: "Missing required SPEF header keyword \(keyword)", location: location)
+            }
+            guard let resources else { return make() }
+            let bytes = try PEXParserStorageSize.add("Missing required SPEF header keyword ".utf8.count,
+                keyword.utf8.count)
+            return try resources.sourceFailure(diagnosticBytes: bytes, make)
         }
     }
 
@@ -410,21 +466,26 @@ public struct SPEFParser: Sendable {
     private func parseNameMap(_ cursor: inout TokenCursor) throws -> [Int: String] {
         var map: [Int: String] = [:]
         guard cursor.currentKeyword == "NAME_MAP" else { return map }
-        cursor.advance() // consume *NAME_MAP
-        cursor.skipNewlines()
+        try cursor.advance() // consume *NAME_MAP
+        try cursor.skipNewlines()
 
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword != nil { break }
             if case .mappedName(let id) = cursor.currentToken {
                 guard map[id] == nil else {
-                    throw diagnostic("Duplicate SPEF name map identifier", location: cursor.currentLocation)
+                    throw try sourceFailure(diagnosticBytes: "Duplicate SPEF name map identifier".utf8.count) {
+                diagnostic("Duplicate SPEF name map identifier", location: cursor.currentLocation)
+            }
                 }
-                cursor.advance()
+                try cursor.advance()
                 map[id] = try requireIdentifier(&cursor, field: "*NAME_MAP")
             } else {
-                throw diagnostic("Malformed SPEF name map entry", location: cursor.currentLocation)
+                throw try sourceFailure(diagnosticBytes: "Malformed SPEF name map entry".utf8.count) {
+                diagnostic("Malformed SPEF name map entry", location: cursor.currentLocation)
             }
-            cursor.skipNewlines()
+            }
+            try cursor.skipNewlines()
         }
         return map
     }
@@ -434,19 +495,22 @@ public struct SPEFParser: Sendable {
     private func parsePorts(_ cursor: inout TokenCursor) throws -> [SPEFPort] {
         var ports: [SPEFPort] = []
         guard cursor.currentKeyword == "PORTS" else { return ports }
-        cursor.advance() // consume *PORTS
-        cursor.skipNewlines()
+        try cursor.advance() // consume *PORTS
+        try cursor.skipNewlines()
 
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword != nil { break }
             let name = try requireIdentifier(&cursor, field: "*PORTS")
             let dirStr = try requireIdentifier(&cursor, field: "*PORTS")
             guard let direction = SPEFDirection(rawValue: dirStr) else {
-                throw diagnostic("Invalid SPEF port direction '\(dirStr)'", location: cursor.currentLocation)
+                throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Invalid SPEF port direction ''".utf8.count, dirStr.utf8.count)) {
+                diagnostic("Invalid SPEF port direction '\(dirStr)'", location: cursor.currentLocation)
             }
-            let coordinate = optionalCoordinate(&cursor)
+            }
+            let coordinate = try optionalCoordinate(&cursor)
             ports.append(SPEFPort(name: name, direction: direction, coordinate: coordinate))
-            cursor.skipNewlines()
+            try cursor.skipNewlines()
         }
         return ports
     }
@@ -455,19 +519,24 @@ public struct SPEFParser: Sendable {
 
     private func parseNetBlock(_ cursor: inout TokenCursor) throws -> SPEFNetBlock {
         guard cursor.currentKeyword == "D_NET" else {
-            throw diagnostic("Expected *D_NET keyword", location: cursor.currentLocation)
+            throw try sourceFailure(diagnosticBytes: "Expected *D_NET keyword".utf8.count) {
+                diagnostic("Expected *D_NET keyword", location: cursor.currentLocation)
+            }
         }
-        cursor.advance() // consume *D_NET
+        try cursor.advance() // consume *D_NET
 
         let netName = try requireIdentifier(&cursor, field: "*D_NET")
         let totalCap = try requireNumber(&cursor, field: "*D_NET")
-        cursor.skipNewlines()
+        try cursor.skipNewlines()
 
         var sections = SPEFNetBlockSections()
 
         while !cursor.isAtEnd {
+            try resources?.check()
             guard let keyword = cursor.currentKeyword else {
-                throw diagnostic("Unexpected SPEF token inside *D_NET \(netName)", location: cursor.currentLocation)
+                throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Unexpected SPEF token inside *D_NET ".utf8.count, netName.utf8.count)) {
+                diagnostic("Unexpected SPEF token inside *D_NET \(netName)", location: cursor.currentLocation)
+            }
             }
 
             if let block = try parseNetSection(
@@ -481,7 +550,9 @@ public struct SPEFParser: Sendable {
             }
         }
 
-        throw diagnostic("Unterminated SPEF net block *D_NET \(netName)", location: cursor.currentLocation)
+        throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Unterminated SPEF net block *D_NET ".utf8.count, netName.utf8.count)) {
+                diagnostic("Unterminated SPEF net block *D_NET \(netName)", location: cursor.currentLocation)
+            }
     }
 
     private struct SPEFNetBlockSections {
@@ -513,37 +584,39 @@ public struct SPEFParser: Sendable {
     ) throws -> SPEFNetBlock? {
         switch keyword {
         case "CONN":
-            cursor.advance()
-            cursor.skipNewlines()
+            try cursor.advance()
+            try cursor.skipNewlines()
             let parsed = try parseConnections(&cursor)
             sections.connections = parsed.connections
             sections.nodeCoordinates = parsed.nodeCoordinates
             return nil
         case "CAP":
-            cursor.advance()
-            cursor.skipNewlines()
+            try cursor.advance()
+            try cursor.skipNewlines()
             sections.capacitors = try parseCapacitors(&cursor)
             return nil
         case "RES":
-            cursor.advance()
-            cursor.skipNewlines()
+            try cursor.advance()
+            try cursor.skipNewlines()
             sections.resistors = try parseResistors(&cursor)
             return nil
         case "INDUC":
-            cursor.advance()
-            cursor.skipNewlines()
+            try cursor.advance()
+            try cursor.skipNewlines()
             sections.inductors = try parseInductors(&cursor)
             return nil
         case "END":
-            cursor.advance()
-            cursor.skipNewlines()
+            try cursor.advance()
+            try cursor.skipNewlines()
             return sections.makeBlock(netName: netName, totalCap: totalCap)
         default:
-            throw SPEFParserDiagnostic(
-                severity: .error,
-                message: "Unsupported SPEF net section *\(keyword)",
-                location: cursor.currentLocation
-            )
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Unsupported SPEF net section *".utf8.count, keyword.utf8.count)) {
+                SPEFParserDiagnostic(
+                    severity: .error,
+                    message: "Unsupported SPEF net section *\(keyword)",
+                    location: cursor.currentLocation
+                )
+            }
         }
     }
 
@@ -556,51 +629,58 @@ public struct SPEFParser: Sendable {
         var connections: [SPEFConnection] = []
         var nodeCoordinates: [SPEFNodeCoordinate] = []
         while !cursor.isAtEnd {
+            try resources?.check()
             if let kw = cursor.currentKeyword {
                 // *I and *P are connection type markers, not section keywords
                 if kw == "I" || kw == "P" {
                     guard let connType = SPEFConnType(rawValue: kw) else {
-                        throw diagnostic("Invalid SPEF connection type *\(kw)", location: cursor.currentLocation)
+                        throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Invalid SPEF connection type *".utf8.count, kw.utf8.count)) {
+                diagnostic("Invalid SPEF connection type *\(kw)", location: cursor.currentLocation)
+            }
                     }
-                    cursor.advance() // consume *I or *P keyword
+                    try cursor.advance() // consume *I or *P keyword
                     let name = try requireIdentifier(&cursor, field: "*\(kw)")
                     let dirStr = try requireIdentifier(&cursor, field: "*\(kw)")
                     guard let direction = SPEFDirection(rawValue: dirStr) else {
-                        throw diagnostic("Invalid SPEF connection direction '\(dirStr)'", location: cursor.currentLocation)
+                        throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Invalid SPEF connection direction ''".utf8.count, dirStr.utf8.count)) {
+                diagnostic("Invalid SPEF connection direction '\(dirStr)'", location: cursor.currentLocation)
+            }
                     }
-                    let coordinate = optionalCoordinate(&cursor)
+                    let coordinate = try optionalCoordinate(&cursor)
                     connections.append(SPEFConnection(
                         type: connType,
                         name: name,
                         direction: direction,
                         coordinate: coordinate
                     ))
-                    cursor.skipUntilLineEnd()
-                    cursor.skipNewlines()
+                    try cursor.skipUntilLineEnd()
+                    try cursor.skipNewlines()
                     continue
                 } else if kw == "N" {
-                    cursor.advance()
+                    try cursor.advance()
                     let name = try requireIdentifier(&cursor, field: "*N")
-                    if let coordinate = optionalCoordinate(&cursor) {
+                    if let coordinate = try optionalCoordinate(&cursor) {
                         nodeCoordinates.append(SPEFNodeCoordinate(name: name, coordinate: coordinate))
                     }
-                    cursor.skipUntilLineEnd()
-                    cursor.skipNewlines()
+                    try cursor.skipUntilLineEnd()
+                    try cursor.skipNewlines()
                     continue
                 } else {
                     break // Any other keyword (*CAP, *RES, *END, etc.) terminates CONN section
                 }
             }
-            throw diagnostic("Malformed SPEF connection entry", location: cursor.currentLocation)
+            throw try sourceFailure(diagnosticBytes: "Malformed SPEF connection entry".utf8.count) {
+                diagnostic("Malformed SPEF connection entry", location: cursor.currentLocation)
+            }
         }
         return ParsedConnections(connections: connections, nodeCoordinates: nodeCoordinates)
     }
 
-    private func optionalCoordinate(_ cursor: inout TokenCursor) -> Point2D? {
+    private func optionalCoordinate(_ cursor: inout TokenCursor) throws -> Point2D? {
         let startIndex = cursor.index
-        if cursor.currentKeyword == "C" { cursor.advance() }
-        guard let x = cursor.consumeNumber(),
-              let y = cursor.consumeNumber() else {
+        if cursor.currentKeyword == "C" { try cursor.advance() }
+        guard let x = try cursor.consumeNumber(),
+              let y = try cursor.consumeNumber() else {
             cursor.index = startIndex
             return nil
         }
@@ -610,6 +690,7 @@ public struct SPEFParser: Sendable {
     private func parseCapacitors(_ cursor: inout TokenCursor) throws -> [SPEFCapacitor] {
         var caps: [SPEFCapacitor] = []
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword != nil { break }
 
             let id = try requireIntNumber(&cursor, field: "*CAP")
@@ -623,9 +704,11 @@ public struct SPEFParser: Sendable {
                 let value = try requireNumber(&cursor, field: "*CAP")
                 caps.append(SPEFCapacitor(id: id, nodeA: nodeA, nodeB: nodeB, value: value))
             default:
-                throw diagnostic("Malformed SPEF capacitor entry", location: cursor.currentLocation)
+                throw try sourceFailure(diagnosticBytes: "Malformed SPEF capacitor entry".utf8.count) {
+                diagnostic("Malformed SPEF capacitor entry", location: cursor.currentLocation)
             }
-            cursor.skipNewlines()
+            }
+            try cursor.skipNewlines()
         }
         return caps
     }
@@ -633,6 +716,7 @@ public struct SPEFParser: Sendable {
     private func parseResistors(_ cursor: inout TokenCursor) throws -> [SPEFResistor] {
         var resistors: [SPEFResistor] = []
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword != nil { break }
 
             let id = try requireIntNumber(&cursor, field: "*RES")
@@ -640,7 +724,7 @@ public struct SPEFParser: Sendable {
             let nodeB = try requireIdentifier(&cursor, field: "*RES")
             let value = try requireNumber(&cursor, field: "*RES")
             resistors.append(SPEFResistor(id: id, nodeA: nodeA, nodeB: nodeB, value: value))
-            cursor.skipNewlines()
+            try cursor.skipNewlines()
         }
         return resistors
     }
@@ -648,6 +732,7 @@ public struct SPEFParser: Sendable {
     private func parseInductors(_ cursor: inout TokenCursor) throws -> [SPEFInductor] {
         var inductors: [SPEFInductor] = []
         while !cursor.isAtEnd {
+            try resources?.check()
             if cursor.currentKeyword != nil { break }
 
             let id = try requireIntNumber(&cursor, field: "*INDUC")
@@ -655,44 +740,60 @@ public struct SPEFParser: Sendable {
             let nodeB = try requireIdentifier(&cursor, field: "*INDUC")
             let value = try requireNumber(&cursor, field: "*INDUC")
             inductors.append(SPEFInductor(id: id, nodeA: nodeA, nodeB: nodeB, value: value))
-            cursor.skipNewlines()
+            try cursor.skipNewlines()
         }
         return inductors
     }
 
     private func requireString(_ cursor: inout TokenCursor, field: String) throws -> String {
-        guard let value = cursor.consumeString(), !value.isEmpty else {
-            throw diagnostic("Expected string value for \(field)", location: cursor.currentLocation)
+        guard let value = try cursor.consumeString(), !value.isEmpty else {
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Expected string value for ".utf8.count, field.utf8.count)) {
+                diagnostic("Expected string value for \(field)", location: cursor.currentLocation)
+            }
         }
         return value
     }
 
     private func requireIdentifier(_ cursor: inout TokenCursor, field: String) throws -> String {
-        guard let value = cursor.consumeIdentifier(), !value.isEmpty else {
-            throw diagnostic("Expected identifier value for \(field)", location: cursor.currentLocation)
+        guard let value = try cursor.consumeIdentifier(), !value.isEmpty else {
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Expected identifier value for ".utf8.count, field.utf8.count)) {
+                diagnostic("Expected identifier value for \(field)", location: cursor.currentLocation)
+            }
         }
         return value
     }
 
     private func requireIdentifierOrPunctuation(_ cursor: inout TokenCursor, field: String) throws -> String {
-        guard let value = cursor.consumeIdentifierOrPunctuation(), !value.isEmpty else {
-            throw diagnostic("Expected identifier or punctuation value for \(field)", location: cursor.currentLocation)
+        guard let value = try cursor.consumeIdentifierOrPunctuation(), !value.isEmpty else {
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Expected identifier or punctuation value for ".utf8.count, field.utf8.count)) {
+                diagnostic("Expected identifier or punctuation value for \(field)", location: cursor.currentLocation)
+            }
         }
         return value
     }
 
     private func requireNumber(_ cursor: inout TokenCursor, field: String) throws -> Double {
-        guard let value = cursor.consumeNumber() else {
-            throw diagnostic("Expected numeric value for \(field)", location: cursor.currentLocation)
+        guard let value = try cursor.consumeNumber() else {
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Expected numeric value for ".utf8.count, field.utf8.count)) {
+                diagnostic("Expected numeric value for \(field)", location: cursor.currentLocation)
+            }
         }
         return value
     }
 
     private func requireIntNumber(_ cursor: inout TokenCursor, field: String) throws -> Int {
-        guard let value = cursor.consumeIntNumber() else {
-            throw diagnostic("Expected integer value for \(field)", location: cursor.currentLocation)
+        guard let value = try cursor.consumeIntNumber() else {
+            throw try sourceFailure(diagnosticBytes: try PEXParserStorageSize.add("Expected integer value for ".utf8.count, field.utf8.count)) {
+                diagnostic("Expected integer value for \(field)", location: cursor.currentLocation)
+            }
         }
         return value
+    }
+
+    private func sourceFailure(diagnosticBytes: Int,
+        _ make: () -> SPEFParserDiagnostic) throws -> any Error {
+        guard let resources else { return make() }
+        return try resources.sourceFailure(diagnosticBytes: diagnosticBytes, make)
     }
 
     private func diagnostic(_ message: String, location: SPEFSourceLocation?) -> SPEFParserDiagnostic {
@@ -704,6 +805,7 @@ public struct SPEFParser: Sendable {
 
 struct TokenCursor: Sendable {
     let tokens: [SPEFToken.Located]
+    let resources: PEXParserResourceScope?
     var index: Int = 0
 
     var isAtEnd: Bool {
@@ -725,18 +827,23 @@ struct TokenCursor: Sendable {
         return tokens[index].location
     }
 
-    mutating func advance() {
+    mutating func advance() throws {
+        try resources?.check()
         if index < tokens.count { index += 1 }
     }
 
-    mutating func skipNewlines() {
+    mutating func skipNewlines() throws {
+        try resources?.check()
         while index < tokens.count, case .newline = tokens[index].token {
+            try resources?.check()
             index += 1
         }
     }
 
-    mutating func skipUntilLineEnd() {
+    mutating func skipUntilLineEnd() throws {
+        try resources?.check()
         while index < tokens.count {
+            try resources?.check()
             switch tokens[index].token {
             case .newline, .endOfFile:
                 return
@@ -746,15 +853,18 @@ struct TokenCursor: Sendable {
         }
     }
 
-    mutating func skipToNextKeyword() {
+    mutating func skipToNextKeyword() throws {
+        try resources?.check()
         while index < tokens.count {
+            try resources?.check()
             if case .keyword(_) = tokens[index].token { return }
             index += 1
         }
     }
 
-    mutating func consumeString() -> String? {
-        skipNewlines()
+    mutating func consumeString() throws -> String? {
+        try resources?.check()
+        try skipNewlines()
         guard index < tokens.count else { return nil }
         if case .string(let s) = tokens[index].token {
             index += 1
@@ -763,19 +873,21 @@ struct TokenCursor: Sendable {
         return nil
     }
 
-    mutating func consumeIdentifier() -> String? {
-        skipNewlines()
+    mutating func consumeIdentifier() throws -> String? {
+        try resources?.check()
+        try skipNewlines()
         guard index < tokens.count else { return nil }
-        guard var value = consumeIdentifierComponent() else {
+        guard var value = try consumeIdentifierComponent() else {
             return nil
         }
 
         while index < tokens.count {
+            try resources?.check()
             guard case .colon = tokens[index].token else {
                 break
             }
             index += 1
-            guard let suffix = consumeIdentifierComponent() else {
+            guard let suffix = try consumeIdentifierComponent() else {
                 return nil
             }
             value += ":\(suffix)"
@@ -784,8 +896,9 @@ struct TokenCursor: Sendable {
         return value
     }
 
-    mutating func consumeIdentifierOrPunctuation() -> String? {
-        skipNewlines()
+    mutating func consumeIdentifierOrPunctuation() throws -> String? {
+        try resources?.check()
+        try skipNewlines()
         guard index < tokens.count else { return nil }
         switch tokens[index].token {
         case .identifier(let s):
@@ -808,8 +921,9 @@ struct TokenCursor: Sendable {
         }
     }
 
-    mutating func consumeNumber() -> Double? {
-        skipNewlines()
+    mutating func consumeNumber() throws -> Double? {
+        try resources?.check()
+        try skipNewlines()
         guard index < tokens.count else { return nil }
         if case .number(let n) = tokens[index].token {
             index += 1
@@ -818,8 +932,9 @@ struct TokenCursor: Sendable {
         return nil
     }
 
-    mutating func consumeIntNumber() -> Int? {
-        skipNewlines()
+    mutating func consumeIntNumber() throws -> Int? {
+        try resources?.check()
+        try skipNewlines()
         guard index < tokens.count else { return nil }
         if case .number(let n) = tokens[index].token {
             guard let value = Int(exactly: n) else {
@@ -839,7 +954,8 @@ struct TokenCursor: Sendable {
         return nil
     }
 
-    private mutating func consumeIdentifierComponent() -> String? {
+    private mutating func consumeIdentifierComponent() throws -> String? {
+        try resources?.check()
         guard index < tokens.count else {
             return nil
         }
