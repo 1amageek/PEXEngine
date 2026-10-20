@@ -139,7 +139,11 @@ struct PEXSPICEWriterTests {
         let spice = try PEXSPICEWriter().write(ir)
 
         #expect(spice.contains(".subckt PEX_TOP_tt vdd vss"))
-        #expect(spice.contains("CPEX_Cground vdd 0 2.000000000000e-12"))
+        let groundLine = try #require(spice.split(separator: "\n").first { $0.hasPrefix("CPEX_Cground ") })
+        let groundTokens = groundLine.split(whereSeparator: \.isWhitespace)
+        #expect(groundTokens.count == 4 && groundTokens[1] == "vdd" && groundTokens[2] == "0")
+        let groundValue = try #require(groundTokens.last)
+        #expect(Double(groundValue) == 2e-12)
         #expect(spice.contains("CPEX_Ccouple"))
         #expect(spice.contains("RPEX_Rsegment vdd"))
         #expect(spice.contains("LPEX_Lsegment vss"))

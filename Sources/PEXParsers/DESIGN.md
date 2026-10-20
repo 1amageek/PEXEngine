@@ -44,6 +44,16 @@ SPICE parsing validates annotation membership and never runs resistance union.
 The composer matches original external terminal names and rejects ambiguous scoped
 leaf bindings instead of connecting distinct terminals together implicitly.
 
+SPICE element values use Swift's locale-independent binary64 round-trip decimal
+representation after the existing SI unit conversion. Re-reading each emitted
+R, C, coupling C or L token must recover the exact converted `Double` bits;
+formatting introduces no further rounding. Decimal/exponent notation stays within
+the existing SPICE parser grammar, with no engineering suffix or format option.
+Both positive and negative zero remain accepted and retain their sign bit;
+negative nonzero and nonfinite values retain their typed rejection. Unit conversion
+still owns its existing arithmetic and representability policy. The public composer
+embeds these same element records rather than reformatting their values.
+
 SPEF uses a mandatory versioned name-map identity annotation, globally injective
 pin tokens and net:number internal tokens. Actual CAP/RES/INDUC records own
 values and endpoints; lowering restores exact scoped leaf names and node kinds.
@@ -153,7 +163,12 @@ Optional human-readable node-map comments do not disable the identity contract.
 `Tests/PEXParsersTests/ScopedStandardOutputTests.swift` owns repeated leaf names,
 case folding, explicit `0`/`gnd` nodes, custom reference, cross-net operators,
 annotation rejection and composer ambiguity. Existing writer/parser tests own
-standard syntax, units and source-deck composition. Changes affect runtime export
+standard syntax, units and source-deck composition.
+`Tests/PEXParsersTests/PEXSPICERoundTripTests.swift` owns exact-bit public
+composition/save/reparse for the saved-SPEF capacitance counterexample, finite
+extremes/subnormals, adjacent doubles, both zeros, all R/C/coupling/L records and
+post-conversion SI values. It also retains nonfinite/negative refusal checks.
+Changes affect runtime export
 and CLI writers through their existing public entrypoints; package verification
 is coordinated at the task owner after the shared source snapshot stabilizes.
 

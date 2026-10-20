@@ -2,7 +2,7 @@ import Foundation
 import PEXCore
 
 /// Writes a deterministic, standalone SPICE subcircuit containing every
-/// positive parasitic element in canonical ParasiticIR.
+/// nonnegative parasitic element in canonical ParasiticIR.
 ///
 /// The writer deliberately does not rewrite the source netlist.  It preserves
 /// the extracted topology in a reusable fragment and emits a node map when a
@@ -206,11 +206,7 @@ public struct PEXSPICEWriter: Sendable {
 
     private func checkedFormat(_ value: Double, id: String) throws -> String {
         guard value.isFinite else { throw PEXSPICEWriterError.nonFiniteValue(id) }
-        return format(value)
-    }
-
-    private func format(_ value: Double) -> String {
-        String(format: "%.12e", value)
+        return String(value)
     }
 }
 

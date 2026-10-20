@@ -23,7 +23,11 @@ struct ScopedStandardOutputTests {
     @Test func parserReadsActualSpiceValuesAndRejectsMissingIdentity() throws {
         let ir = fixture(crossResistance: true)
         let text = try PEXSPICEWriter().write(ir)
-        let changed = text.replacingOccurrences(of: "1.000000000000e+01", with: "2.500000000000e+01")
+        let resistorLine = try #require(text.split(separator: "\n").first { $0.hasPrefix("RPEX_Rcross ") })
+        let resistorTokens = resistorLine.split(whereSeparator: \.isWhitespace)
+        #expect(resistorTokens.count == 4)
+        let changed = text.replacingOccurrences(of: String(resistorLine),
+            with: resistorTokens.dropLast().joined(separator: " ") + " 25")
         let restored = try parse(changed, format: .spice)
         #expect(restored.elements.first { $0.kind == .resistor && $0.nodeA.netName != $0.nodeB?.netName }?.value == 25)
         let stripped = text.split(separator: "\n").filter { !$0.hasPrefix(PEXSPICEIdentity.marker) }.joined(separator: "\n")
