@@ -227,7 +227,7 @@ No CLI execution or new process calibration is inferred from those tests.
 
 Exact dependency-floor alignment changes Foundation and Layout selectors, including Layout's transitive Mask revision, while retaining PEX source/tests, native geometry and RC profiles, configuration and artifact schemas. The causal compatibility boundary reuses the existing [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) public GDSII/OASIS analytical RC/reload, lower-budget no-IR refusal and actual same-executable captured retry proofs. Prior source-grid, unsupported-geometry and unchanged behavior evidence remains valid; this alignment adds no physical qualification.
 
-### Stable successor dependency floor
+### Historical Stable Successor Dependency Floor (26.1021.0)
 
 This successor starts from sole public parent
 `b1bbf83af9218590ff47bb6c8c31482a1dd03bb0`, which already includes the qualified
@@ -270,3 +270,33 @@ resolver are immutable actor-owned properties; capture/profile/hash values
 are immutable `Sendable` values and all intermediate mutation is call-local.
 No target-dependent synchronization branch is introduced. Verification is
 macOS native; no WASM or Embedded runtime result is inferred.
+
+## Foundation 26.1021.1 Metadata Successor
+
+This successor starts from public parent
+`82193e72bdaee88b60f4f5f6c16baa083c1c6ec8`. All 502 nonmetadata tracked
+entries, including production, tests, resources, licenses and modes, remain
+unchanged. Only this design, README and the existing dependency selectors change.
+No dependency, numerical law, API, artifact schema, quota or cancellation behavior
+is added. In particular, this package does not acquire a DRC dependency.
+
+| Dependency | Current public requirement |
+|---|---|
+| CircuiteFoundation | exact `26.1021.1` (`7b5ab9cfcd89eccd04e98fb8355bd8ed4d5596c3`) |
+| SignoffToolSupport | `e15ea6cd60ca1957297aafbba839e51a478d735e` |
+| LogicDesign | `9fbffcb1dfbf37517dfc05aa0f37f53c6a5e7659` |
+| swift-mask-data | `4d6f160e405707220589ea0fcbf71c959204b610` |
+| semiconductor-layout | `3dc3e731cdf7135ee6285a36c16e7caafd6cd9bf` |
+
+Fresh canonical HTTPS resolution establishes the seven-dependency public graph
+without path dependencies, mirrors or edited checkouts. The generated lock stays
+ignored and is retained only with qualification controls, preserving the existing
+repository policy. Publication checks all tracked bytes and modes against the
+public parent, apart from these three metadata paths, and requires review before
+a normal main push.
+
+The prior five-suite, 38-declaration, 62-case PEXParsers evidence retains its
+original Foundation 26.1021.0 graph and finite scope. This metadata qualification
+runs no build or runtime and does not reinterpret prior numerical or actual-model
+evidence as a new-graph execution. The final Physical consumer owns composed
+behavioral qualification on its new public graph.

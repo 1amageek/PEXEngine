@@ -579,3 +579,14 @@ refer to the same actual candidate, including added physical instances. Routed
 source selections explicitly cover each requested RC corner and bind original
 rules plus full technology and cell LEF bytes. Reference loading alone does not
 qualify extraction or bypass source, numerical, standard-output or STA gates.
+
+
+## Foundation 26.1021.1 Dependency Alignment
+
+This metadata successor retains the public `82193e72` implementation, tests,
+resources, licenses and modes. The existing five direct dependency selectors and
+qualification-only canonical seven-dependency lock follow the current floor in
+[DESIGN.md](DESIGN.md#foundation-2610211-metadata-successor). The lock remains
+ignored by Git. No new build or runtime evidence is claimed: prior PEXParsers
+38-declaration/62-case evidence retains its original Foundation 26.1021.0 graph;
+the final Physical consumer owns behavior on the new composed public graph.

@@ -4,7 +4,7 @@ import PackageDescription
 
 let circuiteFoundationDependency: Package.Dependency = .package(
     url: "https://github.com/1amageek/CircuiteFoundation.git",
-    exact: "26.1021.0"
+    exact: "26.1021.1"
 )
 
 let signoffToolSupportDependency: Package.Dependency = .package(
@@ -30,11 +30,11 @@ let package = Package(
         circuiteFoundationDependency,
         signoffToolSupportDependency,
         .package(url: "https://github.com/1amageek/LogicDesign.git",
-                 revision: "e788e555569862a9ed37d34ba3b686bd516cb5cd"),
+                 revision: "9fbffcb1dfbf37517dfc05aa0f37f53c6a5e7659"),
         .package(url: "https://github.com/1amageek/swift-mask-data.git",
-                 revision: "d23f9afd9c049cf06a12e307e4c26b4dd3ad216d"),
+                 revision: "4d6f160e405707220589ea0fcbf71c959204b610"),
         .package(url: "https://github.com/1amageek/semiconductor-layout.git",
-                 revision: "11f1b45af482fc391adf7f3d3e81b58c8d3d8c3f"),
+                 revision: "3dc3e731cdf7135ee6285a36c16e7caafd6cd9bf"),
     ],
     targets: [
         .target(
