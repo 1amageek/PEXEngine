@@ -193,7 +193,7 @@ undeclared transitive includes or arbitrary files read by an external tool.
 
 ## Verification and Change Impact
 
-### Public source prerequisite adoption
+### Historical public source prerequisite adoption
 
 The source prerequisite retains the complete implementation, tests, resources and
 file modes of `e523c45599c03b971a2643e186ed62994211ffeb`. Its sole Git parent is
@@ -226,6 +226,30 @@ product-specific continuation. This is not cold-build performance evidence.
 No CLI execution or new process calibration is inferred from those tests.
 
 Exact dependency-floor alignment changes Foundation and Layout selectors, including Layout's transitive Mask revision, while retaining PEX source/tests, native geometry and RC profiles, configuration and artifact schemas. The causal compatibility boundary reuses the existing [NativeBackend](Sources/PEXAdapters/NativeBackend/DESIGN.md) public GDSII/OASIS analytical RC/reload, lower-budget no-IR refusal and actual same-executable captured retry proofs. Prior source-grid, unsupported-geometry and unchanged behavior evidence remains valid; this alignment adds no physical qualification.
+
+### Stable successor dependency floor
+
+This successor starts from sole public parent
+`b1bbf83af9218590ff47bb6c8c31482a1dd03bb0`, which already includes the qualified
+exact binary64 SPICE round trips and controlled standard parasitic I/O. It changes
+only dependency selectors and their documentation; implementation, tests,
+resources, licenses and modes remain byte-identical to that parent.
+
+| Dependency | Selected public requirement |
+|---|---|
+| CircuiteFoundation | exact `26.1021.0` |
+| SignoffToolSupport | `e15ea6cd60ca1957297aafbba839e51a478d735e` |
+| LogicDesign | `e788e555569862a9ed37d34ba3b686bd516cb5cd` |
+| swift-mask-data | `d23f9afd9c049cf06a12e307e4c26b4dd3ad216d` |
+| semiconductor-layout | `11f1b45af482fc391adf7f3d3e81b58c8d3d8c3f` |
+
+The matching Layout successor is published. Fresh canonical HTTPS resolution
+must establish the final graph and supply the qualification-only lock; this
+parent does not track a lock. The affected public
+parsing/writing composition is checked by the existing five-suite, 38-declaration,
+62-case PEXParsers profile. Existing native numerical and actual 21,437-passive
+source evidence is reused only with its unchanged premises. This dependency
+adoption supplies no new extraction, whole-candidate, Flow or history authority.
 
 Electrical model admission changes affect inline/JSON resolution, direct native model
 selection and request identity. The local suites in the Core child establish those
